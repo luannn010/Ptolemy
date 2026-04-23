@@ -1,0 +1,18 @@
+[Unit]
+Description=Ptolemy Worker Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=luannn010
+WorkingDirectory=/mnt/e/Ptolemy
+ExecStart=/mnt/e/Ptolemy/bin/workerd
+Restart=always
+RestartSec=3
+Environment=APP_ENV=production
+Environment=HTTP_PORT=8080
+Environment=LOG_LEVEL=info
+Environment=STATE_DIR=/mnt/e/Ptolemy/state
+
+[Install]
+WantedBy=multi-user.target
