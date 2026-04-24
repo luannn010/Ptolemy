@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/luannn010/ptolemy/internal/session"
+	"github.com/luannn010/ptolemy/internal/terminal"
 )
 
 type SessionHandler struct {
@@ -108,6 +109,6 @@ func (h *SessionHandler) closeSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
+	terminal.KillSession(id)
 	writeJSON(w, http.StatusOK, sess)
 }

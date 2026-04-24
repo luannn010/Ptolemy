@@ -9,27 +9,28 @@
 - [x] Add Makefile / task runner
 
 ## Phase 1 — Core worker daemon
-- [ ] Create workerd entrypoint
-- [ ] Add health check endpoint
-- [ ] Add config parsing
-- [ ] Add graceful shutdown
-- [ ] Setup systemd service
+- [x] Create workerd entrypoint
+- [x] Add health check endpoint
+- [x] Add config parsing
+- [x] Add graceful shutdown
+- [x] Setup systemd service
 
 ## Phase 2 — Session management
-- [ ] Define session model
-- [ ] Implement open_session
-- [ ] Implement close_session
-- [ ] Persist session in SQLite
-- [ ] Add session recovery
+- [x] Define session model
+- [x] Implement open_session
+- [x] Implement close_session
+- [x] Persist session in SQLite
+- [x] Add session recovery
 
 ## Phase 3 — Terminal execution
-- [ ] Setup tmux
-- [ ] Create session per task
-- [ ] Implement run_command
-- [ ] Capture stdout/stderr
-- [ ] Add timeout + interrupt
-- [ ] Store command logs
-
+- [x] Setup tmux
+- [x] Create session per task
+- [x] Implement run_command
+- [x] Capture stdout/stderr cleanly
+- [x] Add timeout handling
+- [x] Store command logs in SQLite
+- [x] Live tmux session per worker session
+- [x] Automated tests
 ## Phase 4 — File operations
 - [ ] read_file
 - [ ] write_file

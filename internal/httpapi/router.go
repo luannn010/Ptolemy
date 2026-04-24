@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/luannn010/ptolemy/internal/command"
+	"github.com/luannn010/ptolemy/internal/executor"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/terminal"
 	"github.com/rs/zerolog/log"
@@ -20,7 +21,7 @@ type healthResponse struct {
 func NewRouter(
 	sessionStore *session.Store,
 	commandStore *command.Store,
-	runner *terminal.Runner,
+	runner *terminal.TmuxRunner,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -36,6 +37,10 @@ func NewRouter(
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		})
 	})
+
+	exec := executor.NewExecutor(sessionStore, commandStore, runner)
+	executeHandler := NewExecuteHandler(exec)
+	r.Post("/execute", executeHandler.Handle)
 
 	sessionHandler := NewSessionHandler(sessionStore)
 	r.Mount("/sessions", sessionHandler.Routes())

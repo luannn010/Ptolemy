@@ -9,23 +9,26 @@ import (
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/terminal"
+	"github.com/rs/zerolog/log"
 )
+
+const maxOutputSize = 10000 // 10KB
 
 type CommandHandler struct {
 	sessionStore *session.Store
 	commandStore *command.Store
-	runner       *terminal.Runner
+	runner       *terminal.TmuxRunner
 }
 
 func NewCommandHandler(
 	sessionStore *session.Store,
 	commandStore *command.Store,
-	runner *terminal.Runner,
+	runner *terminal.TmuxRunner,
 ) *CommandHandler {
 	return &CommandHandler{
 		sessionStore: sessionStore,
 		commandStore: commandStore,
-		runner: runner,
+		runner:       runner,
 	}
 }
 
@@ -77,7 +80,22 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 		req.CWD = sess.Workspace
 	}
 
-	result := h.runner.Run(r.Context(), req.Command, req.CWD, req.Timeout)
+	result := h.runner.Run(r.Context(), sessionID, req.Command, req.CWD, req.Timeout)
+
+	if len(result.Output) > maxOutputSize {
+		result.Output = result.Output[:maxOutputSize] + "\n...[truncated]"
+	}
+
+	if len(result.ErrorOutput) > maxOutputSize {
+		result.ErrorOutput = result.ErrorOutput[:maxOutputSize] + "\n...[truncated]"
+	}
+
+	log.Info().
+		Str("session_id", sessionID).
+		Str("command", req.Command).
+		Int("exit_code", result.ExitCode).
+		Int64("duration_ms", result.DurationMS).
+		Msg("command executed")
 
 	logItem, err := h.commandStore.Create(r.Context(), command.CommandLog{
 		SessionID:   sessionID,

@@ -8,12 +8,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/httpapi"
 	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
-	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/terminal"
 
 	"github.com/rs/zerolog/log"
@@ -35,7 +35,7 @@ func main() {
 
 	sessionStore := session.NewStore(baseStore)
 	commandStore := command.NewStore(baseStore)
-	runner := terminal.NewRunner()
+	runner := terminal.NewTmuxRunner()
 
 	router := httpapi.NewRouter(sessionStore, commandStore, runner)
 
