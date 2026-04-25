@@ -41,26 +41,33 @@
 - [x] Restrict file paths
 
 ## Phase 5 — Codex Adapter
-- [ ] Create `cmd/ptolemy-mcp`
-- [ ] Add adapter config: worker URL
-- [ ] Implement JSON-RPC stdio loop
-- [ ] Add `tools/list`
-- [ ] Add `tools/call`
-- [ ] Map tools to existing HTTP endpoints
-- [ ] Test with manual JSON-RPC input
-- [ ] Add Codex MCP config
+- [x] Create `cmd/ptolemy-mcp`
+- [x] Add adapter config: worker URL
+- [x] Implement JSON-RPC stdio loop
+- [x] Add `tools/list`
+- [x] Add `tools/call`
+- [x] Map tools to existing HTTP endpoints
+- [x] Test with manual JSON-RPC input
+- [x] Add Codex MCP config
 
 ## Phase 6 — Git operations
-- [ ] git_status
-- [ ] git_diff
-- [ ] git_checkout
-- [ ] git_commit (conventional)
-- [ ] git_push (approval required)
+- [ ] Create internal/gitops module
+- [ ] Implement git_status
+- [ ] Implement git_diff
+- [ ] Implement git_log
+- [ ] Implement git_checkout
+- [ ] Implement git_create_branch
+- [ ] Implement git_commit (conventional)
+- [ ] Implement git_push (approval required)
+- [ ] Expose Git endpoints (HTTP)
+- [ ] Expose Git MCP tools
 
 ## Phase 7 — Worktree isolation
 - [ ] Setup bare repo
 - [ ] create_worktree
 - [ ] remove_worktree
+- [ ] Auto branch per session
+- [ ] Prevent session collision
 - [ ] Bind session → worktree
 - [ ] Test parallel sessions
 
@@ -71,7 +78,29 @@
 - [ ] Approvals table
 - [ ] Add migrations
 
+- [ ] Create jobs table
+- [ ] Create job_steps table
+- [ ] Add job status:
+      pending / running / failed / completed
+- [ ] Add session binding
+- [ ] Add parent-child job relationships
+- [ ] Add retry logic
+- [ ] Add cancellation
+
 ## Phase 9 — Policy engine
+
+- [ ] Create cmd/ptolemy-agent
+- [ ] Add Gemma 4 e2b config (llama.cpp / Ollama)
+- [ ] Add system prompt for executor
+- [ ] Add MCP tool registry
+- [ ] Allow tool calling
+- [ ] Implement execution loop:
+
+      observe → think → act → observe
+
+- [ ] Add max step limit
+- [ ] Add failure recovery
+- [ ] Save execution traces
 - [ ] Define allow / ask / deny rules
 - [ ] Restrict network/download
 - [ ] Restrict secrets access

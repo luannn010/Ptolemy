@@ -1,26 +1,32 @@
-# Architecture
+# Ptolemy Architecture
 
 ## Overview
-Codex = planner/verifier  
-Worker = executor  
-MCP = future tool layer  
 
-## Components
-- Codex App Server (JSON-RPC)
-- Codex Bridge (Go)
-- Worker Daemon (Go)
-- tmux (sessions)
-- Git worktree (repo isolation)
-- SQLite (state)
+Codex = planner
+Gemma = executor
+Ptolemy = runtime
 
 ## Flow
-1. Codex plans
-2. Bridge translates
-3. Worker validates
-4. Worker executes
-5. Worker summarizes
-6. Codex verifies
 
-## Topology
-Codex -> Bridge -> Worker -> (tmux + git + fs)
+Codex → Task
+→ Gemma (local loop)
+→ MCP tools
+→ Ptolemy worker
+→ tmux / fileops / git
+→ result (JSON summary)
+→ Codex validates
 
+## Components
+
+- workerd (Go)
+- tmux sessions
+- fileops
+- gitops (future)
+- MCP adapter
+- SQLite storage
+
+## Future
+
+- parallel sessions
+- job orchestration
+- policy enforcement

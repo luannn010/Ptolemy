@@ -157,6 +157,67 @@ func tools() []map[string]any {
 			},
 			"required": []string{"session_id", "path", "content"},
 		}),
+		tool("ptolemy.create_session", "Create a new Ptolemy worker session.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"name":        map[string]any{"type": "string"},
+				"workspace":   map[string]any{"type": "string"},
+				"description": map[string]any{"type": "string"},
+			},
+			"required": []string{"name", "workspace"},
+		}),
+		tool("ptolemy.list_sessions", "List existing Ptolemy worker sessions.", map[string]any{
+			"type":       "object",
+			"properties": map[string]any{},
+		}),
+		tool("ptolemy.get_session", "Get a Ptolemy worker session by ID.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+			},
+			"required": []string{"session_id"},
+		}),
+		tool("ptolemy.close_session", "Close a Ptolemy worker session.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+			},
+			"required": []string{"session_id"},
+		}),
+		tool("ptolemy.git_status", "Get git status", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+			},
+			"required": []string{"session_id"},
+		}),
+
+		tool("ptolemy.git_diff", "Get git diff", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+			},
+			"required": []string{"session_id"},
+		}),
+
+		tool("ptolemy.git_commit", "Create a commit using conventional message", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+				"message":    map[string]any{"type": "string"},
+			},
+			"required": []string{"session_id", "message"},
+		}),
+
+		tool("ptolemy.git_push", "Push branch to remote (requires approval later)", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+				"remote":     map[string]any{"type": "string"},
+				"branch":     map[string]any{"type": "string"},
+			},
+			"required": []string{"session_id"},
+		}),
 	}
 }
 
@@ -176,6 +237,70 @@ func handleToolCall(workerURL string, raw json.RawMessage) (map[string]any, erro
 
 	endpoint := ""
 	switch params.Name {
+	case "ptolemy.git_status":
+		body, err := postJSON(workerURL+"/git/status", params.Arguments)
+		if err != nil {
+			return nil, err
+		}
+		return textResult(body), nil
+
+	case "ptolemy.git_diff":
+		body, err := postJSON(workerURL+"/git/diff", params.Arguments)
+		if err != nil {
+			return nil, err
+		}
+		return textResult(body), nil
+
+	case "ptolemy.git_commit":
+		body, err := postJSON(workerURL+"/git/commit", params.Arguments)
+		if err != nil {
+			return nil, err
+		}
+		return textResult(body), nil
+
+	case "ptolemy.git_push":
+		body, err := postJSON(workerURL+"/git/push", params.Arguments)
+		if err != nil {
+			return nil, err
+		}
+		return textResult(body), nil
+
+	case "ptolemy.create_session":
+		body, err := postJSON(workerURL+"/sessions", params.Arguments)
+		if err != nil {
+			return nil, err
+		}
+		return textResult(body), nil
+
+	case "ptolemy.list_sessions":
+		body, err := getJSON(workerURL + "/sessions")
+		if err != nil {
+			return nil, err
+		}
+		return textResult(body), nil
+
+	case "ptolemy.get_session":
+		sessionID, ok := params.Arguments["session_id"].(string)
+		if !ok || sessionID == "" {
+			return nil, fmt.Errorf("session_id is required")
+		}
+		body, err := getJSON(workerURL + "/sessions/" + sessionID)
+		if err != nil {
+			return nil, err
+		}
+		return textResult(body), nil
+
+	case "ptolemy.close_session":
+		sessionID, ok := params.Arguments["session_id"].(string)
+		if !ok || sessionID == "" {
+			return nil, fmt.Errorf("session_id is required")
+		}
+		body, err := postJSON(workerURL+"/sessions/"+sessionID+"/close", map[string]any{})
+		if err != nil {
+			return nil, err
+		}
+		return textResult(body), nil
+
 	case "ptolemy.execute":
 		endpoint = "/execute"
 	case "ptolemy.read_file":
@@ -197,14 +322,7 @@ func handleToolCall(workerURL string, raw json.RawMessage) (map[string]any, erro
 		return nil, err
 	}
 
-	return map[string]any{
-		"content": []map[string]any{
-			{
-				"type": "text",
-				"text": string(body),
-			},
-		},
-	}, nil
+	return textResult(body), nil
 }
 
 func postJSON(url string, payload any) ([]byte, error) {
@@ -233,4 +351,30 @@ func writeResp(w *bufio.Writer, resp RPCResponse) {
 	data, _ := json.Marshal(resp)
 	_, _ = w.WriteString(string(data) + "\n")
 	_ = w.Flush()
+}
+func textResult(body []byte) map[string]any {
+	return map[string]any{
+		"content": []map[string]any{
+			{
+				"type": "text",
+				"text": string(body),
+			},
+		},
+	}
+}
+
+func getJSON(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("worker error %d: %s", resp.StatusCode, string(body))
+	}
+
+	return body, nil
 }

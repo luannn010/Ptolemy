@@ -55,6 +55,16 @@ func NewRouter(
 	r.Post("/file/list", fileHandler.List)
 	r.Post("/file/search", fileHandler.Search)
 	r.Post("/file/apply", fileHandler.Apply)
+	// Git routes
+	gitHandler := NewGitHandler(sessionStore)
+
+	r.Post("/git/status", gitHandler.Status)
+	r.Post("/git/diff", gitHandler.Diff)
+	r.Post("/git/log", gitHandler.Log)
+	r.Post("/git/checkout", gitHandler.Checkout)
+	r.Post("/git/branch", gitHandler.CreateBranch)
+	r.Post("/git/commit", gitHandler.Commit)
+	r.Post("/git/push", gitHandler.Push)
 
 	return r
 }
