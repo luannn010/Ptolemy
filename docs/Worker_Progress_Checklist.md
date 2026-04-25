@@ -122,16 +122,17 @@ Markdown knowledge memory
 ## Phase 9 — Policy Engine + Local Brain
 
 Foundation
-- [ ] Create workspace inspector
-- [ ] Detect OS / WSL / CPU / RAM / disk / GPU
-- [ ] Detect project type: Go, Node, Python, Java, Docker
+- [x] Create workspace inspector
+- [x] Detect OS / WSL
+- [ ] Detect CPU / RAM / disk / GPU
+- [x] Detect project type: Go, Node, Python, Java, Docker
 - [ ] Save workspace snapshot into SQLite or Markdown
-- [ ] Use snapshot in agent prompt
+- [x] Use snapshot in agent prompt
 
 Local brain
-- [ ] Use llama.cpp server
-- [ ] Add Gemma 4 E2B config
-- [ ] Add simple client to call local model
+- [x] Use llama.cpp server
+- [x] Add Gemma 4 E2B config
+- [x] Add simple client to call local model
 
 Policy
 - [ ] Define allow / ask / deny rules
@@ -139,11 +140,10 @@ Policy
 - [ ] Create approval record
 
 Agent loop
-- [ ] observe → think → act → observe
+- [x] observe → think → act → observe
 - [ ] max step limit
 - [ ] failure recovery
-- [ ] save execution traces
-
+- [x] save execution traces
 ## Phase 10 — Summarization
 - [ ] Summarize command output
 - [ ] Include exit code + duration

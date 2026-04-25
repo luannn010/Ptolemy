@@ -60,21 +60,43 @@ func (r *TmuxRunner) Run(ctx context.Context, sessionID string, command string, 
 		}
 	}
 
-	runID := uuid.NewString()
+	runID := strings.ReplaceAll(uuid.NewString(), "-", "_")
 	startMarker := "__PTOLEMY_START_" + runID + "__"
+	exitMarker := "__PTOLEMY_EXIT_" + runID + "__"
 	endMarker := "__PTOLEMY_END_" + runID + "__"
+
+	if cwd == "" {
+		cwd = "."
+	}
 
 	scriptPath := filepath.Join(os.TempDir(), "ptolemy-"+runID+".sh")
 
+	// 🔥 FIXED SCRIPT (important part)
 	script := fmt.Sprintf(`#!/usr/bin/env bash
-	cd %q || exit 1
-	echo %q
-	(
-	%s
-	)
-	exit_code=$?
-	echo "%s:${exit_code}"
-	`, cwd, startMarker, command, endMarker)
+set +e
+set +o errexit
+
+cd %q
+cd_status=$?
+
+echo %q
+
+if [ "$cd_status" -ne 0 ]; then
+  echo "failed to cd into workspace: %q"
+  echo "%s:$cd_status"
+  echo %q
+  exit 0
+fi
+
+(
+%s
+)
+
+exit_code=$?
+
+echo "%s:$exit_code"
+echo %q
+`, cwd, startMarker, cwd, exitMarker, endMarker, command, exitMarker, endMarker)
 
 	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		return Result{
@@ -99,12 +121,14 @@ func (r *TmuxRunner) Run(ctx context.Context, sessionID string, command string, 
 
 	deadline := time.Now().Add(time.Duration(timeoutSeconds) * time.Second)
 
-	for {
-		output := r.capture(ctx, name)
+	var output string
 
-		if strings.Contains(output, endMarker+":") {
-			exitCode := extractMarkedExitCode(output, endMarker)
-			cleanOutput := extractMarkedOutput(output, startMarker, endMarker)
+	for {
+		output = r.capture(ctx, name)
+
+		if strings.Contains(output, endMarker) {
+			exitCode := extractMarkedExitCode(output, exitMarker)
+			cleanOutput := extractMarkedOutput(output, startMarker, exitMarker)
 
 			return Result{
 				ExitCode:   exitCode,
@@ -116,7 +140,7 @@ func (r *TmuxRunner) Run(ctx context.Context, sessionID string, command string, 
 		if time.Now().After(deadline) {
 			return Result{
 				ExitCode:    124,
-				Output:      extractMarkedOutput(output, startMarker, endMarker),
+				Output:      extractMarkedOutput(output, startMarker, exitMarker),
 				ErrorOutput: fmt.Sprintf("command timed out after %d seconds", timeoutSeconds),
 				DurationMS:  time.Since(start).Milliseconds(),
 			}
@@ -127,20 +151,20 @@ func (r *TmuxRunner) Run(ctx context.Context, sessionID string, command string, 
 }
 
 func (r *TmuxRunner) capture(ctx context.Context, name string) string {
-	cmd := exec.CommandContext(ctx, "tmux", "capture-pane", "-p", "-t", name)
+	cmd := exec.CommandContext(ctx, "tmux", "capture-pane", "-p", "-S", "-", "-t", name)
 	out, _ := cmd.Output()
 	return string(out)
 }
 
-func extractMarkedExitCode(output string, endMarker string) int {
+func extractMarkedExitCode(output string, exitMarker string) int {
 	lines := strings.Split(output, "\n")
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
-		if strings.HasPrefix(line, endMarker+":") {
+		if strings.HasPrefix(line, exitMarker+":") {
 			var code int
-			_, _ = fmt.Sscanf(line, endMarker+":%d", &code)
+			_, _ = fmt.Sscanf(line, exitMarker+":%d", &code)
 			return code
 		}
 	}
@@ -148,7 +172,7 @@ func extractMarkedExitCode(output string, endMarker string) int {
 	return 1
 }
 
-func extractMarkedOutput(output string, startMarker string, endMarker string) string {
+func extractMarkedOutput(output string, startMarker string, exitMarker string) string {
 	lines := strings.Split(output, "\n")
 	capturing := false
 	cleaned := []string{}
@@ -161,7 +185,7 @@ func extractMarkedOutput(output string, startMarker string, endMarker string) st
 			continue
 		}
 
-		if strings.HasPrefix(trimmed, endMarker+":") {
+		if strings.HasPrefix(trimmed, exitMarker+":") {
 			break
 		}
 
@@ -172,6 +196,7 @@ func extractMarkedOutput(output string, startMarker string, endMarker string) st
 
 	return strings.TrimRight(strings.Join(cleaned, "\n"), "\n") + "\n"
 }
+
 func KillSession(sessionID string) {
 	name := tmuxSessionName(sessionID)
 	_ = exec.Command("tmux", "kill-session", "-t", name).Run()
