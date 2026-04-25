@@ -8,6 +8,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/mcp/filetools"
 	"github.com/luannn010/ptolemy/internal/mcp/gittools"
 	"github.com/luannn010/ptolemy/internal/mcp/sessiontools"
+	"github.com/luannn010/ptolemy/internal/mcp/worktreetools"
 )
 
 func main() {
@@ -24,12 +25,14 @@ func main() {
 		executortools.Tools(),
 		filetools.Tools(),
 		gittools.Tools(),
+		worktreetools.Tools(),
 	)
 
 	server.RegisterHandler(sessiontools.Handle)
 	server.RegisterHandler(executortools.Handle)
 	server.RegisterHandler(filetools.Handle)
 	server.RegisterHandler(gittools.Handle)
+	server.RegisterHandler(worktreetools.Handle)
 
 	server.Run(os.Stdin, os.Stdout)
 }

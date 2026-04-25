@@ -66,5 +66,11 @@ func NewRouter(
 	r.Post("/git/commit", gitHandler.Commit)
 	r.Post("/git/push", gitHandler.Push)
 
+	worktreeHandler := NewWorktreeHandler(sessionStore)
+
+	r.Post("/worktree/create", worktreeHandler.Create)
+	r.Post("/worktree/list", worktreeHandler.List)
+	r.Post("/worktree/remove", worktreeHandler.Remove)
+
 	return r
 }

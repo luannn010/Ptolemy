@@ -172,3 +172,25 @@ func TestGetMissingSession(t *testing.T) {
 		t.Fatalf("expected ErrSessionNotFound, got %v", err)
 	}
 }
+func TestUpdateSessionWorkspace(t *testing.T) {
+	sessionStore := newTestSessionStore(t)
+
+	created, err := sessionStore.Create(context.Background(), CreateSessionRequest{
+		Name:      "update-session",
+		Workspace: "/tmp/old",
+	})
+	if err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	created.Workspace = "/tmp/new"
+
+	updated, err := sessionStore.Update(context.Background(), created)
+	if err != nil {
+		t.Fatalf("update failed: %v", err)
+	}
+
+	if updated.Workspace != "/tmp/new" {
+		t.Fatalf("expected workspace /tmp/new, got %s", updated.Workspace)
+	}
+}

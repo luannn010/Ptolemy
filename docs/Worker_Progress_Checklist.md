@@ -51,25 +51,25 @@
 - [x] Add Codex MCP config
 
 ## Phase 6 — Git operations
-- [ ] Create internal/gitops module
-- [ ] Implement git_status
-- [ ] Implement git_diff
-- [ ] Implement git_log
-- [ ] Implement git_checkout
-- [ ] Implement git_create_branch
-- [ ] Implement git_commit (conventional)
-- [ ] Implement git_push (approval required)
-- [ ] Expose Git endpoints (HTTP)
-- [ ] Expose Git MCP tools
+- [x] Create internal/gitops module
+- [x] Implement git_status
+- [x] Implement git_diff
+- [x] Implement git_log
+- [x] Implement git_checkout
+- [x] Implement git_create_branch
+- [x] Implement git_commit (conventional)
+- [x] Implement git_push (approval required)
+- [x] Expose Git endpoints (HTTP)
+- [x] Expose Git MCP tools
 
 ## Phase 7 — Worktree isolation
-- [ ] Setup bare repo
-- [ ] create_worktree
-- [ ] remove_worktree
-- [ ] Auto branch per session
-- [ ] Prevent session collision
-- [ ] Bind session → worktree
-- [ ] Test parallel sessions
+- [x] Setup bare repo
+- [x] create_worktree
+- [x] remove_worktree
+- [x] Auto branch per session
+- [x] Prevent session collision
+- [x] Bind session → worktree
+- [x] Test parallel sessions
 
 ## Phase 8 — SQLite storage
 - [ ] Sessions table

@@ -187,3 +187,37 @@ func scanSession(row scanner) (Session, error) {
 
 	return sess, nil
 }
+func (s *Store) Update(ctx context.Context, sess Session) (Session, error) {
+	now := time.Now().UTC()
+
+	query := `
+	UPDATE sessions
+	SET name = ?, status = ?, workspace = ?, description = ?, updated_at = ?
+	WHERE id = ?;
+	`
+
+	res, err := s.store.DB.ExecContext(
+		ctx,
+		query,
+		sess.Name,
+		string(sess.Status),
+		sess.Workspace,
+		sess.Description,
+		now.Format(time.RFC3339),
+		sess.ID,
+	)
+	if err != nil {
+		return Session{}, fmt.Errorf("update session: %w", err)
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return Session{}, err
+	}
+
+	if count == 0 {
+		return Session{}, ErrSessionNotFound
+	}
+
+	return s.Get(ctx, sess.ID)
+}
