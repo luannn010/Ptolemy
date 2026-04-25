@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/luannn010/ptolemy/internal/action"
+	"github.com/luannn010/ptolemy/internal/approval"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/executor"
 	"github.com/luannn010/ptolemy/internal/logs"
@@ -25,6 +26,7 @@ func NewRouter(
 	commandStore *command.Store,
 	actionStore *action.Store,
 	logStore *logs.Store,
+	approvalStore *approval.Store,
 	runner *terminal.TmuxRunner,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -54,6 +56,7 @@ func NewRouter(
 		commandStore,
 		actionStore,
 		logStore,
+		approvalStore,
 		runner,
 	)
 	r.Mount("/sessions/{id}/commands", commandHandler.Routes())

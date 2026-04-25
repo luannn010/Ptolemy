@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -15,14 +16,30 @@ import (
 
 type BrainAction struct {
 	Action  string `json:"action"`
-	Command string `json:"command"`
+	Command string `json:"command,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Content string `json:"content,omitempty"`
 	Reason  string `json:"reason"`
 }
 
 func main() {
-	task := strings.Join(os.Args[1:], " ")
-	if task == "" {
-		fmt.Println("usage: ptolemy-agent <task>")
+	taskFile := flag.String("task-file", "", "markdown task file to execute")
+	maxSteps := flag.Int("max-steps", 8, "max agent steps")
+	flag.Parse()
+
+	task := strings.Join(flag.Args(), " ")
+
+	if *taskFile != "" {
+		data, err := os.ReadFile(*taskFile)
+		if err != nil {
+			fmt.Printf("failed to read task file: %v\n", err)
+			os.Exit(1)
+		}
+		task = string(data)
+	}
+
+	if strings.TrimSpace(task) == "" {
+		fmt.Println("usage: ptolemy-agent [--task-file path] [--max-steps 8] <task>")
 		os.Exit(1)
 	}
 
@@ -40,113 +57,166 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	brainClient := brain.NewClient("http://127.0.0.1:8088", "gemma-4-e2b")
+	workerClient := worker.NewClient("http://127.0.0.1:8080")
 
-	reply, err := brainClient.Chat(ctx, []brain.Message{
-		{
-			Role: "system",
-			Content: `You are Ptolemy local executor brain.
+	session, err := workerClient.CreateSession(ctx, worker.CreateSessionRequest{
+		Name:        "ptolemy-agent",
+		Workspace:   workspace,
+		Description: "created by ptolemy-agent",
+	})
+	if err != nil {
+		fmt.Printf("failed to create worker session: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("session: %s\n", session.ID)
+
+	observations := []string{}
+
+	for step := 1; step <= *maxSteps; step++ {
+		fmt.Printf("\n--- step %d/%d ---\n", step, *maxSteps)
+
+		reply, err := brainClient.Chat(ctx, []brain.Message{
+			{
+				Role: "system",
+				Content: `You are Ptolemy local executor brain.
 
 You must respond in JSON ONLY.
 
 Format:
 {
-  "action": "run_command | explain | ask_approval",
+  "action": "run_command | read_file | write_file | explain | ask_approval",
   "command": "<shell command>",
+  "path": "<relative file path>",
+  "content": "<file content for write_file>",
   "reason": "<short explanation>"
 }
 
 Rules:
 - Be concise.
 - Do not execute anything yourself.
-- If safe, action = run_command.
+- Use read_file before editing a file.
+- Use write_file only after you know the target file content.
+- Use run_command for tests, formatting, and validation.
 - If dangerous, action = ask_approval.
-- If no command is needed, action = explain.
-- For Go tests, prefer: go test ./...
+- If task is complete, action = explain.
 - NEVER return markdown.
 - NEVER return plain text.
 - NEVER include reasoning_content.
 `,
-		},
-		{
-			Role: "user",
-			Content: fmt.Sprintf(`Workspace snapshot:
+			},
+			{
+				Role: "user",
+				Content: fmt.Sprintf(`Workspace snapshot:
 %s
 
-User task:
-%s`, string(snapshotJSON), task),
-		},
-	})
-	if err != nil {
-		fmt.Printf("brain error: %v\n", err)
-		os.Exit(1)
+Original task:
+%s
+
+Observations so far:
+%s`, string(snapshotJSON), task, strings.Join(observations, "\n\n")),
+			},
+		})
+		if err != nil {
+			fmt.Printf("brain error: %v\n", err)
+			os.Exit(1)
+		}
+
+		action, err := parseBrainAction(reply)
+		if err != nil {
+			fmt.Printf("failed to parse brain JSON:\n%s\nerror: %v\n", reply, err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("brain action: %s\n", action.Action)
+		fmt.Printf("reason: %s\n", action.Reason)
+
+		observation := executeAction(ctx, workerClient, session.ID, workspace, action)
+		fmt.Println(observation)
+
+		observations = append(observations, observation)
+
+		if action.Action == "explain" || action.Action == "ask_approval" {
+			return
+		}
 	}
 
-	action, err := parseBrainAction(reply)
-	if err != nil {
-		fmt.Printf("failed to parse brain JSON:\n%s\nerror: %v\n", reply, err)
-		os.Exit(1)
-	}
+	fmt.Println("max steps reached")
+}
 
-	fmt.Printf("brain action: %s\n", action.Action)
-	fmt.Printf("reason: %s\n", action.Reason)
-
+func executeAction(
+	ctx context.Context,
+	workerClient *worker.Client,
+	sessionID string,
+	workspace string,
+	action *BrainAction,
+) string {
 	switch action.Action {
 	case "explain":
-		fmt.Println(action.Reason)
-		return
+		return "DONE: " + action.Reason
 
 	case "ask_approval":
-		fmt.Printf("approval required for command: %s\n", action.Command)
-		return
+		return fmt.Sprintf("APPROVAL REQUIRED: %s command=%s", action.Reason, action.Command)
 
 	case "run_command":
 		if strings.TrimSpace(action.Command) == "" {
-			fmt.Println("brain returned empty command")
-			os.Exit(1)
+			return "ERROR: empty command"
 		}
 
-		workerClient := worker.NewClient("http://127.0.0.1:8080")
-
-		session, err := workerClient.CreateSession(ctx, worker.CreateSessionRequest{
-			Name:        "ptolemy-agent",
-			Workspace:   workspace,
-			Description: "created by ptolemy-agent",
-		})
-		if err != nil {
-			fmt.Printf("failed to create worker session: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("session: %s\n", session.ID)
-		fmt.Printf("running: %s\n\n", action.Command)
-
-		result, err := workerClient.RunCommand(ctx, session.ID, worker.RunCommandRequest{
+		result, err := workerClient.RunCommand(ctx, sessionID, worker.RunCommandRequest{
 			Command: action.Command,
 			CWD:     workspace,
-			Timeout: 60,
+			Timeout: 120,
 		})
 		if err != nil {
-			fmt.Printf("worker error: %v\n", err)
-			os.Exit(1)
+			return fmt.Sprintf("ERROR running command: %v", err)
 		}
 
-		fmt.Printf("exit_code: %d\n", result.ExitCode)
-		if result.Output != "" {
-			fmt.Println("output:")
-			fmt.Print(result.Output)
+		return fmt.Sprintf(
+			"COMMAND RESULT\ncommand: %s\nexit_code: %d\noutput:\n%s\nerror_output:\n%s",
+			result.Command,
+			result.ExitCode,
+			result.Output,
+			result.ErrorOutput,
+		)
+
+	case "read_file":
+		if strings.TrimSpace(action.Path) == "" {
+			return "ERROR: empty path"
 		}
-		if result.ErrorOutput != "" {
-			fmt.Println("error_output:")
-			fmt.Print(result.ErrorOutput)
+
+		result, err := workerClient.ReadFile(ctx, worker.ReadFileRequest{
+			SessionID: sessionID,
+			Path:      action.Path,
+		})
+		if err != nil {
+			return fmt.Sprintf("ERROR reading file: %v", err)
 		}
+
+		return fmt.Sprintf("FILE READ\npath: %s\ncontent:\n%s", result.Path, result.Content)
+
+	case "write_file":
+		if strings.TrimSpace(action.Path) == "" {
+			return "ERROR: empty path"
+		}
+
+		result, err := workerClient.WriteFile(ctx, worker.WriteFileRequest{
+			SessionID: sessionID,
+			Path:      action.Path,
+			Content:   action.Content,
+		})
+		if err != nil {
+			return fmt.Sprintf("ERROR writing file: %v", err)
+		}
+
+		return fmt.Sprintf("FILE WRITTEN\npath: %s", result.Path)
 
 	default:
-		fmt.Printf("unknown brain action: %s\n", action.Action)
-		os.Exit(1)
+		return fmt.Sprintf("ERROR: unknown action %s", action.Action)
 	}
 }
 

@@ -44,6 +44,25 @@ type CommandResult struct {
 	DurationMS  int64  `json:"duration_ms"`
 	CreatedAt   string `json:"created_at"`
 }
+type ReadFileRequest struct {
+	SessionID string `json:"session_id"`
+	Path      string `json:"path"`
+}
+
+type ReadFileResponse struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+type WriteFileRequest struct {
+	SessionID string `json:"session_id"`
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+}
+
+type WriteFileResponse struct {
+	Path string `json:"path"`
+}
 
 func NewClient(baseURL string) *Client {
 	return &Client{
@@ -111,6 +130,69 @@ func (c *Client) RunCommand(ctx context.Context, sessionID string, reqBody RunCo
 	}
 
 	var result CommandResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+func (c *Client) ReadFile(ctx context.Context, reqBody ReadFileRequest) (*ReadFileResponse, error) {
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/file/read", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		var errBody map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&errBody)
+		return nil, fmt.Errorf("read file failed with status %s: %v", resp.Status, errBody)
+	}
+
+	var result ReadFileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (c *Client) WriteFile(ctx context.Context, reqBody WriteFileRequest) (*WriteFileResponse, error) {
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/file/write", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		var errBody map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&errBody)
+		return nil, fmt.Errorf("write file failed with status %s: %v", resp.Status, errBody)
+	}
+
+	var result WriteFileResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}

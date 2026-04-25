@@ -135,15 +135,38 @@ Local brain
 - [x] Add simple client to call local model
 
 Policy
-- [ ] Define allow / ask / deny rules
-- [ ] Block dangerous commands
-- [ ] Create approval record
+- [x] Define allow / ask / deny rules
+- [x] Block dangerous commands
+- [x] Create approval record
 
 Agent loop
 - [x] observe → think → act → observe
 - [ ] max step limit
 - [ ] failure recovery
 - [x] save execution traces
+
+## Phase 9.5 — File-aware Agent Tools
+
+Core tools
+- [ ] read_file
+- [ ] write_file
+- [ ] apply_patch
+- [ ] search_file
+- [ ] list_files
+- [ ] run_command
+
+Safety
+- [ ] deny secrets reads: .env, ~/.ssh, tokens
+- [ ] ask approval for destructive writes
+- [ ] only allow edits inside workspace
+- [ ] log every tool call
+
+Loop
+- [ ] max steps
+- [ ] observe output
+- [ ] retry fix if tests fail
+- [ ] stop when tests pass
+
 ## Phase 10 — Summarization
 - [ ] Summarize command output
 - [ ] Include exit code + duration

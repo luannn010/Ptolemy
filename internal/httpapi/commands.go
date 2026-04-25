@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/luannn010/ptolemy/internal/action"
+	"github.com/luannn010/ptolemy/internal/approval"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/logs"
 	"github.com/luannn010/ptolemy/internal/memory"
+	"github.com/luannn010/ptolemy/internal/policy"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/terminal"
 	"github.com/rs/zerolog/log"
@@ -18,11 +21,12 @@ import (
 const maxOutputSize = 10000 // 10KB
 
 type CommandHandler struct {
-	sessionStore *session.Store
-	commandStore *command.Store
-	actionStore  *action.Store
-	logStore     *logs.Store
-	runner       *terminal.TmuxRunner
+	sessionStore  *session.Store
+	commandStore  *command.Store
+	actionStore   *action.Store
+	logStore      *logs.Store
+	approvalStore *approval.Store
+	runner        *terminal.TmuxRunner
 }
 
 func NewCommandHandler(
@@ -30,14 +34,16 @@ func NewCommandHandler(
 	commandStore *command.Store,
 	actionStore *action.Store,
 	logStore *logs.Store,
+	approvalStore *approval.Store,
 	runner *terminal.TmuxRunner,
 ) *CommandHandler {
 	return &CommandHandler{
-		sessionStore: sessionStore,
-		commandStore: commandStore,
-		actionStore:  actionStore,
-		logStore:     logStore,
-		runner:       runner,
+		sessionStore:  sessionStore,
+		commandStore:  commandStore,
+		actionStore:   actionStore,
+		logStore:      logStore,
+		approvalStore: approvalStore,
+		runner:        runner,
 	}
 }
 
@@ -102,7 +108,47 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 			Int("project_files", len(mem.Project)).
 			Msg("memory loaded for execution")
 	}
+	decision := policy.CheckCommand(req.Command)
 
+	if decision.Mode == policy.ModeDeny {
+		_, _ = h.logStore.Create(r.Context(), logs.Log{
+			SessionID: sessionID,
+			Level:     "warn",
+			Message:   "command denied by policy",
+			Metadata:  `{"command":` + strconv.Quote(req.Command) + `}`,
+		})
+
+		writeJSON(w, http.StatusForbidden, map[string]any{
+			"error":       "policy_denied",
+			"reason":      decision.Reason,
+			"action_type": decision.ActionType,
+		})
+		return
+	}
+
+	if decision.Mode == policy.ModeAsk {
+		approvalItem, err := h.approvalStore.Create(r.Context(), approval.Approval{
+			SessionID:  sessionID,
+			ActionType: decision.ActionType,
+			Payload:    req.Command,
+			Status:     "pending",
+			Reason:     decision.Reason,
+		})
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusForbidden, map[string]any{
+			"error":       "approval_required",
+			"reason":      decision.Reason,
+			"action_type": decision.ActionType,
+			"approval_id": approvalItem.ID,
+		})
+		return
+	}
 	act, err := h.actionStore.Create(r.Context(), action.Action{
 		SessionID: sessionID,
 		Type:      "command.exec",

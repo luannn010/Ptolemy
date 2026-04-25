@@ -12,6 +12,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
+	"github.com/luannn010/ptolemy/internal/approval"
 )
 
 func TestWorkerdBootRouter(t *testing.T) {
@@ -29,7 +30,9 @@ func TestWorkerdBootRouter(t *testing.T) {
 	logStore := logs.NewStore(baseStore.SQLDB())
 	runner := terminal.NewTmuxRunner()
 
-	router := httpapi.NewRouter(sessionStore, commandStore, actionStore, logStore, runner)
+	approvalStore := approval.NewStore(baseStore.SQLDB())
+
+	router := httpapi.NewRouter(sessionStore, commandStore, actionStore, logStore, approvalStore, runner)
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()

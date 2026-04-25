@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/luannn010/ptolemy/internal/action"
+	"github.com/luannn010/ptolemy/internal/approval"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/httpapi"
@@ -44,6 +45,7 @@ func main() {
 	commandStore := command.NewStore(baseStore)
 	actionStore := action.NewStore(baseStore.SQLDB())
 	logStore := logs.NewStore(baseStore.SQLDB())
+	approvalStore := approval.NewStore(baseStore.SQLDB())
 
 	runner := terminal.NewTmuxRunner()
 
@@ -52,6 +54,7 @@ func main() {
 		commandStore,
 		actionStore,
 		logStore,
+		approvalStore,
 		runner,
 	)
 

@@ -12,6 +12,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
+	"github.com/luannn010/ptolemy/internal/approval"
 )
 
 func newTestRouter(t *testing.T) http.Handler {
@@ -36,9 +37,10 @@ func newTestRouter(t *testing.T) http.Handler {
 	commandStore := command.NewStore(baseStore)
 	actionStore := action.NewStore(baseStore.SQLDB())
 	logStore := logs.NewStore(baseStore.SQLDB())
+	approvalStore := approval.NewStore(baseStore.SQLDB())
 	runner := terminal.NewTmuxRunner()
 
-	return NewRouter(sessionStore, commandStore, actionStore, logStore, runner)
+	return NewRouter(sessionStore, commandStore, actionStore, logStore, approvalStore, runner)
 }
 
 func TestHealthEndpoint(t *testing.T) {
