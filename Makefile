@@ -7,6 +7,10 @@ run:
 build:
 	mkdir -p $(BIN_DIR)
 	go build -o $(BIN_DIR)/$(APP_NAME) ./cmd/workerd
+	
+build-mcp:
+	mkdir -p bin
+	go build -o bin/ptolemy-mcp ./cmd/ptolemy-mcp
 
 test:
 	go test ./...

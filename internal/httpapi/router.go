@@ -48,5 +48,13 @@ func NewRouter(
 	commandHandler := NewCommandHandler(sessionStore, commandStore, runner)
 	r.Mount("/sessions/{id}/commands", commandHandler.Routes())
 
+	fileHandler := NewFileHandler(sessionStore)
+
+	r.Post("/file/read", fileHandler.Read)
+	r.Post("/file/write", fileHandler.Write)
+	r.Post("/file/list", fileHandler.List)
+	r.Post("/file/search", fileHandler.Search)
+	r.Post("/file/apply", fileHandler.Apply)
+
 	return r
 }
