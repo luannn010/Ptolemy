@@ -28,11 +28,16 @@ func New(repoPath string) *GitOps {
 }
 
 func (g *GitOps) Status(ctx context.Context) Result {
-	return g.run(ctx, "git status --short")
+	return g.run(ctx, "git status --short -- . ':(exclude)state/*.db' ':(exclude)bin/*'")
 }
 
 func (g *GitOps) Diff(ctx context.Context) Result {
-	return g.run(ctx, "git diff")
+	result := g.run(ctx, "git diff --stat && echo '\n--- DIFF EXCERPT ---' && git diff -- . ':(exclude)state/*.db' ':(exclude)bin/*'")
+
+	const maxDiffSize = 12000
+	result.Output, _ = truncateOutput(result.Output, maxDiffSize)
+
+	return result
 }
 
 func (g *GitOps) Log(ctx context.Context) Result {
@@ -121,4 +126,11 @@ func isConventionalCommit(message string) bool {
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+func truncateOutput(output string, max int) (string, bool) {
+	if len(output) <= max {
+		return output, false
+	}
+
+	return output[:max] + "\n...[truncated]", true
 }

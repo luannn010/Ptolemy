@@ -137,3 +137,33 @@ func TestRejectInvalidConventionalCommit(t *testing.T) {
 		t.Fatal("expected invalid commit message to fail")
 	}
 }
+func TestGitStatusExcludesGeneratedFiles(t *testing.T) {
+	repo := setupGitRepo(t)
+	git := New(repo)
+
+	if err := os.MkdirAll(filepath.Join(repo, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(repo, "state"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(repo, "bin", "workerd"), []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(repo, "state", "ptolemy.db"), []byte("db"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := git.Status(context.Background())
+
+	if strings.Contains(result.Output, "bin/workerd") {
+		t.Fatalf("expected status to exclude bin/workerd, got %q", result.Output)
+	}
+
+	if strings.Contains(result.Output, "state/ptolemy.db") {
+		t.Fatalf("expected status to exclude state/ptolemy.db, got %q", result.Output)
+	}
+}
