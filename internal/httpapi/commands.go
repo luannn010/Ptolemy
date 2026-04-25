@@ -9,6 +9,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/logs"
+	"github.com/luannn010/ptolemy/internal/memory"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/terminal"
 	"github.com/rs/zerolog/log"
@@ -86,6 +87,20 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 
 	if req.CWD == "" {
 		req.CWD = sess.Workspace
+	}
+
+	mem, err := memory.LoadMemory("docs/memory", "ptolemy")
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("session_id", sessionID).
+			Msg("failed to load memory for execution")
+	} else {
+		log.Info().
+			Str("session_id", sessionID).
+			Int("global_files", len(mem.Global)).
+			Int("project_files", len(mem.Project)).
+			Msg("memory loaded for execution")
 	}
 
 	act, err := h.actionStore.Create(r.Context(), action.Action{
@@ -167,7 +182,7 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 func (h *CommandHandler) listCommands(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
-	logs, err := h.commandStore.ListBySession(r.Context(), sessionID)
+	commandLogs, err := h.commandStore.ListBySession(r.Context(), sessionID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": err.Error(),
@@ -175,5 +190,5 @@ func (h *CommandHandler) listCommands(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, logs)
+	writeJSON(w, http.StatusOK, commandLogs)
 }

@@ -74,51 +74,75 @@
 ## Phase 8 — Agent Memory Layer
 
 SQLite execution memory
-- [ ] Keep sessions table
-- [ ] Keep command_logs table
-- [ ] Add actions table
-- [ ] Add logs table
-- [ ] Add approvals table
-- [ ] Add indexes
-- [ ] Add metadata JSON fields
-
-Markdown knowledge memory
-- [ ] Add knowledge/global/
-- [ ] Add knowledge/projects/
-- [ ] Add project architecture notes
-- [ ] Add important decisions notes
-- [ ] Add agent-readable conventions
+- [x] Keep sessions table
+- [x] Keep command_logs table
+- [x] Add actions table
+- [x] Add logs table
+- [x] Add approvals table
+- [x] Add indexes
+- [x] Add metadata JSON fields
 
 Migrations
-- [ ] Create basic migration runner
-- [ ] Add schema_migrations table
-- [ ] Auto-run migrations on startup
+- [x] Create basic migration runner
+- [x] Add schema_migrations table
+- [x] Auto-run migrations on startup
 
 Execution integration
-- [ ] Before command runs → create action pending
-- [ ] After command runs → update action success/failed
-- [ ] Important events → write logs
+- [x] Before command runs → create action pending
+- [x] After command runs → update action success/failed
+- [x] Important events → write logs
 - [ ] Dangerous actions → create approval record
 
+## Phase 8.5 — Markdown Knowledge Memory
 
-## Phase 9 — Policy engine
+Structure
+- [x] Create memory folder structure
+- [x] Add global agent rules
+- [x] Add project-level memory
 
-- [ ] Create cmd/ptolemy-agent
-- [ ] Add Gemma 4 e2b config (llama.cpp / Ollama)
-- [ ] Add system prompt for executor
-- [ ] Add MCP tool registry
-- [ ] Allow tool calling
-- [ ] Implement execution loop:
+Content
+- [x] Architecture notes
+- [x] Conventions
+- [x] Important decisions
+- [x] Known issues
 
-      observe → think → act → observe
+Integration
+- [x] Add file loader utility
+- [x] Add "load memory before execution"
 
-- [ ] Add max step limit
-- [ ] Add failure recovery
-- [ ] Save execution traces
+Markdown knowledge memory
+- [x] Add knowledge/global/
+- [x] Add knowledge/projects/
+- [x] Add project architecture notes
+- [x] Add important decisions notes
+- [x] Add agent-readable conventions
+
+
+
+## Phase 9 — Policy Engine + Local Brain
+
+Foundation
+- [ ] Create workspace inspector
+- [ ] Detect OS / WSL / CPU / RAM / disk / GPU
+- [ ] Detect project type: Go, Node, Python, Java, Docker
+- [ ] Save workspace snapshot into SQLite or Markdown
+- [ ] Use snapshot in agent prompt
+
+Local brain
+- [ ] Use llama.cpp server
+- [ ] Add Gemma 4 E2B config
+- [ ] Add simple client to call local model
+
+Policy
 - [ ] Define allow / ask / deny rules
-- [ ] Restrict network/download
-- [ ] Restrict secrets access
-- [ ] Add approval flow
+- [ ] Block dangerous commands
+- [ ] Create approval record
+
+Agent loop
+- [ ] observe → think → act → observe
+- [ ] max step limit
+- [ ] failure recovery
+- [ ] save execution traces
 
 ## Phase 10 — Summarization
 - [ ] Summarize command output

@@ -1,7 +1,27 @@
 # Agent Rules
 
-- SQLite stores execution memory.
-- Markdown stores long-term knowledge.
-- Never run destructive commands without approval.
-- Log every command execution as an action.
-- Use approvals for risky operations such as git push, rm -rf, docker down, database reset, or migration reset.
+## Execution Rules
+
+- Always log every command execution into SQLite (actions + logs).
+- Never run destructive commands without approval:
+  - rm -rf
+  - git reset --hard
+  - docker system prune
+  - database reset
+
+## Behavior
+
+- Prefer small, safe, reversible commands.
+- If a command fails, inspect the error before retrying.
+- Avoid repeating failed commands without modification.
+
+## Git Rules
+
+- Always check git status before commit.
+- Never push without explicit approval.
+- Use descriptive commit messages.
+
+## Memory Model
+
+- SQLite = execution history
+- Markdown = knowledge memory
