@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/command"
+	"github.com/luannn010/ptolemy/internal/logs"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
@@ -26,11 +28,17 @@ func newTestRouter(t *testing.T) http.Handler {
 		_ = baseStore.Close()
 	})
 
+	if err := store.RunMigrations(t.Context(), baseStore.SQLDB()); err != nil {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+
 	sessionStore := session.NewStore(baseStore)
 	commandStore := command.NewStore(baseStore)
+	actionStore := action.NewStore(baseStore.SQLDB())
+	logStore := logs.NewStore(baseStore.SQLDB())
 	runner := terminal.NewTmuxRunner()
 
-	return NewRouter(sessionStore, commandStore, runner)
+	return NewRouter(sessionStore, commandStore, actionStore, logStore, runner)
 }
 
 func TestHealthEndpoint(t *testing.T) {

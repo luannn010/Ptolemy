@@ -8,10 +8,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/httpapi"
 	"github.com/luannn010/ptolemy/internal/logging"
+	"github.com/luannn010/ptolemy/internal/logs"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
@@ -33,11 +35,25 @@ func main() {
 	}
 	defer baseStore.Close()
 
+	// Phase 8: run SQLite migrations before any stores use the DB.
+	if err := store.RunMigrations(context.Background(), baseStore.SQLDB()); err != nil {
+		log.Fatal().Err(err).Msg("failed to run database migrations")
+	}
+
 	sessionStore := session.NewStore(baseStore)
 	commandStore := command.NewStore(baseStore)
+	actionStore := action.NewStore(baseStore.SQLDB())
+	logStore := logs.NewStore(baseStore.SQLDB())
+
 	runner := terminal.NewTmuxRunner()
 
-	router := httpapi.NewRouter(sessionStore, commandStore, runner)
+	router := httpapi.NewRouter(
+		sessionStore,
+		commandStore,
+		actionStore,
+		logStore,
+		runner,
+	)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,

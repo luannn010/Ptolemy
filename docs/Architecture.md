@@ -1,32 +1,19 @@
-# Ptolemy Architecture
+# Ptolemy Architecture Memory
 
-## Overview
+Ptolemy is a worker/MCP-style execution server.
 
-Codex = planner
-Gemma = executor
-Ptolemy = runtime
+SQLite is used for:
+- sessions
+- command logs
+- actions
+- logs
+- approvals
 
-## Flow
+Markdown is used for:
+- architecture notes
+- coding conventions
+- important decisions
+- project-specific lessons
 
-Codex → Task
-→ Gemma (local loop)
-→ MCP tools
-→ Ptolemy worker
-→ tmux / fileops / git
-→ result (JSON summary)
-→ Codex validates
-
-## Components
-
-- workerd (Go)
-- tmux sessions
-- fileops
-- gitops (future)
-- MCP adapter
-- SQLite storage
-
-## Future
-
-- parallel sessions
-- job orchestration
-- policy enforcement
+The goal is not to store full project history.
+The goal is to store only reusable knowledge that helps agents work safely.

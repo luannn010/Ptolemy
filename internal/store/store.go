@@ -69,3 +69,6 @@ func (s *Store) migrate() error {
 
 	return nil
 }
+func (s *Store) SQLDB() *sql.DB {
+	return s.DB
+}

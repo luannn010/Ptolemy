@@ -5,8 +5,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/executor"
+	"github.com/luannn010/ptolemy/internal/logs"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/terminal"
 	"github.com/rs/zerolog/log"
@@ -21,6 +23,8 @@ type healthResponse struct {
 func NewRouter(
 	sessionStore *session.Store,
 	commandStore *command.Store,
+	actionStore *action.Store,
+	logStore *logs.Store,
 	runner *terminal.TmuxRunner,
 ) http.Handler {
 	r := chi.NewRouter()
@@ -45,7 +49,13 @@ func NewRouter(
 	sessionHandler := NewSessionHandler(sessionStore)
 	r.Mount("/sessions", sessionHandler.Routes())
 
-	commandHandler := NewCommandHandler(sessionStore, commandStore, runner)
+	commandHandler := NewCommandHandler(
+		sessionStore,
+		commandStore,
+		actionStore,
+		logStore,
+		runner,
+	)
 	r.Mount("/sessions/{id}/commands", commandHandler.Routes())
 
 	fileHandler := NewFileHandler(sessionStore)
@@ -55,7 +65,7 @@ func NewRouter(
 	r.Post("/file/list", fileHandler.List)
 	r.Post("/file/search", fileHandler.Search)
 	r.Post("/file/apply", fileHandler.Apply)
-	// Git routes
+
 	gitHandler := NewGitHandler(sessionStore)
 
 	r.Post("/git/status", gitHandler.Status)

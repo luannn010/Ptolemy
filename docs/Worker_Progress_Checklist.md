@@ -71,21 +71,35 @@
 - [x] Bind session → worktree
 - [x] Test parallel sessions
 
-## Phase 8 — SQLite storage
-- [ ] Sessions table
-- [ ] Actions table
-- [ ] Logs table
-- [ ] Approvals table
-- [ ] Add migrations
+## Phase 8 — Agent Memory Layer
 
-- [ ] Create jobs table
-- [ ] Create job_steps table
-- [ ] Add job status:
-      pending / running / failed / completed
-- [ ] Add session binding
-- [ ] Add parent-child job relationships
-- [ ] Add retry logic
-- [ ] Add cancellation
+SQLite execution memory
+- [ ] Keep sessions table
+- [ ] Keep command_logs table
+- [ ] Add actions table
+- [ ] Add logs table
+- [ ] Add approvals table
+- [ ] Add indexes
+- [ ] Add metadata JSON fields
+
+Markdown knowledge memory
+- [ ] Add knowledge/global/
+- [ ] Add knowledge/projects/
+- [ ] Add project architecture notes
+- [ ] Add important decisions notes
+- [ ] Add agent-readable conventions
+
+Migrations
+- [ ] Create basic migration runner
+- [ ] Add schema_migrations table
+- [ ] Auto-run migrations on startup
+
+Execution integration
+- [ ] Before command runs → create action pending
+- [ ] After command runs → update action success/failed
+- [ ] Important events → write logs
+- [ ] Dangerous actions → create approval record
+
 
 ## Phase 9 — Policy engine
 
