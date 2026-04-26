@@ -3,11 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 func main() {
-	fmt.Println("ptolemy-task-runner ready")
-
 	dirs := []string{
 		"docs/tasks/inbox",
 		"docs/tasks/active",
@@ -17,12 +16,27 @@ func main() {
 	}
 
 	for _, dir := range dirs {
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			fmt.Printf("Creating directory: %s\n", dir)
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				fmt.Fprintf(os.Stderr, "Error creating directory %s: %v\n", dir, err)
-				os.Exit(1)
-			}
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			fmt.Printf("failed to create %s: %v\n", dir, err)
+			os.Exit(1)
 		}
+	}
+
+	fmt.Println("ptolemy-task-runner ready")
+
+	tasks, err := filepath.Glob("docs/tasks/inbox/*.md")
+	if err != nil {
+		fmt.Printf("failed to scan inbox: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(tasks) == 0 {
+		fmt.Println("no inbox tasks found")
+		return
+	}
+
+	fmt.Println("inbox tasks:")
+	for _, task := range tasks {
+		fmt.Println(task)
 	}
 }
