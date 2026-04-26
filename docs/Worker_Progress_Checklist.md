@@ -141,31 +141,32 @@ Policy
 
 Agent loop
 - [x] observe → think → act → observe
-- [ ] max step limit
+- [x] max step limit
 - [ ] failure recovery
 - [x] save execution traces
 
 ## Phase 9.5 — File-aware Agent Tools
 
 Core tools
-- [ ] read_file
-- [ ] write_file
+- [x] read_file
+- [x] write_file
 - [ ] apply_patch
 - [ ] search_file
 - [ ] list_files
-- [ ] run_command
+- [x] run_command
+- [x] replace_block
 
 Safety
 - [ ] deny secrets reads: .env, ~/.ssh, tokens
 - [ ] ask approval for destructive writes
-- [ ] only allow edits inside workspace
+- [x] only allow edits inside workspace
 - [ ] log every tool call
 
 Loop
-- [ ] max steps
-- [ ] observe output
-- [ ] retry fix if tests fail
-- [ ] stop when tests pass
+- [x] max steps
+- [x] observe output
+- [x] retry fix if tests fail
+- [x] stop when tests pass
 
 ## Phase 10 — Summarization
 - [ ] Summarize command output
