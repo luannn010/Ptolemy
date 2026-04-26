@@ -12,3 +12,6 @@ logs/
 Thumbs.db
 
 .env
+
+.state/
+/docs/tasks/*

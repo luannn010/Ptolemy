@@ -14,12 +14,22 @@ import (
 	"github.com/luannn010/ptolemy/internal/worker"
 )
 
+const maxBrainPreviewChars = 1200
+const artifactDir = ".state/agent-artifacts"
+
 type BrainAction struct {
 	Action  string `json:"action"`
 	Command string `json:"command,omitempty"`
 	Path    string `json:"path,omitempty"`
 	Content string `json:"content,omitempty"`
+	Old     string `json:"old,omitempty"`
+	New     string `json:"new,omitempty"`
 	Reason  string `json:"reason"`
+}
+
+type ActionResult struct {
+	Display string
+	Brain   string
 }
 
 func main() {
@@ -89,10 +99,12 @@ You must respond in JSON ONLY.
 
 Format:
 {
-  "action": "run_command | read_file | write_file | explain | ask_approval",
+  "action": "run_command | read_file | write_file | replace_block | explain | ask_approval",
   "command": "<shell command>",
   "path": "<relative file path>",
   "content": "<file content for write_file>",
+  "old": "<exact old text for replace_block>",
+  "new": "<exact new text for replace_block>",
   "reason": "<short explanation>"
 }
 
@@ -100,10 +112,18 @@ Rules:
 - Be concise.
 - Do not execute anything yourself.
 - Use read_file before editing a file.
-- Use write_file only after you know the target file content.
+- For exact text replacement, use replace_block with old and new fields.
+- For editing existing code, prefer replace_block instead of write_file.
+- Use write_file only for new small files or full overwrite when explicitly required.
+- Never rewrite full source files unless explicitly required.
+- Keep write_file content under 4000 characters.
 - Use run_command for tests, formatting, and validation.
 - If dangerous, action = ask_approval.
 - If task is complete, action = explain.
+- You must return EXACTLY ONE JSON object per response.
+- Never return multiple JSON objects.
+- Never chain multiple actions in one response.
+- If multiple changes are needed, do them step-by-step across multiple iterations.
 - NEVER return markdown.
 - NEVER return plain text.
 - NEVER include reasoning_content.
@@ -128,17 +148,26 @@ Observations so far:
 
 		action, err := parseBrainAction(reply)
 		if err != nil {
-			fmt.Printf("failed to parse brain JSON:\n%s\nerror: %v\n", reply, err)
+			summary := summarizeError(err, reply)
+
+			artifactPath := saveArtifact(0, "brain-parse-error", reply)
+
+			fmt.Printf(
+				"%s\nartifact: %s\n",
+				summary,
+				artifactPath,
+			)
+
 			os.Exit(1)
 		}
 
 		fmt.Printf("brain action: %s\n", action.Action)
 		fmt.Printf("reason: %s\n", action.Reason)
 
-		observation := executeAction(ctx, workerClient, session.ID, workspace, action)
-		fmt.Println(observation)
+		result := executeAction(ctx, workerClient, session.ID, workspace, step, action)
 
-		observations = append(observations, observation)
+		fmt.Println(result.Display)
+		observations = append(observations, result.Brain)
 
 		if action.Action == "explain" || action.Action == "ask_approval" {
 			return
@@ -153,18 +182,25 @@ func executeAction(
 	workerClient *worker.Client,
 	sessionID string,
 	workspace string,
+	step int,
 	action *BrainAction,
-) string {
+) ActionResult {
 	switch action.Action {
 	case "explain":
-		return "DONE: " + action.Reason
+		msg := "DONE: " + action.Reason
+		return ActionResult{Display: msg, Brain: msg}
 
 	case "ask_approval":
-		return fmt.Sprintf("APPROVAL REQUIRED: %s command=%s", action.Reason, action.Command)
+		msg := fmt.Sprintf("APPROVAL REQUIRED: %s command=%s path=%s", action.Reason, action.Command, action.Path)
+		return ActionResult{Display: msg, Brain: msg}
 
 	case "run_command":
 		if strings.TrimSpace(action.Command) == "" {
-			return "ERROR: empty command"
+			return both("ERROR: empty command")
+		}
+
+		if commandRunsScript(action.Command) && !hasExplicitScriptPermission(action.Reason) {
+			return both(fmt.Sprintf("APPROVAL REQUIRED: running script commands requires explicit permission command=%s", action.Command))
 		}
 
 		result, err := workerClient.RunCommand(ctx, sessionID, worker.RunCommandRequest{
@@ -173,20 +209,36 @@ func executeAction(
 			Timeout: 120,
 		})
 		if err != nil {
-			return fmt.Sprintf("ERROR running command: %v", err)
+			return both(fmt.Sprintf("ERROR running command: %v", err))
 		}
 
-		return fmt.Sprintf(
-			"COMMAND RESULT\ncommand: %s\nexit_code: %d\noutput:\n%s\nerror_output:\n%s",
+		combinedOutput := result.Output
+		if result.ErrorOutput != "" {
+			combinedOutput += "\n" + result.ErrorOutput
+		}
+
+		artifactPath := saveArtifact(step, "command-output", combinedOutput)
+
+		display := fmt.Sprintf(
+			"COMMAND RESULT\ncommand: %s\nexit_code: %d\nartifact: %s",
 			result.Command,
 			result.ExitCode,
-			result.Output,
-			result.ErrorOutput,
+			artifactPath,
 		)
+
+		brain := fmt.Sprintf(
+			"COMMAND RESULT\ncommand: %s\nexit_code: %d\nartifact: %s\noutput_preview:\n%s",
+			result.Command,
+			result.ExitCode,
+			artifactPath,
+			previewText(combinedOutput, maxBrainPreviewChars),
+		)
+
+		return ActionResult{Display: display, Brain: brain}
 
 	case "read_file":
 		if strings.TrimSpace(action.Path) == "" {
-			return "ERROR: empty path"
+			return both("ERROR: empty path")
 		}
 
 		result, err := workerClient.ReadFile(ctx, worker.ReadFileRequest{
@@ -194,15 +246,46 @@ func executeAction(
 			Path:      action.Path,
 		})
 		if err != nil {
-			return fmt.Sprintf("ERROR reading file: %v", err)
+			return both(fmt.Sprintf("ERROR reading file: %v", err))
 		}
 
-		return fmt.Sprintf("FILE READ\npath: %s\ncontent:\n%s", result.Path, result.Content)
+		artifactPath := saveArtifact(step, "read-"+result.Path, result.Content)
+
+		display := fmt.Sprintf(
+			"FILE READ OK\npath: %s\nbytes: %d\nartifact: %s",
+			result.Path,
+			len(result.Content),
+			artifactPath,
+		)
+
+		brain := fmt.Sprintf(
+			"FILE READ OK\npath: %s\nbytes: %d\nartifact: %s\npreview_for_reasoning:\n%s",
+			result.Path,
+			len(result.Content),
+			artifactPath,
+			previewText(result.Content, maxBrainPreviewChars),
+		)
+
+		return ActionResult{Display: display, Brain: brain}
 
 	case "write_file":
 		if strings.TrimSpace(action.Path) == "" {
-			return "ERROR: empty path"
+			return both("ERROR: empty path")
 		}
+
+		if isScriptPath(action.Path) && !hasExplicitScriptPermission(action.Reason) {
+			return both(fmt.Sprintf("APPROVAL REQUIRED: creating script file requires explicit permission path=%s", action.Path))
+		}
+
+		if len(action.Content) > 4000 {
+			return both(fmt.Sprintf(
+				"ERROR: write_file content too large. path=%s bytes=%d. Use replace_block instead.",
+				action.Path,
+				len(action.Content),
+			))
+		}
+
+		artifactPath := saveArtifact(step, "write-"+action.Path, action.Content)
 
 		result, err := workerClient.WriteFile(ctx, worker.WriteFileRequest{
 			SessionID: sessionID,
@@ -210,27 +293,215 @@ func executeAction(
 			Content:   action.Content,
 		})
 		if err != nil {
-			return fmt.Sprintf("ERROR writing file: %v", err)
+			return both(fmt.Sprintf("ERROR writing file: %v", err))
 		}
 
-		return fmt.Sprintf("FILE WRITTEN\npath: %s", result.Path)
+		msg := fmt.Sprintf(
+			"FILE WRITE OK\npath: %s\nbytes: %d\nartifact: %s",
+			result.Path,
+			len(action.Content),
+			artifactPath,
+		)
+
+		return ActionResult{Display: msg, Brain: msg}
+
+	case "replace_block":
+		if strings.TrimSpace(action.Path) == "" {
+			return both("ERROR: empty path")
+		}
+
+		if isScriptPath(action.Path) && !hasExplicitScriptPermission(action.Reason) {
+			return both(fmt.Sprintf("APPROVAL REQUIRED: editing script file requires explicit permission path=%s", action.Path))
+		}
+
+		if strings.TrimSpace(action.Old) == "" {
+			return both("ERROR: replace_block old text is empty")
+		}
+
+		if !isSafeReplacePath(action.Path) {
+			return both(fmt.Sprintf("ERROR: replace_block path is not allowed: %s", action.Path))
+		}
+
+		file, err := workerClient.ReadFile(ctx, worker.ReadFileRequest{
+			SessionID: sessionID,
+			Path:      action.Path,
+		})
+		if err != nil {
+			return both(fmt.Sprintf("ERROR reading file for replace_block: %v", err))
+		}
+
+		if !strings.Contains(file.Content, action.Old) {
+			artifactPath := saveArtifact(step, "replace-old-not-found-"+action.Path, file.Content)
+			return both(fmt.Sprintf(
+				"ERROR: replace_block old text not found\npath: %s\nartifact: %s",
+				action.Path,
+				artifactPath,
+			))
+		}
+
+		updated := strings.Replace(file.Content, action.Old, action.New, 1)
+		artifactPath := saveArtifact(step, "replace-"+action.Path, updated)
+
+		result, err := workerClient.WriteFile(ctx, worker.WriteFileRequest{
+			SessionID: sessionID,
+			Path:      action.Path,
+			Content:   updated,
+		})
+		if err != nil {
+			return both(fmt.Sprintf("ERROR writing replace_block result: %v", err))
+		}
+
+		msg := fmt.Sprintf(
+			"REPLACE BLOCK OK\npath: %s\nbytes: %d\nartifact: %s",
+			result.Path,
+			len(updated),
+			artifactPath,
+		)
+
+		return ActionResult{Display: msg, Brain: msg}
 
 	default:
-		return fmt.Sprintf("ERROR: unknown action %s", action.Action)
+		return both(fmt.Sprintf("ERROR: unknown action %s", action.Action))
 	}
+}
+
+func both(message string) ActionResult {
+	return ActionResult{
+		Display: message,
+		Brain:   message,
+	}
+}
+
+func isSafeReplacePath(p string) bool {
+	if p == "" {
+		return false
+	}
+
+	cleaned := strings.TrimSpace(p)
+
+	if strings.HasPrefix(cleaned, "/etc") ||
+		strings.HasPrefix(cleaned, "/usr") ||
+		strings.HasPrefix(cleaned, "/var") ||
+		strings.HasPrefix(cleaned, "/home") {
+		return false
+	}
+
+	if strings.Contains(cleaned, "..") {
+		return false
+	}
+
+	return strings.HasSuffix(cleaned, ".go") ||
+		strings.HasSuffix(cleaned, ".md") ||
+		strings.HasSuffix(cleaned, ".txt")
+}
+
+func hasExplicitScriptPermission(reason string) bool {
+	lower := strings.ToLower(reason)
+	return strings.Contains(lower, "explicit permission") ||
+		strings.Contains(lower, "user approved script") ||
+		strings.Contains(lower, "permission granted")
+}
+
+func isScriptPath(p string) bool {
+	lower := strings.ToLower(strings.TrimSpace(p))
+	return strings.HasSuffix(lower, ".sh") ||
+		strings.HasSuffix(lower, ".py") ||
+		strings.HasSuffix(lower, ".js") ||
+		strings.HasSuffix(lower, ".ts") ||
+		strings.HasSuffix(lower, ".rb") ||
+		strings.HasSuffix(lower, ".pl")
+}
+
+func commandRunsScript(command string) bool {
+	lower := strings.ToLower(command)
+	return strings.Contains(lower, "python ") ||
+		strings.Contains(lower, "python3 ") ||
+		strings.Contains(lower, "bash ") ||
+		strings.Contains(lower, "sh ") ||
+		strings.Contains(lower, "node ") ||
+		strings.Contains(lower, "ts-node ") ||
+		strings.Contains(lower, "ruby ") ||
+		strings.Contains(lower, "perl ")
+}
+
+func saveArtifact(step int, name string, content string) string {
+	if strings.TrimSpace(content) == "" {
+		return ""
+	}
+
+	_ = os.MkdirAll(artifactDir, 0755)
+
+	safeName := strings.NewReplacer(
+		"/", "-",
+		"\\", "-",
+		":", "-",
+		" ", "-",
+	).Replace(name)
+
+	path := fmt.Sprintf("%s/step-%03d-%s.txt", artifactDir, step, safeName)
+
+	_ = os.WriteFile(path, []byte(content), 0644)
+
+	return path
+}
+
+func previewText(text string, maxChars int) string {
+	if len(text) <= maxChars {
+		return text
+	}
+
+	return text[:maxChars] + "\n...[truncated]"
 }
 
 func parseBrainAction(reply string) (*BrainAction, error) {
 	cleaned := strings.TrimSpace(reply)
+
+	if cleaned == "" {
+		return nil, fmt.Errorf("empty brain reply")
+	}
+
 	cleaned = strings.TrimPrefix(cleaned, "```json")
 	cleaned = strings.TrimPrefix(cleaned, "```")
 	cleaned = strings.TrimSuffix(cleaned, "```")
 	cleaned = strings.TrimSpace(cleaned)
 
+	start := strings.Index(cleaned, "{")
+	end := strings.LastIndex(cleaned, "}")
+
+	if start == -1 || end == -1 || end <= start {
+		return nil, fmt.Errorf("no JSON object found in reply: %q", reply)
+	}
+
+	cleaned = cleaned[start : end+1]
+
 	var action BrainAction
 	if err := json.Unmarshal([]byte(cleaned), &action); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid JSON %q: %w", cleaned, err)
 	}
 
 	return &action, nil
+}
+func summarizeError(err error, raw string) string {
+	msg := err.Error()
+
+	// multiple JSON objects (most common failure)
+	if strings.Count(raw, "{") > 1 {
+		return "ERROR: multiple JSON objects returned (agent must return ONE action)"
+	}
+
+	// JSON parse errors
+	if strings.Contains(msg, "invalid character") {
+		return "ERROR: invalid JSON (likely bad escaping or formatting)"
+	}
+
+	if strings.Contains(msg, "unexpected end of JSON") {
+		return "ERROR: incomplete JSON response"
+	}
+
+	if strings.Contains(msg, "no JSON object found") {
+		return "ERROR: no JSON object in response"
+	}
+
+	// fallback
+	return "ERROR: " + msg
 }
