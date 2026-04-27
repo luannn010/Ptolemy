@@ -7,8 +7,9 @@ func Tools() []mcp.Tool {
 		mcp.NewTool("ptolemy.read_file", "Read a file from a session workspace.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"session_id": map[string]any{"type": "string"},
-				"path":       map[string]any{"type": "string"},
+				"session_id":      map[string]any{"type": "string"},
+				"task_session_id": map[string]any{"type": "string"},
+				"path":            map[string]any{"type": "string"},
 			},
 			"required": []string{"session_id", "path"},
 		}),

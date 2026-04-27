@@ -7,6 +7,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/mcp/executortools"
 	"github.com/luannn010/ptolemy/internal/mcp/filetools"
 	"github.com/luannn010/ptolemy/internal/mcp/gittools"
+	"github.com/luannn010/ptolemy/internal/mcp/navigatortools"
 	"github.com/luannn010/ptolemy/internal/mcp/sessiontools"
 	"github.com/luannn010/ptolemy/internal/mcp/worktreetools"
 )
@@ -24,6 +25,7 @@ func main() {
 		sessiontools.Tools(),
 		executortools.Tools(),
 		filetools.Tools(),
+		navigatortools.Tools(),
 		gittools.Tools(),
 		worktreetools.Tools(),
 	)
@@ -31,6 +33,7 @@ func main() {
 	server.RegisterHandler(sessiontools.Handle)
 	server.RegisterHandler(executortools.Handle)
 	server.RegisterHandler(filetools.Handle)
+	server.RegisterHandler(navigatortools.Handle)
 	server.RegisterHandler(gittools.Handle)
 	server.RegisterHandler(worktreetools.Handle)
 

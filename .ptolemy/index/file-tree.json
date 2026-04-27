@@ -1,0 +1,2188 @@
+{
+  "workspace": "/home/luannn010/projects/ptolemy",
+  "generated_at": "2026-04-27T12:23:51.342217799Z",
+  "files": [
+    {
+      "path": ".env",
+      "is_dir": false,
+      "size": 99
+    },
+    {
+      "path": ".env.example",
+      "is_dir": false,
+      "size": 99
+    },
+    {
+      "path": ".gitignore",
+      "is_dir": false,
+      "size": 107
+    },
+    {
+      "path": ".ptolemy-worktrees/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/.env",
+      "is_dir": false,
+      "size": 99
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/.env.example",
+      "is_dir": false,
+      "size": 99
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/.git",
+      "is_dir": false,
+      "size": 65
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/.gitignore",
+      "is_dir": false,
+      "size": 79
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/Makefile",
+      "is_dir": false,
+      "size": 292
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/README.md",
+      "is_dir": false,
+      "size": 126
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/cmd/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/cmd/ptolemy-mcp/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/cmd/ptolemy-mcp/main.go",
+      "is_dir": false,
+      "size": 811
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/cmd/ptolemy-mcp/main_test.go",
+      "is_dir": false,
+      "size": 1158
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/cmd/workerd/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/cmd/workerd/main.go",
+      "is_dir": false,
+      "size": 1882
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/cmd/workerd/main_test.go",
+      "is_dir": false,
+      "size": 919
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/deploy/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/deploy/workerd.service",
+      "is_dir": false,
+      "size": 379
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/docs/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/docs/Architecture.md",
+      "is_dir": false,
+      "size": 419
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/docs/Build Plan.md",
+      "is_dir": false,
+      "size": 307
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/docs/Future Updates.md",
+      "is_dir": false,
+      "size": 294
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/docs/MVP_Design.md",
+      "is_dir": false,
+      "size": 639
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/docs/Worker_Progress_Checklist.md",
+      "is_dir": false,
+      "size": 3858
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/go.mod",
+      "is_dir": false,
+      "size": 667
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/go.sum",
+      "is_dir": false,
+      "size": 4890
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/command/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/command/command.go",
+      "is_dir": false,
+      "size": 556
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/command/store.go",
+      "is_dir": false,
+      "size": 1870
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/command/store_test.go",
+      "is_dir": false,
+      "size": 1790
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/config/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/config/config.go",
+      "is_dir": false,
+      "size": 902
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/config/config_test.go",
+      "is_dir": false,
+      "size": 1300
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/executor/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/executor/executor.go",
+      "is_dir": false,
+      "size": 2488
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/executor/executor_test.go",
+      "is_dir": false,
+      "size": 3981
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/fileops/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/fileops/fileops.go",
+      "is_dir": false,
+      "size": 2310
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/fileops/fileops_test.go",
+      "is_dir": false,
+      "size": 1927
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/gitops/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/gitops/gitops.go",
+      "is_dir": false,
+      "size": 3255
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/gitops/gitops_test.go",
+      "is_dir": false,
+      "size": 4019
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/httpapi/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/httpapi/commands.go",
+      "is_dir": false,
+      "size": 3068
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/httpapi/execute.go",
+      "is_dir": false,
+      "size": 910
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/httpapi/fileops.go",
+      "is_dir": false,
+      "size": 4143
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/httpapi/git.go",
+      "is_dir": false,
+      "size": 3334
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/httpapi/json.go",
+      "is_dir": false,
+      "size": 240
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/httpapi/router.go",
+      "is_dir": false,
+      "size": 1912
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/httpapi/router_test.go",
+      "is_dir": false,
+      "size": 4616
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/httpapi/session.go",
+      "is_dir": false,
+      "size": 2422
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/logging/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/logging/logging.go",
+      "is_dir": false,
+      "size": 752
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/logging/logging_test.go",
+      "is_dir": false,
+      "size": 633
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/client.go",
+      "is_dir": false,
+      "size": 1010
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/client_test.go",
+      "is_dir": false,
+      "size": 1864
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/executortools/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/executortools/tools.go",
+      "is_dir": false,
+      "size": 874
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/executortools/tools_test.go",
+      "is_dir": false,
+      "size": 302
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/filetools/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/filetools/tools.go",
+      "is_dir": false,
+      "size": 2587
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/filetools/tools_test.go",
+      "is_dir": false,
+      "size": 538
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/gittools/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/gittools/tools.go",
+      "is_dir": false,
+      "size": 3175
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/gittools/tools_test.go",
+      "is_dir": false,
+      "size": 622
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/rpc.go",
+      "is_dir": false,
+      "size": 549
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/server.go",
+      "is_dir": false,
+      "size": 2464
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/server_test.go",
+      "is_dir": false,
+      "size": 2628
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/sessiontools/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/sessiontools/tools.go",
+      "is_dir": false,
+      "size": 2101
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/sessiontools/tools_test.go",
+      "is_dir": false,
+      "size": 504
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/tools.go",
+      "is_dir": false,
+      "size": 740
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/mcp/tools_test.go",
+      "is_dir": false,
+      "size": 971
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/session/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/session/session.go",
+      "is_dir": false,
+      "size": 644
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/session/store.go",
+      "is_dir": false,
+      "size": 3560
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/session/store_test.go",
+      "is_dir": false,
+      "size": 4005
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/store/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/store/store.go",
+      "is_dir": false,
+      "size": 1286
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/store/store_test.go",
+      "is_dir": false,
+      "size": 967
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/terminal/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/terminal/runner.go",
+      "is_dir": false,
+      "size": 1296
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/terminal/runner_test.go",
+      "is_dir": false,
+      "size": 827
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/terminal/tmux_runner.go",
+      "is_dir": false,
+      "size": 4240
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/worktree/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/worktree/worktree.go",
+      "is_dir": false,
+      "size": 3269
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/internal/worktree/worktree_test.go",
+      "is_dir": false,
+      "size": 2293
+    },
+    {
+      "path": ".ptolemy-worktrees/task-one/tmp.txt",
+      "is_dir": false,
+      "size": 5
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/.env",
+      "is_dir": false,
+      "size": 99
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/.env.example",
+      "is_dir": false,
+      "size": 99
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/.git",
+      "is_dir": false,
+      "size": 62
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/.gitignore",
+      "is_dir": false,
+      "size": 79
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/Makefile",
+      "is_dir": false,
+      "size": 292
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/README.md",
+      "is_dir": false,
+      "size": 126
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/cmd/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/cmd/ptolemy-mcp/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/cmd/ptolemy-mcp/main.go",
+      "is_dir": false,
+      "size": 811
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/cmd/ptolemy-mcp/main_test.go",
+      "is_dir": false,
+      "size": 1158
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/cmd/workerd/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/cmd/workerd/main.go",
+      "is_dir": false,
+      "size": 1882
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/cmd/workerd/main_test.go",
+      "is_dir": false,
+      "size": 919
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/deploy/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/deploy/workerd.service",
+      "is_dir": false,
+      "size": 379
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/docs/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/docs/Architecture.md",
+      "is_dir": false,
+      "size": 419
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/docs/Build Plan.md",
+      "is_dir": false,
+      "size": 307
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/docs/Future Updates.md",
+      "is_dir": false,
+      "size": 294
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/docs/MVP_Design.md",
+      "is_dir": false,
+      "size": 639
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/docs/Worker_Progress_Checklist.md",
+      "is_dir": false,
+      "size": 3858
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/go.mod",
+      "is_dir": false,
+      "size": 667
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/go.sum",
+      "is_dir": false,
+      "size": 4890
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/command/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/command/command.go",
+      "is_dir": false,
+      "size": 556
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/command/store.go",
+      "is_dir": false,
+      "size": 1870
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/command/store_test.go",
+      "is_dir": false,
+      "size": 1790
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/config/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/config/config.go",
+      "is_dir": false,
+      "size": 902
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/config/config_test.go",
+      "is_dir": false,
+      "size": 1300
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/executor/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/executor/executor.go",
+      "is_dir": false,
+      "size": 2488
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/executor/executor_test.go",
+      "is_dir": false,
+      "size": 3981
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/fileops/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/fileops/fileops.go",
+      "is_dir": false,
+      "size": 2310
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/fileops/fileops_test.go",
+      "is_dir": false,
+      "size": 1927
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/gitops/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/gitops/gitops.go",
+      "is_dir": false,
+      "size": 3255
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/gitops/gitops_test.go",
+      "is_dir": false,
+      "size": 4019
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/httpapi/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/httpapi/commands.go",
+      "is_dir": false,
+      "size": 3068
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/httpapi/execute.go",
+      "is_dir": false,
+      "size": 910
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/httpapi/fileops.go",
+      "is_dir": false,
+      "size": 4143
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/httpapi/git.go",
+      "is_dir": false,
+      "size": 3334
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/httpapi/json.go",
+      "is_dir": false,
+      "size": 240
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/httpapi/router.go",
+      "is_dir": false,
+      "size": 1912
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/httpapi/router_test.go",
+      "is_dir": false,
+      "size": 4616
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/httpapi/session.go",
+      "is_dir": false,
+      "size": 2422
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/logging/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/logging/logging.go",
+      "is_dir": false,
+      "size": 752
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/logging/logging_test.go",
+      "is_dir": false,
+      "size": 633
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/client.go",
+      "is_dir": false,
+      "size": 1010
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/client_test.go",
+      "is_dir": false,
+      "size": 1864
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/executortools/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/executortools/tools.go",
+      "is_dir": false,
+      "size": 874
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/executortools/tools_test.go",
+      "is_dir": false,
+      "size": 302
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/filetools/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/filetools/tools.go",
+      "is_dir": false,
+      "size": 2587
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/filetools/tools_test.go",
+      "is_dir": false,
+      "size": 538
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/gittools/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/gittools/tools.go",
+      "is_dir": false,
+      "size": 3175
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/gittools/tools_test.go",
+      "is_dir": false,
+      "size": 622
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/rpc.go",
+      "is_dir": false,
+      "size": 549
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/server.go",
+      "is_dir": false,
+      "size": 2464
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/server_test.go",
+      "is_dir": false,
+      "size": 2628
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/sessiontools/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/sessiontools/tools.go",
+      "is_dir": false,
+      "size": 2101
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/sessiontools/tools_test.go",
+      "is_dir": false,
+      "size": 504
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/tools.go",
+      "is_dir": false,
+      "size": 740
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/mcp/tools_test.go",
+      "is_dir": false,
+      "size": 971
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/session/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/session/session.go",
+      "is_dir": false,
+      "size": 644
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/session/store.go",
+      "is_dir": false,
+      "size": 3560
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/session/store_test.go",
+      "is_dir": false,
+      "size": 4005
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/store/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/store/store.go",
+      "is_dir": false,
+      "size": 1286
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/store/store_test.go",
+      "is_dir": false,
+      "size": 967
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/terminal/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/terminal/runner.go",
+      "is_dir": false,
+      "size": 1296
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/terminal/runner_test.go",
+      "is_dir": false,
+      "size": 827
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/terminal/tmux_runner.go",
+      "is_dir": false,
+      "size": 4240
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/worktree/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/worktree/worktree.go",
+      "is_dir": false,
+      "size": 3269
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/internal/worktree/worktree_test.go",
+      "is_dir": false,
+      "size": 2293
+    },
+    {
+      "path": ".ptolemy-worktrees/task1/tmp.txt",
+      "is_dir": false,
+      "size": 5
+    },
+    {
+      "path": ".ptolemy/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy/PTOLEMY.md",
+      "is_dir": false,
+      "size": 437
+    },
+    {
+      "path": ".ptolemy/context/",
+      "is_dir": true
+    },
+    {
+      "path": ".ptolemy/context/architecture.md",
+      "is_dir": false,
+      "size": 184
+    },
+    {
+      "path": ".ptolemy/context/commands.md",
+      "is_dir": false,
+      "size": 311
+    },
+    {
+      "path": ".ptolemy/context/conventions.md",
+      "is_dir": false,
+      "size": 253
+    },
+    {
+      "path": ".ptolemy/context/env.md",
+      "is_dir": false,
+      "size": 213
+    },
+    {
+      "path": ".ptolemy/context/project-map.md",
+      "is_dir": false,
+      "size": 98
+    },
+    {
+      "path": ".state/",
+      "is_dir": true
+    },
+    {
+      "path": ".state/agent-artifacts/",
+      "is_dir": true
+    },
+    {
+      "path": ".state/agent-artifacts/step-000-brain-parse-error.txt",
+      "is_dir": false,
+      "size": 1103
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-command-output.txt",
+      "is_dir": false,
+      "size": 21
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-insert-after-tmp-insert-after-test.txt.txt",
+      "is_dir": false,
+      "size": 28
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 16080
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-read-cmd-ptolemy-task-runner-main.go.txt",
+      "is_dir": false,
+      "size": 692
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-read-docs-memory-global-agent-rules.md.txt",
+      "is_dir": false,
+      "size": 1320
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-read-docs-memory-projects-ptolemy-conventions.md.txt",
+      "is_dir": false,
+      "size": 265
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-read-docs-tasks-active-task-classification.md.txt",
+      "is_dir": false,
+      "size": 74
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-read-docs-tasks-inbox-test-task.md.txt",
+      "is_dir": false,
+      "size": 48
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-read-tmp-agent-md-test.txt.txt",
+      "is_dir": false,
+      "size": 24
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-read-tmp-insert-after-test.txt.txt",
+      "is_dir": false,
+      "size": 19
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-read-tmp-replace-test.txt.txt",
+      "is_dir": false,
+      "size": 18
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-cmd-ptolemy-task-runner-main.go.txt",
+      "is_dir": false,
+      "size": 466
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-docs-tasks-active-task-classification.md.txt",
+      "is_dir": false,
+      "size": 74
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-docs-tasks-phase9a-enhance-inspector.md.txt",
+      "is_dir": false,
+      "size": 459
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-docs-tasks-phase9b-save-workspace-snapshot.md.txt",
+      "is_dir": false,
+      "size": 533
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-docs-tasks-phase9c-failure-recovery-rules.md.txt",
+      "is_dir": false,
+      "size": 408
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-docs-tasks-phase9d-update-checklist.md.txt",
+      "is_dir": false,
+      "size": 385
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-docs-tasks-split-000-large-split-validation-a.md.txt",
+      "is_dir": false,
+      "size": 82
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-tmp-agent-md-test.txt.txt",
+      "is_dir": false,
+      "size": 24
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-tmp-large-split-a.txt.txt",
+      "is_dir": false,
+      "size": 1
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-tmp-large-split-b.txt.txt",
+      "is_dir": false,
+      "size": 1
+    },
+    {
+      "path": ".state/agent-artifacts/step-001-write-tmp-phase9f-validation.txt.txt",
+      "is_dir": false,
+      "size": 52
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-command-output.txt",
+      "is_dir": false,
+      "size": 10
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-insert-after-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 16080
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-insert-after-tmp-insert-after-test.txt.txt",
+      "is_dir": false,
+      "size": 28
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 16080
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-read-docs-memory-global-agent-rules.md.txt",
+      "is_dir": false,
+      "size": 605
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-read-docs-tasks-scripts-add_script_permission_policy.py.txt",
+      "is_dir": false,
+      "size": 6932
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-read-docs-tasks-split-task-1.md.txt",
+      "is_dir": false,
+      "size": 309
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-read-tmp-insert-after-test.txt.txt",
+      "is_dir": false,
+      "size": 19
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-read-tmp-replace-test.txt.txt",
+      "is_dir": false,
+      "size": 18
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-replace-docs-memory-projects-ptolemy-conventions.md.txt",
+      "is_dir": false,
+      "size": 756
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-replace-old-not-found-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 13234
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-write-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 3435
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-write-cmd-ptolemy-task-runner-main.go.txt",
+      "is_dir": false,
+      "size": 525
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-write-docs-tasks-active-task-classification.md.txt",
+      "is_dir": false,
+      "size": 74
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-write-docs-tasks-inbox-test-task.md.txt",
+      "is_dir": false,
+      "size": 48
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-write-docs-tasks-split-000-large-split-validation-a.md.txt",
+      "is_dir": false,
+      "size": 82
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-write-tmp-agent-md-test.txt.txt",
+      "is_dir": false,
+      "size": 35
+    },
+    {
+      "path": ".state/agent-artifacts/step-002-write-tmp-phase9f-validation.txt.txt",
+      "is_dir": false,
+      "size": 30
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-command-output.txt",
+      "is_dir": false,
+      "size": 130
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-insert-after-tmp-insert-after-test.txt.txt",
+      "is_dir": false,
+      "size": 46
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 15993
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-read-docs-memory-projects-ptolemy-conventions.md.txt",
+      "is_dir": false,
+      "size": 756
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-read-docs-tasks-split-task-2.md.txt",
+      "is_dir": false,
+      "size": 643
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-read-tmp-agent-md-test.txt.txt",
+      "is_dir": false,
+      "size": 24
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-read-tmp-replace-test.txt.txt",
+      "is_dir": false,
+      "size": 18
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-replace-old-not-found-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 16080
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-replace-tmp-replace-test.txt.txt",
+      "is_dir": false,
+      "size": 25
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-write-docs-tasks-phase9f-1-task-inbox-classifier.md.txt",
+      "is_dir": false,
+      "size": 115
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-write-docs-tasks-split-000-large-split-validation-a.md.txt",
+      "is_dir": false,
+      "size": 66
+    },
+    {
+      "path": ".state/agent-artifacts/step-003-write-tmp-phase9f-validation.txt.txt",
+      "is_dir": false,
+      "size": 30
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-brain-parse-error.txt",
+      "is_dir": false,
+      "size": 489
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-command-output.txt",
+      "is_dir": false,
+      "size": 11
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-insert-after-tmp-insert-after-test.txt.txt",
+      "is_dir": false,
+      "size": 55
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 16080
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-read-cmd-ptolemy-task-runner-main.go.txt",
+      "is_dir": false,
+      "size": 525
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-read-docs-tasks-inbox-large-test-task.md.txt",
+      "is_dir": false,
+      "size": 307
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-replace-old-not-found-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 13234
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-replace-old-not-found-docs-memory-global-agent-rules.md.txt",
+      "is_dir": false,
+      "size": 605
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-write-docs-tasks-split-000-large-split-validation-b.md.txt",
+      "is_dir": false,
+      "size": 66
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-write-tmp-agent-md-test.txt.txt",
+      "is_dir": false,
+      "size": 35
+    },
+    {
+      "path": ".state/agent-artifacts/step-004-write-tmp-phase9f-validation.txt.txt",
+      "is_dir": false,
+      "size": 30
+    },
+    {
+      "path": ".state/agent-artifacts/step-005-brain-parse-error.txt",
+      "is_dir": false,
+      "size": 1332
+    },
+    {
+      "path": ".state/agent-artifacts/step-005-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 9175
+    },
+    {
+      "path": ".state/agent-artifacts/step-005-read-docs-memory-global-agent-rules.md.txt",
+      "is_dir": false,
+      "size": 605
+    },
+    {
+      "path": ".state/agent-artifacts/step-005-read-docs-tasks-split-task-2.md.txt",
+      "is_dir": false,
+      "size": 643
+    },
+    {
+      "path": ".state/agent-artifacts/step-005-read-tmp-agent-md-test.txt.txt",
+      "is_dir": false,
+      "size": 24
+    },
+    {
+      "path": ".state/agent-artifacts/step-005-replace-old-not-found-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 13234
+    },
+    {
+      "path": ".state/agent-artifacts/step-005-write-docs-tasks-split-task-1.md.txt",
+      "is_dir": false,
+      "size": 309
+    },
+    {
+      "path": ".state/agent-artifacts/step-005-write-tmp-agent-md-test.txt.txt",
+      "is_dir": false,
+      "size": 35
+    },
+    {
+      "path": ".state/agent-artifacts/step-006-brain-parse-error.txt",
+      "is_dir": false,
+      "size": 498
+    },
+    {
+      "path": ".state/agent-artifacts/step-006-command-output.txt",
+      "is_dir": false,
+      "size": 23
+    },
+    {
+      "path": ".state/agent-artifacts/step-006-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 15993
+    },
+    {
+      "path": ".state/agent-artifacts/step-006-replace-docs-memory-global-agent-rules.md.txt",
+      "is_dir": false,
+      "size": 1320
+    },
+    {
+      "path": ".state/agent-artifacts/step-006-replace-old-not-found-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 13234
+    },
+    {
+      "path": ".state/agent-artifacts/step-006-write-docs-tasks-split-task-2.md.txt",
+      "is_dir": false,
+      "size": 643
+    },
+    {
+      "path": ".state/agent-artifacts/step-006-write-tmp-agent-md-test.txt.txt",
+      "is_dir": false,
+      "size": 35
+    },
+    {
+      "path": ".state/agent-artifacts/step-007-brain-parse-error.txt",
+      "is_dir": false,
+      "size": 652
+    },
+    {
+      "path": ".state/agent-artifacts/step-007-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 9175
+    },
+    {
+      "path": ".state/agent-artifacts/step-008-brain-parse-error.txt",
+      "is_dir": false,
+      "size": 652
+    },
+    {
+      "path": ".state/agent-artifacts/step-008-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 9175
+    },
+    {
+      "path": ".state/agent-artifacts/step-008-replace-old-not-found-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 15993
+    },
+    {
+      "path": ".state/agent-artifacts/step-009-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 9175
+    },
+    {
+      "path": ".state/agent-artifacts/step-010-read-cmd-ptolemy-agent-main.go.txt",
+      "is_dir": false,
+      "size": 9175
+    },
+    {
+      "path": ".state/task-runner/",
+      "is_dir": true
+    },
+    {
+      "path": ".state/task-runner/000-large-split-workflow-validation-output.txt",
+      "is_dir": false,
+      "size": 1365
+    },
+    {
+      "path": ".state/task-runner/000-phase9f-validation-output.txt",
+      "is_dir": false,
+      "size": 1048
+    },
+    {
+      "path": "AGENT.md",
+      "is_dir": false,
+      "size": 10451
+    },
+    {
+      "path": "Makefile",
+      "is_dir": false,
+      "size": 292
+    },
+    {
+      "path": "README.md",
+      "is_dir": false,
+      "size": 126
+    },
+    {
+      "path": "WORKFLOWS.md",
+      "is_dir": false,
+      "size": 5320
+    },
+    {
+      "path": "bin/",
+      "is_dir": true
+    },
+    {
+      "path": "bin/ptolemy-mcp",
+      "is_dir": false,
+      "size": 8700008
+    },
+    {
+      "path": "bin/workerd",
+      "is_dir": false,
+      "size": 15326616
+    },
+    {
+      "path": "cmd/",
+      "is_dir": true
+    },
+    {
+      "path": "cmd/ptolemy-agent/",
+      "is_dir": true
+    },
+    {
+      "path": "cmd/ptolemy-agent/main.go",
+      "is_dir": false,
+      "size": 16080
+    },
+    {
+      "path": "cmd/ptolemy-mcp/",
+      "is_dir": true
+    },
+    {
+      "path": "cmd/ptolemy-mcp/main.go",
+      "is_dir": false,
+      "size": 1074
+    },
+    {
+      "path": "cmd/ptolemy-mcp/main_test.go",
+      "is_dir": false,
+      "size": 1158
+    },
+    {
+      "path": "cmd/ptolemy-task-runner/",
+      "is_dir": true
+    },
+    {
+      "path": "cmd/ptolemy-task-runner/main.go",
+      "is_dir": false,
+      "size": 4609
+    },
+    {
+      "path": "cmd/ptolemy-task-runner/main_test.go",
+      "is_dir": false,
+      "size": 2793
+    },
+    {
+      "path": "cmd/workerd/",
+      "is_dir": true
+    },
+    {
+      "path": "cmd/workerd/main.go",
+      "is_dir": false,
+      "size": 2452
+    },
+    {
+      "path": "cmd/workerd/main_test.go",
+      "is_dir": false,
+      "size": 1254
+    },
+    {
+      "path": "configs/",
+      "is_dir": true
+    },
+    {
+      "path": "deploy/",
+      "is_dir": true
+    },
+    {
+      "path": "deploy/workerd.service",
+      "is_dir": false,
+      "size": 379
+    },
+    {
+      "path": "docs/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/Architecture.md",
+      "is_dir": false,
+      "size": 392
+    },
+    {
+      "path": "docs/Build Plan.md",
+      "is_dir": false,
+      "size": 307
+    },
+    {
+      "path": "docs/Future Updates.md",
+      "is_dir": false,
+      "size": 489
+    },
+    {
+      "path": "docs/MVP_Design.md",
+      "is_dir": false,
+      "size": 639
+    },
+    {
+      "path": "docs/Worker_Progress_Checklist.md",
+      "is_dir": false,
+      "size": 5197
+    },
+    {
+      "path": "docs/memory/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/memory/global/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/memory/global/agent-rules.md",
+      "is_dir": false,
+      "size": 1320
+    },
+    {
+      "path": "docs/memory/projects/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/memory/projects/ptolemy/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/memory/projects/ptolemy/architecture.md",
+      "is_dir": false,
+      "size": 550
+    },
+    {
+      "path": "docs/memory/projects/ptolemy/conventions.md",
+      "is_dir": false,
+      "size": 756
+    },
+    {
+      "path": "docs/memory/projects/ptolemy/decisions.md",
+      "is_dir": false,
+      "size": 261
+    },
+    {
+      "path": "docs/memory/projects/ptolemy/known-issues.md",
+      "is_dir": false,
+      "size": 342
+    },
+    {
+      "path": "docs/tasks/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/tasks/active/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/tasks/active/task-classification.md",
+      "is_dir": false,
+      "size": 74
+    },
+    {
+      "path": "docs/tasks/archive/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/tasks/done/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/tasks/done/000-large-split-workflow-validation.md",
+      "is_dir": false,
+      "size": 4234
+    },
+    {
+      "path": "docs/tasks/done/000-phase9f-validation.md",
+      "is_dir": false,
+      "size": 123
+    },
+    {
+      "path": "docs/tasks/done/task-1.md",
+      "is_dir": false,
+      "size": 309
+    },
+    {
+      "path": "docs/tasks/done/task-2.md",
+      "is_dir": false,
+      "size": 643
+    },
+    {
+      "path": "docs/tasks/failed/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/tasks/inbox/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/tasks/inbox/fix-parse-recovery-force.md",
+      "is_dir": false,
+      "size": 984
+    },
+    {
+      "path": "docs/tasks/inbox/large-test-task.md",
+      "is_dir": false,
+      "size": 307
+    },
+    {
+      "path": "docs/tasks/inbox/test-task.md",
+      "is_dir": false,
+      "size": 48
+    },
+    {
+      "path": "docs/tasks/phase9f-3-execute-split-tasks.md",
+      "is_dir": false,
+      "size": 659
+    },
+    {
+      "path": "docs/tasks/phase9f-3b-execute-one-split-task.md",
+      "is_dir": false,
+      "size": 651
+    },
+    {
+      "path": "docs/tasks/phase9f-4-task-runner-command.md",
+      "is_dir": false,
+      "size": 3926
+    },
+    {
+      "path": "docs/tasks/phase9f-4a-task-runner-skeleton.md",
+      "is_dir": false,
+      "size": 544
+    },
+    {
+      "path": "docs/tasks/phase9f-4b-scan-inbox-bootstrap.md",
+      "is_dir": false,
+      "size": 427
+    },
+    {
+      "path": "docs/tasks/phase9f-4b-scan-inbox.md",
+      "is_dir": false,
+      "size": 556
+    },
+    {
+      "path": "docs/tasks/phase9f-4c-allow-scripts-flag.md",
+      "is_dir": false,
+      "size": 1074
+    },
+    {
+      "path": "docs/tasks/phase9f-4d-task-runner-classify.md",
+      "is_dir": false,
+      "size": 1298
+    },
+    {
+      "path": "docs/tasks/phase9f-4e-1-insert-after-skill.md",
+      "is_dir": false,
+      "size": 2451
+    },
+    {
+      "path": "docs/tasks/phase9f-4e-2-json-parse-recovery.md",
+      "is_dir": false,
+      "size": 1699
+    },
+    {
+      "path": "docs/tasks/phase9f-4e-json-parse-recovery.md",
+      "is_dir": false,
+      "size": 2147
+    },
+    {
+      "path": "docs/tasks/scripts/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/tasks/scripts/add_allow_scripts_flag.py",
+      "is_dir": false,
+      "size": 1633
+    },
+    {
+      "path": "docs/tasks/scripts/add_insert_after_skill.py",
+      "is_dir": false,
+      "size": 3260
+    },
+    {
+      "path": "docs/tasks/scripts/add_script_permission_policy.py",
+      "is_dir": false,
+      "size": 1387
+    },
+    {
+      "path": "docs/tasks/scripts/fix_parse_recovery.py",
+      "is_dir": false,
+      "size": 1444
+    },
+    {
+      "path": "docs/tasks/scripts/update_task_runner_4b.py",
+      "is_dir": false,
+      "size": 904
+    },
+    {
+      "path": "docs/tasks/split/",
+      "is_dir": true
+    },
+    {
+      "path": "docs/tasks/split/000-large-split-validation-a.md",
+      "is_dir": false,
+      "size": 66
+    },
+    {
+      "path": "docs/tasks/split/000-large-split-validation-b.md",
+      "is_dir": false,
+      "size": 66
+    },
+    {
+      "path": "go.mod",
+      "is_dir": false,
+      "size": 667
+    },
+    {
+      "path": "go.sum",
+      "is_dir": false,
+      "size": 4890
+    },
+    {
+      "path": "internal/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/action/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/action/store.go",
+      "is_dir": false,
+      "size": 1192
+    },
+    {
+      "path": "internal/approval/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/approval/store.go",
+      "is_dir": false,
+      "size": 1165
+    },
+    {
+      "path": "internal/brain/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/brain/client.go",
+      "is_dir": false,
+      "size": 1694
+    },
+    {
+      "path": "internal/brain/client_test.go",
+      "is_dir": false,
+      "size": 877
+    },
+    {
+      "path": "internal/command/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/command/command.go",
+      "is_dir": false,
+      "size": 556
+    },
+    {
+      "path": "internal/command/store.go",
+      "is_dir": false,
+      "size": 1870
+    },
+    {
+      "path": "internal/command/store_test.go",
+      "is_dir": false,
+      "size": 1790
+    },
+    {
+      "path": "internal/config/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/config/config.go",
+      "is_dir": false,
+      "size": 902
+    },
+    {
+      "path": "internal/config/config_test.go",
+      "is_dir": false,
+      "size": 1300
+    },
+    {
+      "path": "internal/config/state/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/executor/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/executor/executor.go",
+      "is_dir": false,
+      "size": 2488
+    },
+    {
+      "path": "internal/executor/executor_test.go",
+      "is_dir": false,
+      "size": 3981
+    },
+    {
+      "path": "internal/fileops/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/fileops/fileops.go",
+      "is_dir": false,
+      "size": 2310
+    },
+    {
+      "path": "internal/fileops/fileops_test.go",
+      "is_dir": false,
+      "size": 1927
+    },
+    {
+      "path": "internal/gitops/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/gitops/gitops.go",
+      "is_dir": false,
+      "size": 3255
+    },
+    {
+      "path": "internal/gitops/gitops_test.go",
+      "is_dir": false,
+      "size": 4019
+    },
+    {
+      "path": "internal/httpapi/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/httpapi/commands.go",
+      "is_dir": false,
+      "size": 5959
+    },
+    {
+      "path": "internal/httpapi/execute.go",
+      "is_dir": false,
+      "size": 910
+    },
+    {
+      "path": "internal/httpapi/fileops.go",
+      "is_dir": false,
+      "size": 4477
+    },
+    {
+      "path": "internal/httpapi/git.go",
+      "is_dir": false,
+      "size": 3334
+    },
+    {
+      "path": "internal/httpapi/json.go",
+      "is_dir": false,
+      "size": 240
+    },
+    {
+      "path": "internal/httpapi/navigator.go",
+      "is_dir": false,
+      "size": 3555
+    },
+    {
+      "path": "internal/httpapi/router.go",
+      "is_dir": false,
+      "size": 2706
+    },
+    {
+      "path": "internal/httpapi/router_test.go",
+      "is_dir": false,
+      "size": 5079
+    },
+    {
+      "path": "internal/httpapi/session.go",
+      "is_dir": false,
+      "size": 2422
+    },
+    {
+      "path": "internal/httpapi/worktree.go",
+      "is_dir": false,
+      "size": 2857
+    },
+    {
+      "path": "internal/inspect/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/inspect/inspect.go",
+      "is_dir": false,
+      "size": 2724
+    },
+    {
+      "path": "internal/inspect/inspect_test.go",
+      "is_dir": false,
+      "size": 1608
+    },
+    {
+      "path": "internal/logging/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/logging/logging.go",
+      "is_dir": false,
+      "size": 752
+    },
+    {
+      "path": "internal/logging/logging_test.go",
+      "is_dir": false,
+      "size": 633
+    },
+    {
+      "path": "internal/logs/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/logs/store.go",
+      "is_dir": false,
+      "size": 744
+    },
+    {
+      "path": "internal/mcp/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/mcp/client.go",
+      "is_dir": false,
+      "size": 1010
+    },
+    {
+      "path": "internal/mcp/client_test.go",
+      "is_dir": false,
+      "size": 1864
+    },
+    {
+      "path": "internal/mcp/executortools/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/mcp/executortools/tools.go",
+      "is_dir": false,
+      "size": 874
+    },
+    {
+      "path": "internal/mcp/executortools/tools_test.go",
+      "is_dir": false,
+      "size": 302
+    },
+    {
+      "path": "internal/mcp/filetools/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/mcp/filetools/tools.go",
+      "is_dir": false,
+      "size": 2654
+    },
+    {
+      "path": "internal/mcp/filetools/tools_test.go",
+      "is_dir": false,
+      "size": 538
+    },
+    {
+      "path": "internal/mcp/gittools/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/mcp/gittools/tools.go",
+      "is_dir": false,
+      "size": 3175
+    },
+    {
+      "path": "internal/mcp/gittools/tools_test.go",
+      "is_dir": false,
+      "size": 622
+    },
+    {
+      "path": "internal/mcp/navigatortools/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/mcp/navigatortools/tools.go",
+      "is_dir": false,
+      "size": 2341
+    },
+    {
+      "path": "internal/mcp/navigatortools/tools_test.go",
+      "is_dir": false,
+      "size": 528
+    },
+    {
+      "path": "internal/mcp/rpc.go",
+      "is_dir": false,
+      "size": 549
+    },
+    {
+      "path": "internal/mcp/server.go",
+      "is_dir": false,
+      "size": 2464
+    },
+    {
+      "path": "internal/mcp/server_test.go",
+      "is_dir": false,
+      "size": 2628
+    },
+    {
+      "path": "internal/mcp/sessiontools/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/mcp/sessiontools/tools.go",
+      "is_dir": false,
+      "size": 2101
+    },
+    {
+      "path": "internal/mcp/sessiontools/tools_test.go",
+      "is_dir": false,
+      "size": 504
+    },
+    {
+      "path": "internal/mcp/tools.go",
+      "is_dir": false,
+      "size": 740
+    },
+    {
+      "path": "internal/mcp/tools_test.go",
+      "is_dir": false,
+      "size": 971
+    },
+    {
+      "path": "internal/mcp/worktreetools/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/mcp/worktreetools/tools.go",
+      "is_dir": false,
+      "size": 1613
+    },
+    {
+      "path": "internal/mcp/worktreetools/tools_test.go",
+      "is_dir": false,
+      "size": 474
+    },
+    {
+      "path": "internal/memory/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/memory/loader.go",
+      "is_dir": false,
+      "size": 1708
+    },
+    {
+      "path": "internal/memory/loader_test.go",
+      "is_dir": false,
+      "size": 5097
+    },
+    {
+      "path": "internal/navigator/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/navigator/navigator.go",
+      "is_dir": false,
+      "size": 13252
+    },
+    {
+      "path": "internal/navigator/navigator_test.go",
+      "is_dir": false,
+      "size": 4393
+    },
+    {
+      "path": "internal/policy/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/policy/policy.go",
+      "is_dir": false,
+      "size": 1678
+    },
+    {
+      "path": "internal/policy/policy_test.go",
+      "is_dir": false,
+      "size": 1014
+    },
+    {
+      "path": "internal/session/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/session/session.go",
+      "is_dir": false,
+      "size": 644
+    },
+    {
+      "path": "internal/session/store.go",
+      "is_dir": false,
+      "size": 4202
+    },
+    {
+      "path": "internal/session/store_test.go",
+      "is_dir": false,
+      "size": 4564
+    },
+    {
+      "path": "internal/store/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/store/migrations.go",
+      "is_dir": false,
+      "size": 1495
+    },
+    {
+      "path": "internal/store/store.go",
+      "is_dir": false,
+      "size": 1334
+    },
+    {
+      "path": "internal/store/store_test.go",
+      "is_dir": false,
+      "size": 967
+    },
+    {
+      "path": "internal/terminal/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/terminal/runner.go",
+      "is_dir": false,
+      "size": 1296
+    },
+    {
+      "path": "internal/terminal/runner_test.go",
+      "is_dir": false,
+      "size": 827
+    },
+    {
+      "path": "internal/terminal/tmux_runner.go",
+      "is_dir": false,
+      "size": 4611
+    },
+    {
+      "path": "internal/worker/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/worker/client.go",
+      "is_dir": false,
+      "size": 4793
+    },
+    {
+      "path": "internal/worker/client_test.go",
+      "is_dir": false,
+      "size": 1687
+    },
+    {
+      "path": "internal/worktree/",
+      "is_dir": true
+    },
+    {
+      "path": "internal/worktree/worktree.go",
+      "is_dir": false,
+      "size": 3269
+    },
+    {
+      "path": "internal/worktree/worktree_test.go",
+      "is_dir": false,
+      "size": 2293
+    },
+    {
+      "path": "state/",
+      "is_dir": true
+    },
+    {
+      "path": "state/ptolemy.db",
+      "is_dir": false,
+      "size": 184320
+    },
+    {
+      "path": "tmp-agent-test.txt",
+      "is_dir": false,
+      "size": 16
+    },
+    {
+      "path": "tmp-insert-after-test.txt",
+      "is_dir": false,
+      "size": 28
+    },
+    {
+      "path": "tmp-large-split-a.txt",
+      "is_dir": false,
+      "size": 1
+    },
+    {
+      "path": "tmp-large-split-b.txt",
+      "is_dir": false,
+      "size": 1
+    },
+    {
+      "path": "tmp-md-task.txt",
+      "is_dir": false,
+      "size": 79
+    },
+    {
+      "path": "tmp-phase9f-validation.txt",
+      "is_dir": false,
+      "size": 30
+    }
+  ]
+}

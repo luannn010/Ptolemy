@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/luannn010/ptolemy/internal/fileops"
+	"github.com/luannn010/ptolemy/internal/navigator"
 	"github.com/luannn010/ptolemy/internal/session"
 )
 
@@ -17,10 +18,11 @@ func NewFileHandler(sessionStore *session.Store) *FileHandler {
 }
 
 type fileRequest struct {
-	SessionID string `json:"session_id"`
-	Path      string `json:"path"`
-	Content   string `json:"content"`
-	Query     string `json:"query"`
+	SessionID     string `json:"session_id"`
+	TaskSessionID string `json:"task_session_id"`
+	Path          string `json:"path"`
+	Content       string `json:"content"`
+	Query         string `json:"query"`
 }
 
 // func (h *FileHandler) opsForSession(r *http.Request, sessionID string) (*fileops.FileOps, bool) {
@@ -49,6 +51,12 @@ func (h *FileHandler) Read(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
+	}
+	if req.TaskSessionID != "" {
+		if err := navigator.RecordFileRead(ops.BaseDir, req.TaskSessionID, req.Path); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

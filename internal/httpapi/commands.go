@@ -95,7 +95,7 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 		req.CWD = sess.Workspace
 	}
 
-	mem, err := memory.LoadMemory("docs/memory", "ptolemy")
+	mem, err := memory.LoadWorkspaceMemory(sess.Workspace)
 	if err != nil {
 		log.Warn().
 			Err(err).

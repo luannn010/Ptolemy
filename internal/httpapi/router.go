@@ -69,6 +69,13 @@ func NewRouter(
 	r.Post("/file/search", fileHandler.Search)
 	r.Post("/file/apply", fileHandler.Apply)
 
+	navigatorHandler := NewNavigatorHandler(sessionStore)
+
+	r.Post("/navigator/index", navigatorHandler.IndexWorkspace)
+	r.Post("/navigator/context", navigatorHandler.ReadContext)
+	r.Post("/navigator/session/start", navigatorHandler.StartTaskSession)
+	r.Post("/navigator/session/note", navigatorHandler.AppendSessionNote)
+
 	gitHandler := NewGitHandler(sessionStore)
 
 	r.Post("/git/status", gitHandler.Status)
