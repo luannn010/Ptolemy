@@ -1,0 +1,118 @@
+package main
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestClassifyTask(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want taskClass
+	}{
+		{
+			name: "small task",
+			body: "# Test Task\nCreate tmp-inbox-test.txt with hello",
+			want: classSmall,
+		},
+		{
+			name: "medium task",
+			body: strings.Repeat("Update one source file with a narrow implementation change.\n", 30),
+			want: classMedium,
+		},
+		{
+			name: "large by marker",
+			body: "Build a full task runner pipeline with split task execution.",
+			want: classLarge,
+		},
+		{
+			name: "large by length",
+			body: strings.Repeat("x", 4000),
+			want: classLarge,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := classifyTask(tt.body); got != tt.want {
+				t.Fatalf("classifyTask() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStepBudget(t *testing.T) {
+	tests := map[taskClass]int{
+		classSmall:  4,
+		classMedium: 8,
+		classLarge:  10,
+	}
+
+	for classification, want := range tests {
+		if got := stepBudget(classification); got != want {
+			t.Fatalf("stepBudget(%q) = %d, want %d", classification, got, want)
+		}
+	}
+}
+
+func TestTaskLogPath(t *testing.T) {
+	got := taskLogPath(filepath.Join(activeDir, "example-task.md"))
+	want := filepath.Join(taskRunnerStateDir, "example-task-output.txt")
+	if got != want {
+		t.Fatalf("taskLogPath() = %q, want %q", got, want)
+	}
+}
+
+func TestUniqueTaskPathPreservesExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "task.md")
+	if err := os.WriteFile(existing, []byte("existing"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := uniqueTaskPath(dir, "task.md")
+	if got == existing {
+		t.Fatalf("uniqueTaskPath() returned existing path %q", got)
+	}
+	if !strings.HasPrefix(filepath.Base(got), "task-") {
+		t.Fatalf("uniqueTaskPath() = %q, want timestamped task name", got)
+	}
+	if filepath.Ext(got) != ".md" {
+		t.Fatalf("uniqueTaskPath() = %q, want .md extension", got)
+	}
+}
+
+func TestRunNoPendingTasks(t *testing.T) {
+	previousWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previousWD); err != nil {
+			t.Fatalf("restore working directory: %v", err)
+		}
+	})
+
+	var out bytes.Buffer
+	if err := run(&out); err != nil {
+		t.Fatalf("run() returned error: %v", err)
+	}
+
+	if got := strings.TrimSpace(out.String()); got != "no pending tasks" {
+		t.Fatalf("run() output = %q, want no pending tasks", got)
+	}
+
+	for _, dir := range []string{inboxDir, activeDir, splitDir, doneDir, failedDir, archiveDir, taskRunnerStateDir} {
+		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+			t.Fatalf("expected directory %s to exist, stat err: %v", dir, err)
+		}
+	}
+}

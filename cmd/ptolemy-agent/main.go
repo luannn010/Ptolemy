@@ -24,6 +24,7 @@ type BrainAction struct {
 	Content string `json:"content,omitempty"`
 	Old     string `json:"old,omitempty"`
 	New     string `json:"new,omitempty"`
+	Marker  string `json:"marker,omitempty"`
 	Reason  string `json:"reason"`
 }
 
@@ -33,8 +34,10 @@ type ActionResult struct {
 }
 
 func main() {
+// Fix: Moved recovery snippet to ensure artifactPath is scoped within error handling.
 	taskFile := flag.String("task-file", "", "markdown task file to execute")
 	maxSteps := flag.Int("max-steps", 8, "max agent steps")
+	allowScripts := flag.Bool("allow-scripts", false, "allow script creation/execution for approved bootstrap tasks")
 	flag.Parse()
 
 	task := strings.Join(flag.Args(), " ")
@@ -99,12 +102,13 @@ You must respond in JSON ONLY.
 
 Format:
 {
-  "action": "run_command | read_file | write_file | replace_block | explain | ask_approval",
+  "action": "run_command | read_file | write_file | replace_block | insert_after | explain | ask_approval",
   "command": "<shell command>",
   "path": "<relative file path>",
   "content": "<file content for write_file>",
   "old": "<exact old text for replace_block>",
   "new": "<exact new text for replace_block>",
+  "marker": "<text marker for insert_after>",
   "reason": "<short explanation>"
 }
 
@@ -113,6 +117,9 @@ Rules:
 - Do not execute anything yourself.
 - Use read_file before editing a file.
 - For exact text replacement, use replace_block with old and new fields.
+- Use insert_after when you need to add a small function, rule, or block after a known marker.
+- Prefer insert_after over replace_block when exact old text matching is fragile.
+- insert_after must only insert one small block at a time.
 - For editing existing code, prefer replace_block instead of write_file.
 - Use write_file only for new small files or full overwrite when explicitly required.
 - Never rewrite full source files unless explicitly required.
@@ -124,6 +131,8 @@ Rules:
 - Never return multiple JSON objects.
 - Never chain multiple actions in one response.
 - If multiple changes are needed, do them step-by-step across multiple iterations.
+- For insert_after, you MUST provide both marker and content fields.
+- The marker field must be the exact text to search for.
 - NEVER return markdown.
 - NEVER return plain text.
 - NEVER include reasoning_content.
@@ -149,8 +158,7 @@ Observations so far:
 		action, err := parseBrainAction(reply)
 		if err != nil {
 			summary := summarizeError(err, reply)
-
-			artifactPath := saveArtifact(0, "brain-parse-error", reply)
+			artifactPath := saveArtifact(step, "brain-parse-error", reply)
 
 			fmt.Printf(
 				"%s\nartifact: %s\n",
@@ -158,13 +166,19 @@ Observations so far:
 				artifactPath,
 			)
 
-			os.Exit(1)
+			observations = append(observations, fmt.Sprintf(
+				"Previous brain response was invalid JSON. Summary: %s. Artifact: %s. Return exactly ONE JSON object only. Do not return multiple JSON objects. Do not chain actions. Do one action now and continue later.",
+				summary,
+				artifactPath,
+			))
+
+			continue
 		}
 
 		fmt.Printf("brain action: %s\n", action.Action)
 		fmt.Printf("reason: %s\n", action.Reason)
 
-		result := executeAction(ctx, workerClient, session.ID, workspace, step, action)
+		result := executeAction(ctx, workerClient, session.ID, workspace, step, action, *allowScripts)
 
 		fmt.Println(result.Display)
 		observations = append(observations, result.Brain)
@@ -184,6 +198,7 @@ func executeAction(
 	workspace string,
 	step int,
 	action *BrainAction,
+	allowScripts bool,
 ) ActionResult {
 	switch action.Action {
 	case "explain":
@@ -199,7 +214,7 @@ func executeAction(
 			return both("ERROR: empty command")
 		}
 
-		if commandRunsScript(action.Command) && !hasExplicitScriptPermission(action.Reason) {
+		if commandRunsScript(action.Command) && !allowScripts {
 			return both(fmt.Sprintf("APPROVAL REQUIRED: running script commands requires explicit permission command=%s", action.Command))
 		}
 
@@ -273,7 +288,7 @@ func executeAction(
 			return both("ERROR: empty path")
 		}
 
-		if isScriptPath(action.Path) && !hasExplicitScriptPermission(action.Reason) {
+		if isScriptPath(action.Path) && !allowScripts {
 			return both(fmt.Sprintf("APPROVAL REQUIRED: creating script file requires explicit permission path=%s", action.Path))
 		}
 
@@ -305,12 +320,84 @@ func executeAction(
 
 		return ActionResult{Display: msg, Brain: msg}
 
+	case "insert_after":
+		if strings.TrimSpace(action.Path) == "" {
+			return both("ERROR: empty path")
+		}
+
+		if strings.TrimSpace(action.Marker) == "" {
+			return both("ERROR: insert_after marker is empty")
+		}
+
+		if strings.TrimSpace(action.Content) == "" {
+			return both("ERROR: insert_after content is empty")
+		}
+
+		if !isSafeReplacePath(action.Path) {
+			return both(fmt.Sprintf("ERROR: insert_after path is not allowed: %s", action.Path))
+		}
+
+		file, err := workerClient.ReadFile(ctx, worker.ReadFileRequest{
+			SessionID: sessionID,
+			Path:      action.Path,
+		})
+		if err != nil {
+			return both(fmt.Sprintf("ERROR reading file for insert_after: %v", err))
+		}
+
+		idx := strings.Index(file.Content, action.Marker)
+		if idx == -1 {
+			artifactPath := saveArtifact(step, "insert-after-marker-not-found-"+action.Path, file.Content)
+			return both(fmt.Sprintf(
+				"ERROR: insert_after marker not found\npath: %s\nartifact: %s",
+				action.Path,
+				artifactPath,
+			))
+		}
+
+		insertAt := idx + len(action.Marker)
+
+		afterMarker := file.Content[insertAt:]
+		if strings.Contains(afterMarker, action.Content) {
+			msg := fmt.Sprintf(
+				"INSERT AFTER SKIPPED\npath: %s\nreason: content already exists after marker",
+				action.Path,
+			)
+			return ActionResult{Display: msg, Brain: msg}
+		}
+
+		insertText := action.Content
+		if !strings.HasPrefix(insertText, "\n") {
+			insertText = "\n" + insertText
+		}
+
+		updated := file.Content[:insertAt] + insertText + file.Content[insertAt:]
+		artifactPath := saveArtifact(step, "insert-after-"+action.Path, updated)
+
+		result, err := workerClient.WriteFile(ctx, worker.WriteFileRequest{
+			SessionID: sessionID,
+			Path:      action.Path,
+			Content:   updated,
+		})
+		if err != nil {
+			return both(fmt.Sprintf("ERROR writing insert_after result: %v", err))
+		}
+
+		msg := fmt.Sprintf(
+			"INSERT AFTER OK\npath: %s\nbytes: %d\nartifact: %s",
+			result.Path,
+			len(updated),
+			artifactPath,
+		)
+
+		return ActionResult{Display: msg, Brain: msg}
+
 	case "replace_block":
 		if strings.TrimSpace(action.Path) == "" {
 			return both("ERROR: empty path")
 		}
 
-		if isScriptPath(action.Path) && !hasExplicitScriptPermission(action.Reason) {
+		if isScriptPath(action.Path) && !allowScripts {
 			return both(fmt.Sprintf("APPROVAL REQUIRED: editing script file requires explicit permission path=%s", action.Path))
 		}
 
