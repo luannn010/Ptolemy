@@ -30,6 +30,20 @@ const (
 	classLarge  taskClass = "large"
 )
 
+type taskQueue string
+
+const (
+	queueSplit taskQueue = "split"
+	queueInbox taskQueue = "inbox"
+)
+
+type pendingTask struct {
+	Path           string
+	Queue          taskQueue
+	Classification taskClass
+	MaxSteps       int
+}
+
 func main() {
 	if err := run(os.Stdout); err != nil {
 		fmt.Fprintf(os.Stdout, "Result: failed\nError: %v\n", err)
@@ -38,55 +52,34 @@ func main() {
 }
 
 func run(out io.Writer) error {
-	dirs := []string{
-		inboxDir,
-		activeDir,
-		splitDir,
-		doneDir,
-		failedDir,
-		archiveDir,
-		taskRunnerStateDir,
+	if err := ensureDirs(); err != nil {
+		return err
 	}
 
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("create %s: %w", dir, err)
-		}
-	}
-
-	tasks, err := filepath.Glob(filepath.Join(inboxDir, "*.md"))
+	task, ok, err := selectNextTask()
 	if err != nil {
-		return fmt.Errorf("scan inbox: %w", err)
+		return err
 	}
-	sort.Strings(tasks)
 
-	if len(tasks) == 0 {
+	if !ok {
 		fmt.Fprintln(out, "no pending tasks")
 		return nil
 	}
 
-	selected := tasks[0]
-	activePath := uniqueTaskPath(activeDir, filepath.Base(selected))
-	if err := os.Rename(selected, activePath); err != nil {
+	activePath := uniqueTaskPath(activeDir, filepath.Base(task.Path))
+	if err := os.Rename(task.Path, activePath); err != nil {
 		return fmt.Errorf("move selected task to active: %w", err)
 	}
 
-	content, err := os.ReadFile(activePath)
-	if err != nil {
-		_, _ = moveTask(activePath, failedDir)
-		return fmt.Errorf("read active task: %w", err)
-	}
-
-	classification := classifyTask(string(content))
-	maxSteps := stepBudget(classification)
 	logPath := taskLogPath(activePath)
 
 	fmt.Fprintf(out, "Selected task: %s\n", activePath)
-	fmt.Fprintf(out, "Classification: %s\n", classification)
-	fmt.Fprintf(out, "Max steps: %d\n", maxSteps)
+	fmt.Fprintf(out, "Queue: %s\n", task.Queue)
+	fmt.Fprintf(out, "Classification: %s\n", task.Classification)
+	fmt.Fprintf(out, "Max steps: %d\n", task.MaxSteps)
 	fmt.Fprintln(out, "Running agent...")
 
-	cmd := exec.Command(goBinary(), "run", "./cmd/ptolemy-agent", "--task-file", activePath, "--max-steps", strconv.Itoa(maxSteps))
+	cmd := exec.Command(goBinary(), "run", "./cmd/ptolemy-agent", "--task-file", activePath, "--max-steps", strconv.Itoa(task.MaxSteps))
 	cmdOutput, runErr := cmd.CombinedOutput()
 
 	logContent := cmdOutput
@@ -112,6 +105,75 @@ func run(out io.Writer) error {
 	fmt.Fprintf(out, "Result: %s\n", result)
 	fmt.Fprintf(out, "Log: %s\n", logPath)
 	return nil
+}
+
+func ensureDirs() error {
+	dirs := []string{
+		inboxDir,
+		activeDir,
+		splitDir,
+		doneDir,
+		failedDir,
+		archiveDir,
+		taskRunnerStateDir,
+	}
+
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("create %s: %w", dir, err)
+		}
+	}
+
+	return nil
+}
+
+func selectNextTask() (pendingTask, bool, error) {
+	splitTasks, err := sortedMarkdownTasks(splitDir)
+	if err != nil {
+		return pendingTask{}, false, err
+	}
+	if len(splitTasks) > 0 {
+		return buildPendingTask(splitTasks[0], queueSplit, 4)
+	}
+
+	inboxTasks, err := sortedMarkdownTasks(inboxDir)
+	if err != nil {
+		return pendingTask{}, false, err
+	}
+	if len(inboxTasks) == 0 {
+		return pendingTask{}, false, nil
+	}
+
+	return buildPendingTask(inboxTasks[0], queueInbox, 0)
+}
+
+func sortedMarkdownTasks(dir string) ([]string, error) {
+	tasks, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	if err != nil {
+		return nil, fmt.Errorf("scan %s: %w", dir, err)
+	}
+	sort.Strings(tasks)
+	return tasks, nil
+}
+
+func buildPendingTask(path string, queue taskQueue, forcedMaxSteps int) (pendingTask, bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return pendingTask{}, false, fmt.Errorf("read task %s: %w", path, err)
+	}
+
+	classification := classifyTask(string(content))
+	maxSteps := forcedMaxSteps
+	if maxSteps == 0 {
+		maxSteps = stepBudget(classification)
+	}
+
+	return pendingTask{
+		Path:           path,
+		Queue:          queue,
+		Classification: classification,
+		MaxSteps:       maxSteps,
+	}, true, nil
 }
 
 func classifyTask(content string) taskClass {

@@ -67,6 +67,76 @@ func TestTaskLogPath(t *testing.T) {
 	}
 }
 
+func TestSelectNextTaskPrioritizesSplitQueue(t *testing.T) {
+	chdirTemp(t)
+	if err := ensureDirs(); err != nil {
+		t.Fatal(err)
+	}
+	writeTask(t, filepath.Join(splitDir, "002-split.md"), "Create split output.")
+	writeTask(t, filepath.Join(splitDir, "001-split.md"), strings.Repeat("pipeline ", 200))
+	writeTask(t, filepath.Join(inboxDir, "000-inbox.md"), "Create inbox output.")
+
+	task, ok, err := selectNextTask()
+	if err != nil {
+		t.Fatalf("selectNextTask() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("selectNextTask() returned no task")
+	}
+
+	wantPath := filepath.Join(splitDir, "001-split.md")
+	if task.Path != wantPath {
+		t.Fatalf("selected path = %q, want %q", task.Path, wantPath)
+	}
+	if task.Queue != queueSplit {
+		t.Fatalf("queue = %q, want %q", task.Queue, queueSplit)
+	}
+	if task.MaxSteps != 4 {
+		t.Fatalf("max steps = %d, want 4", task.MaxSteps)
+	}
+	if task.Classification != classLarge {
+		t.Fatalf("classification = %q, want %q", task.Classification, classLarge)
+	}
+}
+
+func TestSelectNextTaskFallsBackToInbox(t *testing.T) {
+	chdirTemp(t)
+	if err := ensureDirs(); err != nil {
+		t.Fatal(err)
+	}
+	writeTask(t, filepath.Join(inboxDir, "000-inbox.md"), "Create inbox output.")
+
+	task, ok, err := selectNextTask()
+	if err != nil {
+		t.Fatalf("selectNextTask() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("selectNextTask() returned no task")
+	}
+
+	if task.Queue != queueInbox {
+		t.Fatalf("queue = %q, want %q", task.Queue, queueInbox)
+	}
+	if task.MaxSteps != 4 {
+		t.Fatalf("max steps = %d, want 4", task.MaxSteps)
+	}
+}
+
+func TestSelectNextTaskReturnsNoTaskWhenQueuesAreEmpty(t *testing.T) {
+	chdirTemp(t)
+	if err := ensureDirs(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, ok, err := selectNextTask()
+	if err != nil {
+		t.Fatalf("selectNextTask() error = %v", err)
+	}
+	if ok {
+		t.Fatal("selectNextTask() returned a task for empty queues")
+	}
+}
+
 func TestUniqueTaskPathPreservesExistingFile(t *testing.T) {
 	dir := t.TempDir()
 	existing := filepath.Join(dir, "task.md")
@@ -114,5 +184,35 @@ func TestRunNoPendingTasks(t *testing.T) {
 		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 			t.Fatalf("expected directory %s to exist, stat err: %v", dir, err)
 		}
+	}
+}
+
+func chdirTemp(t *testing.T) {
+	t.Helper()
+
+	previousWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		if err := os.Chdir(previousWD); err != nil {
+			t.Fatalf("restore working directory: %v", err)
+		}
+	})
+}
+
+func writeTask(t *testing.T, path string, content string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
 	}
 }
