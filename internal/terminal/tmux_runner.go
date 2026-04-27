@@ -162,9 +162,9 @@ func extractMarkedExitCode(output string, exitMarker string) int {
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
-		if strings.HasPrefix(line, exitMarker+":") {
+		if idx := strings.Index(line, exitMarker+":"); idx >= 0 {
 			var code int
-			_, _ = fmt.Sscanf(line, exitMarker+":%d", &code)
+			_, _ = fmt.Sscanf(line[idx:], exitMarker+":%d", &code)
 			return code
 		}
 	}
@@ -185,11 +185,14 @@ func extractMarkedOutput(output string, startMarker string, exitMarker string) s
 			continue
 		}
 
-		if strings.HasPrefix(trimmed, exitMarker+":") {
-			break
-		}
-
 		if capturing {
+			if idx := strings.Index(line, exitMarker+":"); idx >= 0 {
+				beforeMarker := line[:idx]
+				if beforeMarker != "" {
+					cleaned = append(cleaned, beforeMarker)
+				}
+				break
+			}
 			cleaned = append(cleaned, line)
 		}
 	}

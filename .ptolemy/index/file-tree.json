@@ -1,6 +1,6 @@
 {
   "workspace": "/home/luannn010/projects/ptolemy",
-  "generated_at": "2026-04-27T12:23:51.342217799Z",
+  "generated_at": "2026-04-27T12:48:25.090450125Z",
   "files": [
     {
       "path": ".env",
@@ -1336,6 +1336,11 @@
       "is_dir": true
     },
     {
+      "path": ".state/task-runner/000-large-split-validation-a-output.txt",
+      "is_dir": false,
+      "size": 575
+    },
+    {
       "path": ".state/task-runner/000-large-split-workflow-validation-output.txt",
       "is_dir": false,
       "size": 1365
@@ -1363,7 +1368,7 @@
     {
       "path": "WORKFLOWS.md",
       "is_dir": false,
-      "size": 5320
+      "size": 6404
     },
     {
       "path": "bin/",
@@ -1413,12 +1418,12 @@
     {
       "path": "cmd/ptolemy-task-runner/main.go",
       "is_dir": false,
-      "size": 4609
+      "size": 5854
     },
     {
       "path": "cmd/ptolemy-task-runner/main_test.go",
       "is_dir": false,
-      "size": 2793
+      "size": 5186
     },
     {
       "path": "cmd/workerd/",
@@ -1537,6 +1542,11 @@
     {
       "path": "docs/tasks/done/",
       "is_dir": true
+    },
+    {
+      "path": "docs/tasks/done/000-large-split-validation-a.md",
+      "is_dir": false,
+      "size": 66
     },
     {
       "path": "docs/tasks/done/000-large-split-workflow-validation.md",
@@ -1668,11 +1678,6 @@
     {
       "path": "docs/tasks/split/",
       "is_dir": true
-    },
-    {
-      "path": "docs/tasks/split/000-large-split-validation-a.md",
-      "is_dir": false,
-      "size": 66
     },
     {
       "path": "docs/tasks/split/000-large-split-validation-b.md",
@@ -1846,7 +1851,7 @@
     {
       "path": "internal/httpapi/router_test.go",
       "is_dir": false,
-      "size": 5079
+      "size": 8100
     },
     {
       "path": "internal/httpapi/session.go",
@@ -2115,7 +2120,12 @@
     {
       "path": "internal/terminal/tmux_runner.go",
       "is_dir": false,
-      "size": 4611
+      "size": 4752
+    },
+    {
+      "path": "internal/terminal/tmux_runner_test.go",
+      "is_dir": false,
+      "size": 649
     },
     {
       "path": "internal/worker/",

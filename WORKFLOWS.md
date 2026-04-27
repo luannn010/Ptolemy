@@ -1,333 +1,270 @@
 # Ptolemy Workflows
 
 This document defines the core execution and development workflows supported by Ptolemy.
-It is designed for **agent-driven development (Codex/LLM)** with deterministic, low-risk operations.
+The goal is agent-driven development with deterministic, low-risk operations.
 
----
+## 1. Health Check Workflow
 
-## 1. Session Workflow
+Verify the worker process is reachable.
 
-Create and manage isolated execution environments.
-
-### Flow
-
-```
-Client / Agent
-  -> POST /sessions
-  -> Ptolemy creates session
-  -> Session stored in SQLite
-  -> Workspace attached
-```
-
-### Purpose
-
-* Isolate execution per task/agent
-* Bind all commands to a specific workspace
-
----
-
-## 2. Command Execution Workflow
-
-Execute shell commands safely within a session.
-
-### Flow
-
-```
-Client / Agent
-  -> POST /sessions/{id}/commands
-  -> Validate session
-  -> Execute command (cwd, timeout)
-  -> Return stdout / stderr / exit code
-```
-
-### Purpose
-
-* Controlled command execution
-* Used by Codex to build, test, run code
-
----
-
-## 3. Health Check Workflow
-
-Verify worker availability.
-
-### Flow
-
-```
+```text
 Client
   -> GET /health
-  -> Worker responds OK
+  -> Worker responds with status/service/timestamp
 ```
 
-### Purpose
+Example:
 
-* Debug worker status
-* Detect crashed or unavailable worker
-
----
-
-## 4. Persistent Session Workflow
-
-Sessions survive restarts.
-
-### Flow
-
-```
-Worker starts
-  -> Load sessions from SQLite
-  -> Sessions reusable
-  -> Sessions can be closed
+```bash
+curl -s http://localhost:8080/health
 ```
 
-### Purpose
+Status: working.
 
-* Long-running workflows
-* Resume agent tasks
+## 2. Session Workflow
 
----
+Create and manage isolated execution contexts.
 
-## 5. Terminal Runner Workflow
-
-Abstract execution layer.
-
-### Flow
-
-```
-HTTP API
-  -> Command Service
-  -> Terminal Runner
-  -> OS Shell
-```
-
-### Variants
-
-* Basic runner (stateless)
-* Tmux runner (stateful, planned)
-
-### Purpose
-
-* Support both short and long-running processes
-* Future: persistent shells
-
----
-
-## 6. Worktree Workflow
-
-Isolated Git environments per task.
-
-### Flow
-
-```
+```text
 Client / Agent
-  -> Request worktree creation
-  -> Validate session
-  -> Create git worktree (branch/name)
+  -> POST /sessions
+  -> Ptolemy stores the session in SQLite
+  -> Session binds commands and file tools to a workspace
 ```
 
-### Purpose
+Example:
 
-* Prevent modifying main branch
-* Enable parallel development
-
----
-
-## 7. Codex Execution Workflow
-
-Ptolemy as execution backend for LLM.
-
-### Flow
-
-```
-Codex
-  -> Reads TASK.md / AGENT.md
-  -> Sends commands to Ptolemy
-  -> Ptolemy executes
-  -> Returns result
-  -> Codex updates code
-  -> Repeat
+```bash
+curl -s -X POST http://localhost:8080/sessions \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"workflow-session","workspace":"/path/to/workspace"}'
 ```
 
-### Purpose
+Status: working.
 
-* Human-out-of-the-loop coding
-* Deterministic execution layer
+## 3. Persistent Session Workflow
 
----
+Sessions are stored in SQLite and can be reused after worker restart.
 
-## 8. Task-File Driven Workflow
-
-Structured instructions instead of free-form prompts.
-
-### Files
-
-* AGENT.md → behavior rules
-* TASK.md → specific objective
-
-### Flow
-
+```text
+Worker starts
+  -> Uses configured DB_PATH
+  -> Existing sessions remain available
+  -> Sessions can be listed, fetched, or closed
 ```
+
+Status: working when the restarted worker points at the same `DB_PATH`.
+
+## 4. Command Execution Workflow
+
+Execute shell commands inside a session workspace.
+
+```text
+Client / Agent
+  -> POST /sessions/{id}/commands
+  -> Validate session and command policy
+  -> Execute command through TmuxRunner
+  -> Store command/action/log records
+  -> Return stdout, stderr, exit code, duration
+```
+
+Example:
+
+```bash
+curl -s -X POST http://localhost:8080/sessions/<id>/commands \
+  -H 'Content-Type: application/json' \
+  -d '{"command":"echo hello","timeout":30}'
+```
+
+Status: working.
+
+## 5. Execute Endpoint Workflow
+
+Run a command through the higher-level executor API.
+
+```text
+Client / Agent
+  -> POST /execute
+  -> Validate session_id and command
+  -> Execute command
+  -> Return output, summary, success flag
+```
+
+Example:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"session_id":"<id>","command":"echo hello","timeout":30}'
+```
+
+Status: working.
+
+## 6. Terminal Runner Workflow
+
+Use tmux-backed execution so a session can keep shell state.
+
+```text
+HTTP API
+  -> Command / Executor service
+  -> TmuxRunner
+  -> tmux session per Ptolemy session
+  -> OS shell
+```
+
+Notes:
+
+- Commands that do not print a trailing newline are supported.
+- Closing a Ptolemy session kills the matching tmux session.
+
+Status: working.
+
+## 7. Navigator Workflow
+
+Use Ptolemy as a codebase navigator, not a whole-codebase reader.
+
+```text
 Agent
-  -> Reads TASK.md
-  -> Understands scope
-  -> Executes steps via Ptolemy
+  -> POST /navigator/index
+  -> Read .ptolemy/PTOLEMY.md and .ptolemy/context/*.md
+  -> Search by keyword/symbol
+  -> Read only relevant files
+  -> Record task notes and files read
 ```
 
-### Purpose
+Index a workspace:
 
-* Reduce token usage
-* Increase reliability
-* Improve reproducibility
-
----
-
-## 9. Code Update Workflow (Insert-After Strategy)
-
-Deterministic code modification without rewriting files.
-
-### Strategy
-
-```
-1. Locate anchor
-2. Identify insertion point
-3. Insert new code AFTER anchor
-4. Save file
-5. Run test/build
+```bash
+curl -s -X POST http://localhost:8080/navigator/index \
+  -H 'Content-Type: application/json' \
+  -d '{"workspace":"/path/to/workspace"}'
 ```
 
-### Example
+Read context:
 
+```bash
+curl -s -X POST http://localhost:8080/navigator/context \
+  -H 'Content-Type: application/json' \
+  -d '{"workspace":"/path/to/workspace"}'
 ```
-anchor: "func (h *Handler) Create"
-action: insert_after
+
+Start task notes:
+
+```bash
+curl -s -X POST http://localhost:8080/navigator/session/start \
+  -H 'Content-Type: application/json' \
+  -d '{"workspace":"/path/to/workspace","task_session_id":"my-task","task":"Fix the bug"}'
 ```
 
-### Supported Anchors
+Append a note:
 
-* Function signature
-* Specific string
-* Comment marker (recommended)
+```bash
+curl -s -X POST http://localhost:8080/navigator/session/note \
+  -H 'Content-Type: application/json' \
+  -d '{"workspace":"/path/to/workspace","task_session_id":"my-task","note":"Read router and command handler"}'
+```
 
-### Example Marker
+Status: working.
+
+## 8. File Search / Read Workflow
+
+Search before reading full files.
+
+```text
+Agent
+  -> POST /file/search
+  -> Choose top relevant files
+  -> POST /file/read with optional task_session_id
+  -> Ptolemy records the read in .ptolemy/sessions/<id>/files-read.json
+```
+
+Status: working.
+
+## 9. Worktree Workflow
+
+Create isolated Git worktrees per task.
+
+```text
+Client / Agent
+  -> POST /worktree/create
+  -> Validate session
+  -> Resolve repo root
+  -> Create .ptolemy-worktrees/<name>
+  -> Update session workspace to the worktree
+```
+
+Example:
+
+```bash
+curl -s -X POST http://localhost:8080/worktree/create \
+  -H 'Content-Type: application/json' \
+  -d '{"session_id":"<id>","name":"my-task","branch":"codex/my-task"}'
+```
+
+Status: working.
+
+## 10. Codex Execution Workflow
+
+Ptolemy acts as the execution backend while Codex plans, edits, and validates.
+
+```text
+Codex
+  -> Reads AGENT.md and .ptolemy context
+  -> Uses navigator/search/read tools
+  -> Makes targeted edits
+  -> Runs commands/tests through Ptolemy
+  -> Summarizes results
+```
+
+Status: working as a supported development pattern.
+
+## 11. Task-File Driven Workflow
+
+Use structured instructions instead of free-form prompts.
+
+```text
+Agent
+  -> Reads task file
+  -> Classifies scope
+  -> Runs ptolemy-agent with a step budget
+  -> Stores command output artifacts
+```
+
+Current task runner paths:
+
+- `docs/tasks/inbox`
+- `docs/tasks/active`
+- `docs/tasks/split`
+- `docs/tasks/done`
+- `docs/tasks/failed`
+
+Status: partially implemented.
+
+## 12. Marker-Based Editing Workflow
+
+Improve reliability of edits by using stable anchors.
+
+```text
+Developer or agent inserts a marker
+  -> Agent locates marker
+  -> Agent uses insert_after
+  -> Ptolemy writes the targeted edit
+  -> Tests run immediately
+```
+
+Example marker:
 
 ```go
 // PTOLEMY: INSERT ROUTES HERE
 ```
 
-### Purpose
-
-* Safe code edits
-* Avoid breaking structure
-* Works with large codebases
-
----
-
-## 10. Patch Execution Workflow (Planned)
-
-Structured patch system for agents.
-
-### Flow
-
-```
-Agent
-  -> Generates PATCH spec
-  -> Sends to Ptolemy
-  -> Ptolemy applies patch
-  -> Runs command/test
-```
-
-### Patch Example
-
-```yaml
-type: insert_after
-file: internal/httpapi/handler.go
-anchor: "func (h *Handler) Create"
-content: |
-  log.Info().Msg("created")
-```
-
-### Purpose
-
-* Standardize code edits
-* Enable automation
-* Replace fragile text edits
-
----
-
-## 11. Execution Failure Workflow (Current Debug State)
-
-Known issue:
-
-```
-POST /sessions works
-POST /execute fails (EOF)
-```
-
-### Interpretation
-
-* HTTP layer OK
-* Worker execution layer failing
-
-### Next Step
-
-* Verify worker process
-* Check execution handler
-* Restart or debug command runner
-
----
-
-## Design Principles
-
-```
-- Deterministic over “smart”
-- File-based over prompt-based
-- Safe edits over full rewrites
-- Local-first execution
-- Agent-compatible architecture
-```
-
----
-
-## Future Extensions
-
-* AST-based patch engine
-* Multi-file patch support
-* Context indexing per project
-* Distributed worker nodes
-* Skill execution (Python/Go hybrid)
-
----
-## 12. Marker-Based Editing Workflow
-
-Improve reliability of code edits by using stable markers instead of fragile text matching.
-
-### Strategy
-
-1. Developer inserts marker in code  
-2. Agent locates marker  
-3. Agent uses insert_after  
-4. Ptolemy modifies file safely  
-
-### Example
-
-```go
-
-
-
----
+Status: supported by `ptolemy-agent` insert-after behavior.
 
 ## 13. Patch Spec Workflow
 
-Introduce structured patch instructions instead of raw text edits.
+Structured patch specs are the intended future replacement for fragile text edits.
 
-### Flow
-
-Agent  
-→ Generates patch spec  
-→ Ptolemy validates patch  
-→ Applies patch via edit tools  
-→ Runs test/build  
-
-### Example
+Example:
 
 ```yaml
 type: insert_after
@@ -337,25 +274,32 @@ content: |
   case "insert_after":
 ```
 
+Status: planned. Basic content replacement exists through file tools, but full patch-spec validation is not implemented yet.
 
 ## 14. Planner vs Executor Workflow
 
 Separate reasoning from execution.
 
-### Flow
+```text
+Planner
+  -> Reads task/context
+  -> Produces plan or patch spec
 
-Gemma (Planner)  
-→ Reads TASK.md  
-→ Generates plan / patch spec  
+Executor
+  -> Validates action
+  -> Executes file/command/worktree operations
+  -> Returns structured results
+```
 
-Ptolemy (Executor)  
-→ Validates plan  
-→ Executes actions  
-→ Runs commands/tests  
-→ Returns results  
+Status: partially implemented through `ptolemy-agent`, `workerd`, and MCP tools.
 
-### Purpose
+## Design Principles
 
-- Reduce LLM error rate  
-- Make execution deterministic  
-- Allow debugging at each layer     
+```text
+- Deterministic over smart
+- File-based over prompt-based
+- Search before read
+- Safe edits over full rewrites
+- Local-first execution
+- Agent-compatible architecture
+```
