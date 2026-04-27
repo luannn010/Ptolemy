@@ -2,6 +2,9 @@
 
 Ptolemy is a codebase navigator, not a whole-codebase reader.
 
+When available, use the `ptolemy-workflows` Codex skill to select the right workflow from
+`WORKFLOWS.md`. Codex should route the workflow; Ptolemy should execute deterministic steps.
+
 Golden rule:
 
 ```text
