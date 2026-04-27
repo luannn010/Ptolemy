@@ -34,7 +34,6 @@ type ActionResult struct {
 }
 
 func main() {
-// Fix: Moved recovery snippet to ensure artifactPath is scoped within error handling.
 	taskFile := flag.String("task-file", "", "markdown task file to execute")
 	maxSteps := flag.Int("max-steps", 8, "max agent steps")
 	allowScripts := flag.Bool("allow-scripts", false, "allow script creation/execution for approved bootstrap tasks")
@@ -189,6 +188,7 @@ Observations so far:
 	}
 
 	fmt.Println("max steps reached")
+	os.Exit(1)
 }
 
 func executeAction(
