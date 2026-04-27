@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,11 +16,13 @@ import (
 const (
 	inboxDir           = "docs/tasks/inbox"
 	activeDir          = "docs/tasks/active"
+	processDir         = "docs/tasks/process"
 	splitDir           = "docs/tasks/split"
 	doneDir            = "docs/tasks/done"
 	failedDir          = "docs/tasks/failed"
 	archiveDir         = "docs/tasks/archive"
 	taskRunnerStateDir = ".state/task-runner"
+	notificationDir    = ".state/task-runner/notifications"
 )
 
 type taskClass string
@@ -33,8 +36,10 @@ const (
 type taskQueue string
 
 const (
-	queueSplit taskQueue = "split"
-	queueInbox taskQueue = "inbox"
+	queueProcess taskQueue = "process"
+	queueActive  taskQueue = "active"
+	queueSplit   taskQueue = "split"
+	queueInbox   taskQueue = "inbox"
 )
 
 type pendingTask struct {
@@ -43,6 +48,10 @@ type pendingTask struct {
 	Classification taskClass
 	MaxSteps       int
 }
+
+type agentRunner func(taskPath string, maxSteps int) ([]byte, error)
+
+var runAgent = runAgentTask
 
 func main() {
 	if err := run(os.Stdout); err != nil {
@@ -66,28 +75,56 @@ func run(out io.Writer) error {
 		return nil
 	}
 
-	activePath := uniqueTaskPath(activeDir, filepath.Base(task.Path))
-	if err := os.Rename(task.Path, activePath); err != nil {
-		return fmt.Errorf("move selected task to active: %w", err)
+	activePath, err := moveToActive(task)
+	if err != nil {
+		return err
 	}
 
-	logPath := taskLogPath(activePath)
+	if shouldSplit(task) {
+		splitFiles, err := splitLargeTask(activePath)
+		if err != nil {
+			_, _ = moveTask(activePath, failedDir)
+			return err
+		}
 
-	fmt.Fprintf(out, "Selected task: %s\n", activePath)
+		archivePath, err := moveTask(activePath, archiveDir)
+		if err != nil {
+			return fmt.Errorf("archive split parent task: %w", err)
+		}
+
+		fmt.Fprintf(out, "Selected task: %s\n", activePath)
+		fmt.Fprintf(out, "Queue: %s\n", task.Queue)
+		fmt.Fprintf(out, "Classification: %s\n", task.Classification)
+		fmt.Fprintln(out, "Result: split")
+		fmt.Fprintf(out, "Split tasks: %d\n", len(splitFiles))
+		for _, file := range splitFiles {
+			fmt.Fprintf(out, "Split: %s\n", file)
+		}
+		fmt.Fprintf(out, "Archive: %s\n", archivePath)
+		return nil
+	}
+
+	processPath, err := moveToProcess(activePath)
+	if err != nil {
+		return err
+	}
+
+	logPath := taskLogPath(processPath)
+
+	fmt.Fprintf(out, "Selected task: %s\n", processPath)
 	fmt.Fprintf(out, "Queue: %s\n", task.Queue)
 	fmt.Fprintf(out, "Classification: %s\n", task.Classification)
 	fmt.Fprintf(out, "Max steps: %d\n", task.MaxSteps)
 	fmt.Fprintln(out, "Running agent...")
 
-	cmd := exec.Command(goBinary(), "run", "./cmd/ptolemy-agent", "--task-file", activePath, "--max-steps", strconv.Itoa(task.MaxSteps))
-	cmdOutput, runErr := cmd.CombinedOutput()
+	cmdOutput, runErr := runAgent(processPath, task.MaxSteps)
 
 	logContent := cmdOutput
 	if runErr != nil {
 		logContent = append(logContent, []byte("\n"+runErr.Error()+"\n")...)
 	}
 	if err := os.WriteFile(logPath, logContent, 0644); err != nil {
-		_, _ = moveTask(activePath, failedDir)
+		_, _ = moveTask(processPath, failedDir)
 		return fmt.Errorf("write task log: %w", err)
 	}
 
@@ -98,12 +135,28 @@ func run(out io.Writer) error {
 		targetDir = failedDir
 	}
 
-	if _, err := moveTask(activePath, targetDir); err != nil {
-		return fmt.Errorf("move active task to %s: %w", targetDir, err)
+	finalPath, err := moveTask(processPath, targetDir)
+	if err != nil {
+		return fmt.Errorf("move process task to %s: %w", targetDir, err)
 	}
 
 	fmt.Fprintf(out, "Result: %s\n", result)
 	fmt.Fprintf(out, "Log: %s\n", logPath)
+
+	if runErr != nil {
+		notificationPath, err := writeFailureNotification(finalPath, logPath, runErr)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Notification: %s\n", notificationPath)
+		return nil
+	}
+
+	archivePath, err := archiveCompletedTask(finalPath)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Archive: %s\n", archivePath)
 	return nil
 }
 
@@ -111,11 +164,13 @@ func ensureDirs() error {
 	dirs := []string{
 		inboxDir,
 		activeDir,
+		processDir,
 		splitDir,
 		doneDir,
 		failedDir,
 		archiveDir,
 		taskRunnerStateDir,
+		notificationDir,
 	}
 
 	for _, dir := range dirs {
@@ -128,6 +183,22 @@ func ensureDirs() error {
 }
 
 func selectNextTask() (pendingTask, bool, error) {
+	processTasks, err := sortedMarkdownTasks(processDir)
+	if err != nil {
+		return pendingTask{}, false, err
+	}
+	if len(processTasks) > 0 {
+		return buildPendingTask(processTasks[0], queueProcess, 0)
+	}
+
+	activeTasks, err := sortedMarkdownTasks(activeDir)
+	if err != nil {
+		return pendingTask{}, false, err
+	}
+	if len(activeTasks) > 0 {
+		return buildPendingTask(activeTasks[0], queueActive, 0)
+	}
+
 	splitTasks, err := sortedMarkdownTasks(splitDir)
 	if err != nil {
 		return pendingTask{}, false, err
@@ -226,11 +297,160 @@ func taskLogPath(taskPath string) string {
 }
 
 func moveTask(path string, targetDir string) (string, error) {
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return "", err
+	}
+
 	targetPath := uniqueTaskPath(targetDir, filepath.Base(path))
 	if err := os.Rename(path, targetPath); err != nil {
 		return "", err
 	}
 	return targetPath, nil
+}
+
+func moveToActive(task pendingTask) (string, error) {
+	if task.Queue == queueActive {
+		return task.Path, nil
+	}
+	if task.Queue == queueProcess {
+		return task.Path, nil
+	}
+
+	activePath, err := moveTask(task.Path, activeDir)
+	if err != nil {
+		return "", fmt.Errorf("move selected task to active: %w", err)
+	}
+	return activePath, nil
+}
+
+func moveToProcess(activePath string) (string, error) {
+	if filepath.Dir(activePath) == processDir {
+		return activePath, nil
+	}
+
+	processPath, err := moveTask(activePath, processDir)
+	if err != nil {
+		return "", fmt.Errorf("move active task to process: %w", err)
+	}
+	return processPath, nil
+}
+
+func shouldSplit(task pendingTask) bool {
+	if task.Classification != classLarge {
+		return false
+	}
+
+	return task.Queue == queueInbox || task.Queue == queueActive
+}
+
+func splitLargeTask(parentPath string) ([]string, error) {
+	content, err := os.ReadFile(parentPath)
+	if err != nil {
+		return nil, fmt.Errorf("read large task for split: %w", err)
+	}
+
+	scopes := splitScopes(string(content))
+	if len(scopes) == 0 {
+		return nil, errors.New("large task has no deterministic split scopes")
+	}
+
+	title := taskTitle(string(content), filepath.Base(parentPath))
+	base := strings.TrimSuffix(filepath.Base(parentPath), filepath.Ext(parentPath))
+	created := make([]string, 0, len(scopes))
+
+	for i, scope := range scopes {
+		name := fmt.Sprintf("%s-part-%03d.md", base, i+1)
+		path := uniqueTaskPath(splitDir, name)
+		body := fmt.Sprintf(`# %s - Part %03d
+
+Parent task: %s
+
+## Scope
+%s
+
+## Rules
+- Execute only this split task.
+- Do not continue to another split task in the same run.
+- Move this split task to done or failed after execution.
+`, title, i+1, filepath.Base(parentPath), scope)
+
+		if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+			return nil, fmt.Errorf("write split task %s: %w", path, err)
+		}
+		created = append(created, path)
+	}
+
+	return created, nil
+}
+
+func splitScopes(content string) []string {
+	var scopes []string
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- ") {
+			scopes = append(scopes, strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+		}
+	}
+
+	if len(scopes) > 0 {
+		return scopes
+	}
+
+	for _, block := range strings.Split(content, "\n\n") {
+		trimmed := strings.TrimSpace(block)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		scopes = append(scopes, trimmed)
+	}
+
+	return scopes
+}
+
+func taskTitle(content string, fallback string) string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			return strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+		}
+	}
+	return strings.TrimSuffix(fallback, filepath.Ext(fallback))
+}
+
+func archiveCompletedTask(donePath string) (string, error) {
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		return "", err
+	}
+
+	archivePath := uniqueTaskPath(archiveDir, filepath.Base(donePath))
+	if err := copyFile(donePath, archivePath); err != nil {
+		return "", fmt.Errorf("archive completed task: %w", err)
+	}
+
+	return archivePath, nil
+}
+
+func writeFailureNotification(failedPath string, logPath string, runErr error) (string, error) {
+	if err := os.MkdirAll(notificationDir, 0755); err != nil {
+		return "", err
+	}
+
+	base := strings.TrimSuffix(filepath.Base(failedPath), filepath.Ext(failedPath))
+	notificationPath := uniqueTaskPath(notificationDir, base+"-failed.txt")
+	content := fmt.Sprintf("Task failed: %s\nLog: %s\nError: %v\n", failedPath, logPath, runErr)
+	if err := os.WriteFile(notificationPath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("write failure notification: %w", err)
+	}
+
+	return notificationPath, nil
+}
+
+func copyFile(source string, target string) error {
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(target, data, 0644)
 }
 
 func uniqueTaskPath(dir string, base string) string {
@@ -268,4 +488,9 @@ func goBinary() string {
 	}
 
 	return "go"
+}
+
+func runAgentTask(taskPath string, maxSteps int) ([]byte, error) {
+	cmd := exec.Command(goBinary(), "run", "./cmd/ptolemy-agent", "--task-file", taskPath, "--max-steps", strconv.Itoa(maxSteps))
+	return cmd.CombinedOutput()
 }

@@ -99,6 +99,30 @@ func TestSelectNextTaskPrioritizesSplitQueue(t *testing.T) {
 	}
 }
 
+func TestSelectNextTaskResumesProcessQueueFirst(t *testing.T) {
+	chdirTemp(t)
+	if err := ensureDirs(); err != nil {
+		t.Fatal(err)
+	}
+	writeTask(t, filepath.Join(processDir, "001-process.md"), "Resume process task.")
+	writeTask(t, filepath.Join(splitDir, "001-split.md"), "Create split output.")
+	writeTask(t, filepath.Join(inboxDir, "000-inbox.md"), "Create inbox output.")
+
+	task, ok, err := selectNextTask()
+	if err != nil {
+		t.Fatalf("selectNextTask() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("selectNextTask() returned no task")
+	}
+	if task.Queue != queueProcess {
+		t.Fatalf("queue = %q, want %q", task.Queue, queueProcess)
+	}
+	if task.Path != filepath.Join(processDir, "001-process.md") {
+		t.Fatalf("selected path = %q", task.Path)
+	}
+}
+
 func TestSelectNextTaskFallsBackToInbox(t *testing.T) {
 	chdirTemp(t)
 	if err := ensureDirs(); err != nil {
@@ -157,19 +181,7 @@ func TestUniqueTaskPathPreservesExistingFile(t *testing.T) {
 }
 
 func TestRunNoPendingTasks(t *testing.T) {
-	previousWD, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.Chdir(t.TempDir()); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chdir(previousWD); err != nil {
-			t.Fatalf("restore working directory: %v", err)
-		}
-	})
+	chdirTemp(t)
 
 	var out bytes.Buffer
 	if err := run(&out); err != nil {
@@ -180,7 +192,7 @@ func TestRunNoPendingTasks(t *testing.T) {
 		t.Fatalf("run() output = %q, want no pending tasks", got)
 	}
 
-	for _, dir := range []string{inboxDir, activeDir, splitDir, doneDir, failedDir, archiveDir, taskRunnerStateDir} {
+	for _, dir := range []string{inboxDir, activeDir, processDir, splitDir, doneDir, failedDir, archiveDir, taskRunnerStateDir, notificationDir} {
 		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 			t.Fatalf("expected directory %s to exist, stat err: %v", dir, err)
 		}
