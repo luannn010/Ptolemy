@@ -8,8 +8,9 @@
 - One branch per task
 - Commit only tested changes
 - Merge only if working branch is clean
-- If conflict occurs → STOP and report
+- If conflict occurs -> STOP and report
 - Do not auto-resolve runtime code conflicts
+- If the branch should be reviewed instead of merged directly, use `docs/workflows/git/pull-request.md` after the commit
 
 ## Workflow
 
@@ -20,7 +21,7 @@ git branch --show-current
 git status --short
 ```
 
-If not clean → STOP
+If not clean -> STOP
 
 ### 2. Create task branch
 
@@ -77,7 +78,7 @@ STOP and report:
 
 ## Conflict policy
 
-- Docs → can suggest fix
-- Config → suggest + validate
-- Runtime code → DO NOT auto-resolve
-- User files → DO NOT touch
+- Docs -> can suggest fix
+- Config -> suggest + validate
+- Runtime code -> DO NOT auto-resolve
+- User files -> DO NOT touch

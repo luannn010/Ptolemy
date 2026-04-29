@@ -16,6 +16,7 @@ Agents should read this file first, then open only the workflow file relevant to
 
 - Codex Execution: `docs/workflows/agent/codex-execution.md`
 - Task-File Driven Execution: `docs/workflows/agent/task-file-driven.md`
+- Task Flags and Isolation: `docs/workflows/agent/task-flags-and-isolation.md`
 - Navigator: `docs/workflows/agent/navigator.md`
 - File Search / Read: `docs/workflows/agent/file-search-read.md`
 - Planner vs Executor: `docs/workflows/agent/planner-vs-executor.md`
@@ -34,6 +35,7 @@ Agents should read this file first, then open only the workflow file relevant to
 
 - Safe Commit: `docs/workflows/git/safe-commit.md`
 - Task Branch and Safe Merge: `docs/workflows/git/task-branch-merge.md`
+- Pull Request: `docs/workflows/git/pull-request.md`
 
 ## Design Principles
 
