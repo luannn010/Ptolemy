@@ -97,6 +97,10 @@ docs/tasks/inbox/*.md
 - If a command fails, inspect the artifact/log before retrying.
 - Do not repeat the same failing command without changing something.
 
+## EOF / Worker Drop Recovery
+
+If `ptolemy-agent` or the worker connection drops with EOF, timeout, or no response, do not restart blindly and do not assume failure. First check git status and latest commit. If no commit exists but the expected task files are modified, continue using the deterministic fallback workflow in `WORKFLOWS.md`. Never stage files outside the task scope.
+
 ### JSON action rules for `ptolemy-agent`
 
 When interacting with the local agent, Gemma must return exactly one JSON object per response.
