@@ -1,4 +1,0 @@
-alpha
-MARKER
-INSERTED
-omega

@@ -63,12 +63,9 @@ internal/
 
 docs/
   Architecture.md
-  Build Plan.md
-  Future Updates.md
-  MVP_Design.md
-  Worker_Progress_Checklist.md
   memory/
   tasks/
+  workflows/
 ```
 
 ## Requirements
@@ -250,6 +247,7 @@ Task queues:
 ```text
 docs/tasks/inbox
 docs/tasks/active
+docs/tasks/process
 docs/tasks/split
 docs/tasks/done
 docs/tasks/failed
@@ -261,6 +259,41 @@ Run the task runner:
 ```bash
 go run ./cmd/ptolemy-task-runner
 ```
+
+## Task System
+
+Tasks live in `docs/tasks/` and are intended to describe one bounded change. Root task files use the naming format `<Priority>-<task-slug>.md`, where the priority prefix is `Urgent`, `Normal`, or `Low`.
+
+Each task starts with YAML metadata such as `priority`, `task_id`, `parent_task`, `owner`, `status`, `branch`, `allowed_files`, and `created_by`. Agents work on one `task_id` per session, use the declared task branch, and only edit paths listed in `allowed_files`.
+
+Split tasks inherit the parent priority, parent task ID, and allowed file scope unless a child task narrows it. Each child receives its own unique `task_id` and branch.
+
+Task templates:
+
+- `docs/tasks/templates/task-file-template.md`
+- `docs/tasks/templates/split-task-template.md`
+
+## Workflow System
+
+`WORKFLOWS.md` is the workflow index. Agents read it first, then load only the workflow file relevant to the current task.
+
+Workflow documents are split by purpose:
+
+```text
+docs/workflows/core/
+docs/workflows/agent/
+docs/workflows/editing/
+docs/workflows/recovery/
+docs/workflows/git/
+```
+
+This keeps context small while still documenting command execution, task-file handling, editing, recovery, safe commits, task branches, and pull requests.
+
+## Git And Pull Requests
+
+Task work happens on the branch declared by task metadata, usually `ptolemy/<priority>-<task-id>`. Stage explicit task files only, never use `git add .`, and commit task-related changes on the task branch after validation.
+
+The pull request workflow is: push the branch, create a Pull Request with the GitHub CLI when available, and write fallback instructions under `.state/pr/` if the CLI is unavailable or unauthenticated. Do not auto-merge unless a task explicitly requests it.
 
 ## Development Workflow
 
@@ -303,6 +336,7 @@ Completed or mostly complete:
 - SQLite execution memory tables and migrations.
 - Markdown knowledge memory structure.
 - Basic local-brain agent loop and task runner prototype.
+- Split workflow documentation, task metadata rules, and safe commit/PR guidance.
 
 Still in progress:
 
@@ -311,7 +345,7 @@ Still in progress:
 - Failure recovery in the agent loop.
 - Short command-output summaries.
 - Full Codex bridge service.
-- End-to-end task execution, validation, commit, and push workflow.
+- End-to-end task execution, validation, and queue finalization.
 
 See `docs/Worker_Progress_Checklist.md` for the detailed phase checklist.
 
@@ -328,7 +362,9 @@ Agent-compatible architecture.
 
 ## More Documentation
 
-- `WORKFLOWS.md` documents supported execution workflows.
+- `WORKFLOWS.md` indexes supported execution workflows.
+- `docs/workflows/` contains focused workflow files for core runtime, agent operation, editing, recovery, Git, and Pull Request handling.
+- `docs/tasks/templates/` contains root and split task templates.
 - `docs/MVP_Design.md` describes the planner/executor/runtime model.
 - `docs/Build Plan.md` lays out the build phases.
 - `docs/Future Updates.md` lists future MCP, infrastructure, and safety ideas.
