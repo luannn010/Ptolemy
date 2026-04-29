@@ -33,6 +33,7 @@ Agents should read this file first, then open only the workflow file relevant to
 ## Git Workflows
 
 - Safe Commit: `docs/workflows/git/safe-commit.md`
+- Task Branch and Safe Merge: `docs/workflows/git/task-branch-merge.md`
 
 ## Design Principles
 

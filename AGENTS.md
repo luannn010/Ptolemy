@@ -98,6 +98,27 @@ Before executing a task:
 5. Follow `docs/workflows/git/safe-commit.md` before committing.
 6. If Ptolemy returns EOF, timeout, or no response, follow `docs/workflows/recovery/eof-worker-drop.md`.
 
+## Task Branch Workflow
+
+Before starting a task:
+
+1. Read `WORKFLOWS.md`.
+2. Ensure working branch is clean.
+3. Create branch: `ptolemy/<task-slug>`.
+
+After task:
+
+1. Run tests.
+2. Stage explicit files only.
+3. Commit on task branch.
+4. Merge only if working branch is clean.
+5. If conflict occurs → STOP and report.
+
+Never:
+- use `git add .`
+- auto-resolve runtime conflicts
+- overwrite user files
+
 ### General safety
 
 - Never push without explicit user approval.
