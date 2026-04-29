@@ -1,1 +1,0 @@
-README Summary: Worker Platform setup guide including Go and Make requirements.

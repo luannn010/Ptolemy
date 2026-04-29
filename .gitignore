@@ -15,3 +15,5 @@ Thumbs.db
 
 .state/
 /docs/tasks/*
+/docs/plans/*
+/deploy/*
