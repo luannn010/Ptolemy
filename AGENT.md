@@ -103,7 +103,11 @@ When interacting with the local agent, Gemma must return exactly one JSON object
 
 Do not return multiple JSON objects.
 
+Do not return top-level JSON arrays.
+
 Do not chain multiple tool actions in one response.
+
+If multiple steps are needed, return one `create_task_batch` object and let Ptolemy queue the child tasks separately.
 
 Correct:
 
@@ -120,6 +124,24 @@ Incorrect:
 ```json
 { "action": "read_file", "...": "..." }
 { "action": "replace_block", "...": "..." }
+```
+
+Queued multi-step form:
+
+```json
+{
+  "action": "create_task_batch",
+  "tasks": [
+    {
+      "type": "read_file",
+      "path": "cmd/ptolemy-agent/main.go"
+    },
+    {
+      "type": "run_command",
+      "command": "go test ./..."
+    }
+  ]
+}
 ```
 
 ### File editing rules

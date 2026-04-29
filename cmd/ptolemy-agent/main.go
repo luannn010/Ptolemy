@@ -6,31 +6,40 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
+	actionpkg "github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/brain"
+	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/inspect"
+	logspkg "github.com/luannn010/ptolemy/internal/logs"
+	storepkg "github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/worker"
 )
 
 const maxBrainPreviewChars = 1200
 const artifactDir = ".state/agent-artifacts"
 
-type BrainAction struct {
-	Action  string `json:"action"`
-	Command string `json:"command,omitempty"`
-	Path    string `json:"path,omitempty"`
-	Content string `json:"content,omitempty"`
-	Old     string `json:"old,omitempty"`
-	New     string `json:"new,omitempty"`
-	Marker  string `json:"marker,omitempty"`
-	Reason  string `json:"reason"`
-}
-
 type ActionResult struct {
 	Display string
 	Brain   string
+}
+
+type workerClient interface {
+	CreateSession(ctx context.Context, reqBody worker.CreateSessionRequest) (*worker.Session, error)
+	RunCommand(ctx context.Context, sessionID string, reqBody worker.RunCommandRequest) (*worker.CommandResult, error)
+	ReadFile(ctx context.Context, reqBody worker.ReadFileRequest) (*worker.ReadFileResponse, error)
+	WriteFile(ctx context.Context, reqBody worker.WriteFileRequest) (*worker.WriteFileResponse, error)
+}
+
+type agentRuntime struct {
+	workerClient workerClient
+	actionStore  *actionpkg.Store
+	logStore     *logspkg.Store
+	splitter     actionpkg.TaskSplitter
 }
 
 func main() {
@@ -55,6 +64,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	taskName := deriveTaskName(*taskFile, task)
+
 	workspace, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("failed to get workspace: %v\n", err)
@@ -72,10 +83,33 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	brainClient := brain.NewClient("http://127.0.0.1:8088", "gemma-4-e2b")
-	workerClient := worker.NewClient("http://127.0.0.1:8080")
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Printf("failed to load config: %v\n", err)
+		os.Exit(1)
+	}
 
-	session, err := workerClient.CreateSession(ctx, worker.CreateSessionRequest{
+	baseStore, err := storepkg.Open(cfg.DBPath)
+	if err != nil {
+		fmt.Printf("failed to open store: %v\n", err)
+		os.Exit(1)
+	}
+	defer baseStore.Close()
+
+	if err := storepkg.RunMigrations(ctx, baseStore.SQLDB()); err != nil {
+		fmt.Printf("failed to run migrations: %v\n", err)
+		os.Exit(1)
+	}
+
+	brainClient := brain.NewClient("http://127.0.0.1:8088", "gemma-4-e2b")
+	runtime := &agentRuntime{
+		workerClient: worker.NewClient("http://127.0.0.1:8080"),
+		actionStore:  actionpkg.NewStore(baseStore.SQLDB()),
+		logStore:     logspkg.NewStore(baseStore.SQLDB()),
+		splitter:     actionpkg.PlaceholderTaskSplitter{},
+	}
+
+	session, err := runtime.workerClient.CreateSession(ctx, worker.CreateSessionRequest{
 		Name:        "ptolemy-agent",
 		Workspace:   workspace,
 		Description: "created by ptolemy-agent",
@@ -154,30 +188,15 @@ Observations so far:
 			os.Exit(1)
 		}
 
-		action, err := parseBrainAction(reply)
-		if err != nil {
-			summary := summarizeError(err, reply)
-			artifactPath := saveArtifact(step, "brain-parse-error", reply)
-
-			fmt.Printf(
-				"%s\nartifact: %s\n",
-				summary,
-				artifactPath,
-			)
-
-			observations = append(observations, fmt.Sprintf(
-				"Previous brain response was invalid JSON. Summary: %s. Artifact: %s. Return exactly ONE JSON object only. Do not return multiple JSON objects. Do not chain actions. Do one action now and continue later.",
-				summary,
-				artifactPath,
-			))
-
+		action, result, ok := processBrainReply(ctx, runtime, session.ID, workspace, taskName, step, reply, *allowScripts)
+		if !ok {
+			fmt.Println(result.Display)
+			observations = append(observations, result.Brain)
 			continue
 		}
 
 		fmt.Printf("brain action: %s\n", action.Action)
 		fmt.Printf("reason: %s\n", action.Reason)
-
-		result := executeAction(ctx, workerClient, session.ID, workspace, step, action, *allowScripts)
 
 		fmt.Println(result.Display)
 		observations = append(observations, result.Brain)
@@ -193,11 +212,12 @@ Observations so far:
 
 func executeAction(
 	ctx context.Context,
-	workerClient *worker.Client,
+	runtime *agentRuntime,
 	sessionID string,
 	workspace string,
+	taskName string,
 	step int,
-	action *BrainAction,
+	action *actionpkg.ActionEnvelope,
 	allowScripts bool,
 ) ActionResult {
 	switch action.Action {
@@ -218,7 +238,7 @@ func executeAction(
 			return both(fmt.Sprintf("APPROVAL REQUIRED: running script commands requires explicit permission command=%s", action.Command))
 		}
 
-		result, err := workerClient.RunCommand(ctx, sessionID, worker.RunCommandRequest{
+		result, err := runtime.workerClient.RunCommand(ctx, sessionID, worker.RunCommandRequest{
 			Command: action.Command,
 			CWD:     workspace,
 			Timeout: 120,
@@ -232,7 +252,7 @@ func executeAction(
 			combinedOutput += "\n" + result.ErrorOutput
 		}
 
-		artifactPath := saveArtifact(step, "command-output", combinedOutput)
+		artifactPath := saveArtifact(taskName, step, "command-output", combinedOutput)
 
 		display := fmt.Sprintf(
 			"COMMAND RESULT\ncommand: %s\nexit_code: %d\nartifact: %s",
@@ -256,7 +276,7 @@ func executeAction(
 			return both("ERROR: empty path")
 		}
 
-		result, err := workerClient.ReadFile(ctx, worker.ReadFileRequest{
+		result, err := runtime.workerClient.ReadFile(ctx, worker.ReadFileRequest{
 			SessionID: sessionID,
 			Path:      action.Path,
 		})
@@ -264,7 +284,7 @@ func executeAction(
 			return both(fmt.Sprintf("ERROR reading file: %v", err))
 		}
 
-		artifactPath := saveArtifact(step, "read-"+result.Path, result.Content)
+		artifactPath := saveArtifact(taskName, step, "read-"+result.Path, result.Content)
 
 		display := fmt.Sprintf(
 			"FILE READ OK\npath: %s\nbytes: %d\nartifact: %s",
@@ -300,9 +320,9 @@ func executeAction(
 			))
 		}
 
-		artifactPath := saveArtifact(step, "write-"+action.Path, action.Content)
+		artifactPath := saveArtifact(taskName, step, "write-"+action.Path, action.Content)
 
-		result, err := workerClient.WriteFile(ctx, worker.WriteFileRequest{
+		result, err := runtime.workerClient.WriteFile(ctx, worker.WriteFileRequest{
 			SessionID: sessionID,
 			Path:      action.Path,
 			Content:   action.Content,
@@ -337,7 +357,7 @@ func executeAction(
 			return both(fmt.Sprintf("ERROR: insert_after path is not allowed: %s", action.Path))
 		}
 
-		file, err := workerClient.ReadFile(ctx, worker.ReadFileRequest{
+		file, err := runtime.workerClient.ReadFile(ctx, worker.ReadFileRequest{
 			SessionID: sessionID,
 			Path:      action.Path,
 		})
@@ -347,7 +367,7 @@ func executeAction(
 
 		idx := strings.Index(file.Content, action.Marker)
 		if idx == -1 {
-			artifactPath := saveArtifact(step, "insert-after-marker-not-found-"+action.Path, file.Content)
+			artifactPath := saveArtifact(taskName, step, "insert-after-marker-not-found-"+action.Path, file.Content)
 			return both(fmt.Sprintf(
 				"ERROR: insert_after marker not found\npath: %s\nartifact: %s",
 				action.Path,
@@ -372,9 +392,9 @@ func executeAction(
 		}
 
 		updated := file.Content[:insertAt] + insertText + file.Content[insertAt:]
-		artifactPath := saveArtifact(step, "insert-after-"+action.Path, updated)
+		artifactPath := saveArtifact(taskName, step, "insert-after-"+action.Path, updated)
 
-		result, err := workerClient.WriteFile(ctx, worker.WriteFileRequest{
+		result, err := runtime.workerClient.WriteFile(ctx, worker.WriteFileRequest{
 			SessionID: sessionID,
 			Path:      action.Path,
 			Content:   updated,
@@ -409,7 +429,7 @@ func executeAction(
 			return both(fmt.Sprintf("ERROR: replace_block path is not allowed: %s", action.Path))
 		}
 
-		file, err := workerClient.ReadFile(ctx, worker.ReadFileRequest{
+		file, err := runtime.workerClient.ReadFile(ctx, worker.ReadFileRequest{
 			SessionID: sessionID,
 			Path:      action.Path,
 		})
@@ -418,7 +438,7 @@ func executeAction(
 		}
 
 		if !strings.Contains(file.Content, action.Old) {
-			artifactPath := saveArtifact(step, "replace-old-not-found-"+action.Path, file.Content)
+			artifactPath := saveArtifact(taskName, step, "replace-old-not-found-"+action.Path, file.Content)
 			return both(fmt.Sprintf(
 				"ERROR: replace_block old text not found\npath: %s\nartifact: %s",
 				action.Path,
@@ -427,9 +447,9 @@ func executeAction(
 		}
 
 		updated := strings.Replace(file.Content, action.Old, action.New, 1)
-		artifactPath := saveArtifact(step, "replace-"+action.Path, updated)
+		artifactPath := saveArtifact(taskName, step, "replace-"+action.Path, updated)
 
-		result, err := workerClient.WriteFile(ctx, worker.WriteFileRequest{
+		result, err := runtime.workerClient.WriteFile(ctx, worker.WriteFileRequest{
 			SessionID: sessionID,
 			Path:      action.Path,
 			Content:   updated,
@@ -447,9 +467,134 @@ func executeAction(
 
 		return ActionResult{Display: msg, Brain: msg}
 
+	case "create_task_batch":
+		return queueTaskBatch(ctx, runtime, sessionID, action)
+
 	default:
 		return both(fmt.Sprintf("ERROR: unknown action %s", action.Action))
 	}
+}
+
+func processBrainReply(
+	ctx context.Context,
+	runtime *agentRuntime,
+	sessionID string,
+	workspace string,
+	taskName string,
+	step int,
+	reply string,
+	allowScripts bool,
+) (*actionpkg.ActionEnvelope, ActionResult, bool) {
+	action, err := actionpkg.ValidateSingleJSONAction(reply)
+	if err != nil {
+		return nil, handleInvalidModelOutput(ctx, runtime, sessionID, taskName, step, reply, err), false
+	}
+
+	result := executeAction(ctx, runtime, sessionID, workspace, taskName, step, action, allowScripts)
+	return action, result, true
+}
+
+func handleInvalidModelOutput(
+	ctx context.Context,
+	runtime *agentRuntime,
+	sessionID string,
+	taskName string,
+	step int,
+	reply string,
+	err error,
+) ActionResult {
+	summary := summarizeError(err)
+	artifactPath := saveArtifact(taskName, step, "brain-parse-error", reply)
+
+	recoveryPayload := map[string]any{
+		"status":           "invalid_model_output",
+		"error":            summary,
+		"safe_to_continue": false,
+		"next_step":        "split_into_task_batch",
+	}
+	metadata := map[string]any{
+		"parser_error":      err.Error(),
+		"safe_to_continue":  false,
+		"next_step":         "split_into_task_batch",
+		"splitter_strategy": "placeholder",
+		"splitter_error":    splitterMessage(runtime.splitter),
+		"artifact_path":     artifactPath,
+	}
+
+	recordedAction, createErr := runtime.actionStore.Create(ctx, actionpkg.Action{
+		SessionID: sessionID,
+		Type:      "model.output",
+		Input:     reply,
+		Output:    mustMarshalJSON(recoveryPayload),
+		Status:    "invalid_model_output",
+		Metadata:  mustMarshalJSON(metadata),
+	})
+	if createErr == nil {
+		_, _ = runtime.logStore.Create(ctx, logspkg.Log{
+			SessionID: sessionID,
+			ActionID:  recordedAction.ID,
+			Level:     "warn",
+			Message:   summary,
+			Metadata:  mustMarshalJSON(metadata),
+		})
+	}
+
+	display := fmt.Sprintf(
+		"INVALID MODEL OUTPUT\nstatus: invalid_model_output\nerror: %s\nsafe_to_continue: false\nnext_step: split_into_task_batch\nartifact: %s",
+		summary,
+		artifactPath,
+	)
+	brain := fmt.Sprintf(
+		"Previous brain response was invalid. Status: invalid_model_output. Error: %s. Artifact: %s. Return exactly ONE JSON object only. Do not return multiple JSON objects. Do not chain actions. Use create_task_batch if multiple tasks are needed.",
+		summary,
+		artifactPath,
+	)
+
+	return ActionResult{Display: display, Brain: brain}
+}
+
+func queueTaskBatch(ctx context.Context, runtime *agentRuntime, sessionID string, action *actionpkg.ActionEnvelope) ActionResult {
+	parentMeta := mustMarshalJSON(map[string]any{
+		"task_count": len(action.Tasks),
+	})
+
+	parent, err := runtime.actionStore.Create(ctx, actionpkg.Action{
+		SessionID: sessionID,
+		Type:      "create_task_batch",
+		Input:     mustMarshalJSON(action),
+		Status:    "queued",
+		Metadata:  parentMeta,
+	})
+	if err != nil {
+		return both(fmt.Sprintf("ERROR queueing task batch: %v", err))
+	}
+
+	for i, task := range action.Tasks {
+		_, err := runtime.actionStore.Create(ctx, actionpkg.Action{
+			SessionID: sessionID,
+			Type:      task.NormalizedType(),
+			Input:     mustMarshalJSON(task),
+			Status:    "pending",
+			Metadata: mustMarshalJSON(map[string]any{
+				"batch_action_id": parent.ID,
+				"batch_index":     i,
+			}),
+		})
+		if err != nil {
+			return both(fmt.Sprintf("ERROR queueing task batch item: %v", err))
+		}
+	}
+
+	_, _ = runtime.logStore.Create(ctx, logspkg.Log{
+		SessionID: sessionID,
+		ActionID:  parent.ID,
+		Level:     "info",
+		Message:   "task batch queued",
+		Metadata:  parentMeta,
+	})
+
+	msg := fmt.Sprintf("TASK BATCH QUEUED\nstatus: queued\ncount: %d", len(action.Tasks))
+	return ActionResult{Display: msg, Brain: msg}
 }
 
 func both(message string) ActionResult {
@@ -511,25 +656,114 @@ func commandRunsScript(command string) bool {
 		strings.Contains(lower, "perl ")
 }
 
-func saveArtifact(step int, name string, content string) string {
+func saveArtifact(taskName string, step int, label string, content string) string {
 	if strings.TrimSpace(content) == "" {
 		return ""
 	}
 
 	_ = os.MkdirAll(artifactDir, 0755)
 
-	safeName := strings.NewReplacer(
-		"/", "-",
-		"\\", "-",
-		":", "-",
-		" ", "-",
-	).Replace(name)
-
-	path := fmt.Sprintf("%s/step-%03d-%s.txt", artifactDir, step, safeName)
+	path := artifactPath(taskName, step, label, time.Now())
+	path = uniqueArtifactPath(path)
 
 	_ = os.WriteFile(path, []byte(content), 0644)
 
 	return path
+}
+
+func saveArtifactAt(now time.Time, taskName string, step int, label string, content string) string {
+	if strings.TrimSpace(content) == "" {
+		return ""
+	}
+
+	_ = os.MkdirAll(artifactDir, 0755)
+
+	path := artifactPath(taskName, step, label, now)
+	path = uniqueArtifactPath(path)
+
+	_ = os.WriteFile(path, []byte(content), 0644)
+
+	return path
+}
+
+func artifactPath(taskName string, step int, label string, now time.Time) string {
+	name := fmt.Sprintf(
+		"%s-%s-step%03d-%s.txt",
+		now.UTC().Format("020106"),
+		slugArtifactPart(taskName, "task"),
+		step,
+		slugArtifactPart(label, "artifact"),
+	)
+	return filepath.Join(artifactDir, name)
+}
+
+func uniqueArtifactPath(path string) string {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return path
+	}
+
+	dir := filepath.Dir(path)
+	ext := filepath.Ext(path)
+	base := strings.TrimSuffix(filepath.Base(path), ext)
+
+	for i := 2; ; i++ {
+		candidate := filepath.Join(dir, fmt.Sprintf("%s-%d%s", base, i, ext))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+}
+
+func slugArtifactPart(value string, fallback string) string {
+	trimmed := strings.ToLower(strings.TrimSpace(value))
+	if trimmed == "" {
+		return fallback
+	}
+
+	var b strings.Builder
+	lastDash := false
+
+	for _, r := range trimmed {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r):
+			b.WriteRune(r)
+			lastDash = false
+		default:
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+
+	slug := strings.Trim(b.String(), "-")
+	if slug == "" {
+		return fallback
+	}
+
+	return slug
+}
+
+func deriveTaskName(taskFile string, task string) string {
+	if strings.TrimSpace(taskFile) != "" {
+		base := filepath.Base(taskFile)
+		return strings.TrimSuffix(base, filepath.Ext(base))
+	}
+
+	for _, line := range strings.Split(task, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "#") {
+			return strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+		}
+
+		return trimmed
+	}
+
+	return "task"
 }
 
 func previewText(text string, maxChars int) string {
@@ -540,43 +774,13 @@ func previewText(text string, maxChars int) string {
 	return text[:maxChars] + "\n...[truncated]"
 }
 
-func parseBrainAction(reply string) (*BrainAction, error) {
-	cleaned := strings.TrimSpace(reply)
-
-	if cleaned == "" {
-		return nil, fmt.Errorf("empty brain reply")
-	}
-
-	cleaned = strings.TrimPrefix(cleaned, "```json")
-	cleaned = strings.TrimPrefix(cleaned, "```")
-	cleaned = strings.TrimSuffix(cleaned, "```")
-	cleaned = strings.TrimSpace(cleaned)
-
-	start := strings.Index(cleaned, "{")
-	end := strings.LastIndex(cleaned, "}")
-
-	if start == -1 || end == -1 || end <= start {
-		return nil, fmt.Errorf("no JSON object found in reply: %q", reply)
-	}
-
-	cleaned = cleaned[start : end+1]
-
-	var action BrainAction
-	if err := json.Unmarshal([]byte(cleaned), &action); err != nil {
-		return nil, fmt.Errorf("invalid JSON %q: %w", cleaned, err)
-	}
-
-	return &action, nil
-}
-func summarizeError(err error, raw string) string {
+func summarizeError(err error) string {
 	msg := err.Error()
 
-	// multiple JSON objects (most common failure)
-	if strings.Count(raw, "{") > 1 {
+	if strings.Contains(msg, "multiple JSON objects returned") {
 		return "ERROR: multiple JSON objects returned (agent must return ONE action)"
 	}
 
-	// JSON parse errors
 	if strings.Contains(msg, "invalid character") {
 		return "ERROR: invalid JSON (likely bad escaping or formatting)"
 	}
@@ -589,6 +793,35 @@ func summarizeError(err error, raw string) string {
 		return "ERROR: no JSON object in response"
 	}
 
+	if strings.Contains(msg, "top-level JSON arrays are not allowed") {
+		return "ERROR: top-level JSON arrays are not allowed"
+	}
+
+	if strings.Contains(msg, "missing action or type") {
+		return "ERROR: missing action or type"
+	}
+
 	// fallback
 	return "ERROR: " + msg
+}
+
+func mustMarshalJSON(v any) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return `{}`
+	}
+	return string(data)
+}
+
+func splitterMessage(splitter actionpkg.TaskSplitter) string {
+	if splitter == nil {
+		return "no splitter configured"
+	}
+
+	_, err := splitter.Split("")
+	if err != nil {
+		return err.Error()
+	}
+
+	return "splitter available"
 }
