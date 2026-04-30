@@ -5,6 +5,7 @@
 The current scheduler can:
 
 - scan inbox tasks from Markdown frontmatter
+- load task packs and scan pack `inbox/` tasks in place
 - validate task metadata before execution
 - build a deterministic plan from dependencies, priority, and execution group
 - check `allowed_files` conflicts
@@ -59,12 +60,21 @@ Preview plan:
 
 ```bash
 go run ./cmd/ptolemy-task-runner plan --inbox docs/tasks/inbox
+go run ./cmd/ptolemy-task-runner plan --pack <pack-dir>
 ```
 
 Run sequential scheduler:
 
 ```bash
 go run ./cmd/ptolemy-task-runner run --inbox docs/tasks/inbox --workspace .
+go run ./cmd/ptolemy-task-runner run --pack <pack-dir> --workspace .
 ```
+
+Pack behavior in v1:
+
+- the runner reads `PACK_MANIFEST.yaml` and `TASK_PLAN.md`
+- the runner executes the pack's `inbox/` tasks directly from the pack directory
+- referenced `task-scripts/` and `snippets/` files are validated for existence
+- pack `scripts/` hooks are not auto-run
 
 These commands operate on task metadata and validation commands only. They do not create branches, worktrees, or true parallel execution yet.

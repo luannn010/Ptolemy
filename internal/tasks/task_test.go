@@ -61,6 +61,35 @@ Body`)
 	if len(task.DependsOn) != 0 || len(task.Validation) != 0 {
 		t.Fatalf("expected empty optional lists, got %+v", task)
 	}
+	if len(task.Scripts) != 0 || len(task.Snippets) != 0 {
+		t.Fatalf("expected empty pack lists, got %+v", task)
+	}
+}
+
+func TestParseTaskMarkdown_PackReferences(t *testing.T) {
+	content := []byte(`---
+task_id: t1
+status: inbox
+branch: ptolemy/t1
+allowed_files:
+  - a.go
+scripts:
+  - task-scripts/01.md
+snippets:
+  - snippets/example.go
+---
+Body`)
+
+	task, err := ParseTaskMarkdown("p.md", content)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(task.Scripts) != 1 || task.Scripts[0] != "task-scripts/01.md" {
+		t.Fatalf("unexpected scripts: %+v", task.Scripts)
+	}
+	if len(task.Snippets) != 1 || task.Snippets[0] != "snippets/example.go" {
+		t.Fatalf("unexpected snippets: %+v", task.Snippets)
+	}
 }
 
 func TestParseTaskMarkdown_MissingTaskID(t *testing.T) {

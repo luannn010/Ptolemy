@@ -1,6 +1,10 @@
 package tasks
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestValidateTaskValidTaskReturnsNoErrors(t *testing.T) {
 	task := Task{
@@ -93,6 +97,70 @@ func TestValidateTaskSelfDependencyReturnsError(t *testing.T) {
 	}
 
 	assertHasValidationError(t, ValidateTask(task), "depends_on")
+}
+
+func TestValidateTaskMissingPackScriptReturnsError(t *testing.T) {
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, "task-scripts"))
+	mustMkdir(t, filepath.Join(root, "snippets"))
+	mustWriteFile(t, filepath.Join(root, "snippets", "ok.go"), "package snippets\n")
+
+	task := Task{
+		ID:             "task-1",
+		Status:         StatusInbox,
+		Branch:         "ptolemy/task-1",
+		ExecutionGroup: "sequential",
+		AllowedFiles:   []string{"internal/tasks/validator.go"},
+		Validation:     []string{"go test ./internal/tasks"},
+		Scripts:        []string{"task-scripts/missing.md"},
+		Snippets:       []string{"snippets/ok.go"},
+		PackContext: &TaskPackContext{
+			Root:           root,
+			TaskScriptsDir: "task-scripts",
+			SnippetsDir:    "snippets",
+		},
+	}
+
+	assertHasValidationError(t, ValidateTask(task), "scripts")
+}
+
+func TestValidateTaskMissingPackSnippetReturnsError(t *testing.T) {
+	root := t.TempDir()
+	mustMkdir(t, filepath.Join(root, "task-scripts"))
+	mustMkdir(t, filepath.Join(root, "snippets"))
+	mustWriteFile(t, filepath.Join(root, "task-scripts", "ok.md"), "# ok\n")
+
+	task := Task{
+		ID:             "task-1",
+		Status:         StatusInbox,
+		Branch:         "ptolemy/task-1",
+		ExecutionGroup: "sequential",
+		AllowedFiles:   []string{"internal/tasks/validator.go"},
+		Validation:     []string{"go test ./internal/tasks"},
+		Scripts:        []string{"task-scripts/ok.md"},
+		Snippets:       []string{"snippets/missing.go"},
+		PackContext: &TaskPackContext{
+			Root:           root,
+			TaskScriptsDir: "task-scripts",
+			SnippetsDir:    "snippets",
+		},
+	}
+
+	assertHasValidationError(t, ValidateTask(task), "snippets")
+}
+
+func mustMkdir(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func assertHasValidationError(t *testing.T, errs []ValidationError, field string) {

@@ -8,6 +8,10 @@ func BuildPlanPreview(inbox string) ([]string, []ValidationError, error) {
 		return nil, nil, err
 	}
 
+	return buildPlanPreviewForTasks(taskList)
+}
+
+func buildPlanPreviewForTasks(taskList []Task) ([]string, []ValidationError, error) {
 	validationErrs := ValidateTasks(taskList)
 	if len(validationErrs) > 0 {
 		return nil, validationErrs, nil
@@ -26,5 +30,18 @@ func BuildPlanPreview(inbox string) ([]string, []ValidationError, error) {
 }
 
 func RunInboxScheduler(ctx context.Context, inbox string, workspace string) SchedulerResult {
-	return NewScheduler(inbox, workspace).Run(ctx)
+	taskList, err := ScanInbox(inbox)
+	if err != nil {
+		return SchedulerResult{
+			PlannedTaskIDs:   []string{},
+			CompletedTaskIDs: []string{},
+			ValidationErrors: []ValidationError{{
+				TaskID: "<scan>",
+				Field:  "inbox",
+				Reason: err.Error(),
+			}},
+		}
+	}
+
+	return runTaskList(ctx, taskList, workspace)
 }

@@ -56,10 +56,10 @@ type Scheduler struct {
 }
 
 type SchedulerResult struct {
-	PlannedTaskIDs    []string
-	CompletedTaskIDs  []string
-	FailedTaskID      string
-	ValidationErrors  []ValidationError
+	PlannedTaskIDs   []string
+	CompletedTaskIDs []string
+	FailedTaskID     string
+	ValidationErrors []ValidationError
 }
 
 func NewScheduler(inboxDir string, workspace string) *Scheduler {
@@ -67,20 +67,27 @@ func NewScheduler(inboxDir string, workspace string) *Scheduler {
 }
 
 func (s *Scheduler) Run(ctx context.Context) SchedulerResult {
+	taskList, err := ScanInbox(s.InboxDir)
+	if err != nil {
+		return SchedulerResult{
+			PlannedTaskIDs:   []string{},
+			CompletedTaskIDs: []string{},
+			ValidationErrors: []ValidationError{{
+				TaskID: "<scan>",
+				Field:  "inbox",
+				Reason: err.Error(),
+			}},
+		}
+	}
+
+	return runTaskList(ctx, taskList, s.Workspace)
+}
+
+func runTaskList(ctx context.Context, taskList []Task, workspace string) SchedulerResult {
 	result := SchedulerResult{
 		PlannedTaskIDs:   []string{},
 		CompletedTaskIDs: []string{},
 		ValidationErrors: []ValidationError{},
-	}
-
-	taskList, err := ScanInbox(s.InboxDir)
-	if err != nil {
-		result.ValidationErrors = append(result.ValidationErrors, ValidationError{
-			TaskID: "<scan>",
-			Field:  "inbox",
-			Reason: err.Error(),
-		})
-		return result
 	}
 
 	result.ValidationErrors = ValidateTasks(taskList)
@@ -98,7 +105,7 @@ func (s *Scheduler) Run(ctx context.Context) SchedulerResult {
 		return result
 	}
 
-	runner := NewRunner(s.Workspace)
+	runner := NewRunner(workspace)
 
 	for _, step := range plan.Steps {
 		task := step.Task

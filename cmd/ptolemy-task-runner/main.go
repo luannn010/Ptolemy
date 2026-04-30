@@ -82,12 +82,30 @@ func runCLI(args []string, out io.Writer) error {
 func runPlanCommand(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("plan", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	inbox := fs.String("inbox", inboxDir, "task inbox directory")
+	inbox := fs.String("inbox", "", "task inbox directory")
+	pack := fs.String("pack", "", "task pack directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	ids, validationErrs, err := tasks.BuildPlanPreview(*inbox)
+	if *inbox != "" && *pack != "" {
+		return errors.New("plan accepts exactly one of --inbox or --pack")
+	}
+	if *inbox == "" && *pack == "" {
+		*inbox = inboxDir
+	}
+
+	var (
+		ids            []string
+		validationErrs []tasks.ValidationError
+		err            error
+	)
+
+	if *pack != "" {
+		ids, validationErrs, err = tasks.BuildPackPlanPreview(*pack)
+	} else {
+		ids, validationErrs, err = tasks.BuildPlanPreview(*inbox)
+	}
 	if err != nil {
 		return err
 	}
@@ -108,13 +126,26 @@ func runPlanCommand(args []string, out io.Writer) error {
 func runSchedulerCommand(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	inbox := fs.String("inbox", inboxDir, "task inbox directory")
+	inbox := fs.String("inbox", "", "task inbox directory")
+	pack := fs.String("pack", "", "task pack directory")
 	workspace := fs.String("workspace", ".", "workspace directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	result := tasks.RunInboxScheduler(context.Background(), *inbox, *workspace)
+	if *inbox != "" && *pack != "" {
+		return errors.New("run accepts exactly one of --inbox or --pack")
+	}
+	if *inbox == "" && *pack == "" {
+		*inbox = inboxDir
+	}
+
+	var result tasks.SchedulerResult
+	if *pack != "" {
+		result = tasks.RunTaskPack(context.Background(), *pack, *workspace)
+	} else {
+		result = tasks.RunInboxScheduler(context.Background(), *inbox, *workspace)
+	}
 
 	for _, id := range result.PlannedTaskIDs {
 		fmt.Fprintf(out, "Planned: %s\n", id)

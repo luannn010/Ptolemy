@@ -1,6 +1,8 @@
 package tasks
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -82,6 +84,15 @@ func ValidateTask(task Task) []ValidationError {
 		}
 	}
 
+	if task.PackContext != nil {
+		for _, script := range task.Scripts {
+			errs = append(errs, validatePackReference(taskID, "scripts", script, task.PackContext.Root, task.PackContext.TaskScriptsDir)...)
+		}
+		for _, snippet := range task.Snippets {
+			errs = append(errs, validatePackReference(taskID, "snippets", snippet, task.PackContext.Root, task.PackContext.SnippetsDir)...)
+		}
+	}
+
 	return errs
 }
 
@@ -149,6 +160,76 @@ func validateAllowedFile(taskID string, allowed string) []ValidationError {
 			TaskID: taskID,
 			Field:  "allowed_files",
 			Reason: "must not contain directory paths",
+		})
+	}
+
+	return errs
+}
+
+func validatePackReference(taskID string, field string, value string, packRoot string, expectedDir string) []ValidationError {
+	errs := make([]ValidationError, 0)
+	trimmed := strings.TrimSpace(value)
+
+	if trimmed == "" {
+		return []ValidationError{{
+			TaskID: taskID,
+			Field:  field,
+			Reason: "must not contain empty paths",
+		}}
+	}
+
+	if filepath.IsAbs(trimmed) {
+		return []ValidationError{{
+			TaskID: taskID,
+			Field:  field,
+			Reason: "must not contain absolute paths",
+		}}
+	}
+
+	cleaned := filepath.ToSlash(filepath.Clean(trimmed))
+	for _, part := range strings.Split(cleaned, "/") {
+		if part == ".." {
+			return []ValidationError{{
+				TaskID: taskID,
+				Field:  field,
+				Reason: "must not contain parent directory traversal",
+			}}
+		}
+	}
+
+	expectedPrefix := normalizeRelativeDir(expectedDir) + "/"
+	if cleaned != normalizeRelativeDir(expectedDir) && !strings.HasPrefix(cleaned, expectedPrefix) {
+		errs = append(errs, ValidationError{
+			TaskID: taskID,
+			Field:  field,
+			Reason: fmt.Sprintf("must stay within %s", normalizeRelativeDir(expectedDir)),
+		})
+		return errs
+	}
+
+	resolvedPath := filepath.Join(packRoot, filepath.FromSlash(cleaned))
+	info, err := os.Stat(resolvedPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			errs = append(errs, ValidationError{
+				TaskID: taskID,
+				Field:  field,
+				Reason: fmt.Sprintf("referenced file does not exist: %s", cleaned),
+			})
+			return errs
+		}
+		errs = append(errs, ValidationError{
+			TaskID: taskID,
+			Field:  field,
+			Reason: err.Error(),
+		})
+		return errs
+	}
+	if info.IsDir() {
+		errs = append(errs, ValidationError{
+			TaskID: taskID,
+			Field:  field,
+			Reason: fmt.Sprintf("expected file, found directory: %s", cleaned),
 		})
 	}
 

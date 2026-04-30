@@ -17,8 +17,11 @@ type Task struct {
 	DependsOn      []string
 	AllowedFiles   []string
 	Validation     []string
+	Scripts        []string
+	Snippets       []string
 	Path           string
 	Body           string
+	PackContext    *TaskPackContext
 }
 
 func ParseTaskMarkdown(path string, content []byte) (Task, error) {
@@ -27,6 +30,8 @@ func ParseTaskMarkdown(path string, content []byte) (Task, error) {
 		ExecutionGroup: "sequential",
 		DependsOn:      []string{},
 		Validation:     []string{},
+		Scripts:        []string{},
+		Snippets:       []string{},
 		Path:           path,
 	}
 
@@ -54,6 +59,8 @@ func ParseTaskMarkdown(path string, content []byte) (Task, error) {
 	task.DependsOn = listOrEmpty(meta, "depends_on")
 	task.AllowedFiles = listOrEmpty(meta, "allowed_files")
 	task.Validation = listOrEmpty(meta, "validation")
+	task.Scripts = listOrEmpty(meta, "scripts")
+	task.Snippets = listOrEmpty(meta, "snippets")
 
 	if task.ID == "" {
 		return Task{}, fmt.Errorf("missing required field: task_id")
