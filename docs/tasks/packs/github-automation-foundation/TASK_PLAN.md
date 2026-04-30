@@ -16,12 +16,16 @@ Implement local deterministic foundations before any networked GitHub actions.
 1. `01-add-pack-artifact-logging.md`
 2. `02-add-pack-branch-preparation.md`
 
-### Phase 2 - Handoff Artifacts
-3. `03-add-pack-failure-issue-draft.md`
-4. `04-add-pack-success-pr-draft.md`
+### Phase 2 - Branch Convergence
+3. `03-add-pack-integration-branch-merge.md`
 
-### Phase 3 - Final Validation
-5. `99-final-validation.md`
+### Phase 3 - Publish Handoff
+3. `03-add-pack-failure-issue-draft.md`
+4. `04-add-pack-push-integration-branch.md`
+5. `05-add-pack-success-pr-create.md`
+
+### Phase 4 - Final Validation
+6. `99-final-validation.md`
 
 ## Global Validation
 

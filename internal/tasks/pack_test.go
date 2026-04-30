@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,10 +100,11 @@ func TestBuildPackPlanPreviewReturnsValidationErrorsForMissingAssets(t *testing.
 
 func TestRunTaskPackRunsTasksInDependencyOrder(t *testing.T) {
 	root := createPackSkeleton(t)
+	repo, _ := setupPackRepoWithPublish(t)
 	first := writePackTask(t, filepath.Join(root, "inbox"), "b.md", "task-b", "inbox", "ptolemy/task-b", "sequential", []string{"task-a"}, []string{"printf b"}, nil, nil)
 	second := writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"printf a"}, nil, nil)
 
-	result := RunTaskPack(context.Background(), root, "")
+	result := RunTaskPack(context.Background(), root, repo)
 	if result.FailedTaskID != "" || len(result.ValidationErrors) != 0 {
 		t.Fatalf("unexpected result: %+v", result)
 	}
@@ -125,7 +127,9 @@ func TestRunTaskPackRunsTasksInDependencyOrder(t *testing.T) {
 
 func TestRunTaskPackWritesArtifactsAndPullRequestDraft(t *testing.T) {
 	root := createPackSkeleton(t)
-	repo := setupPackRepo(t)
+	repo, ghLogPath := setupPackRepoWithPublish(t)
+	createFeatureBranchCommit(t, repo, "ptolemy/task-a", "task-a.txt", "A\n")
+	createFeatureBranchCommit(t, repo, "ptolemy/task-b", "task-b.txt", "B\n")
 	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"printf a"}, nil, nil)
 	writePackTask(t, filepath.Join(root, "inbox"), "b.md", "task-b", "inbox", "ptolemy/task-b", "sequential", []string{"task-a"}, []string{"printf b"}, nil, nil)
 
@@ -135,6 +139,12 @@ func TestRunTaskPackWritesArtifactsAndPullRequestDraft(t *testing.T) {
 	}
 	if result.PRDraftPath == "" {
 		t.Fatalf("expected PR draft path, got %+v", result)
+	}
+	if result.PullRequestURL != "https://example.com/pr/123" {
+		t.Fatalf("expected PR URL, got %+v", result)
+	}
+	if result.IntegrationBranch == "" || result.PushLogPath == "" || result.PRCreateLogPath == "" {
+		t.Fatalf("expected publish artifacts, got %+v", result)
 	}
 	if result.SummaryPath == "" {
 		t.Fatalf("expected summary path, got %+v", result)
@@ -155,14 +165,27 @@ func TestRunTaskPackWritesArtifactsAndPullRequestDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(prData), "Base: \"main\"") || !strings.Contains(string(prData), "`ptolemy/task-a`") {
+	if !strings.Contains(string(prData), "Base: \"main\"") || !strings.Contains(string(prData), result.IntegrationBranch) {
 		t.Fatalf("unexpected PR draft: %s", string(prData))
+	}
+
+	ghData, err := os.ReadFile(ghLogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(ghData), "--base main") || !strings.Contains(string(ghData), "--head "+result.IntegrationBranch) {
+		t.Fatalf("unexpected gh invocation: %s", string(ghData))
+	}
+
+	remoteHeads := gitOutput(t, repo, "ls-remote", "--heads", "origin", result.IntegrationBranch)
+	if !strings.Contains(remoteHeads, result.IntegrationBranch) {
+		t.Fatalf("expected pushed integration branch, got %q", remoteHeads)
 	}
 }
 
 func TestRunTaskPackWritesFailureIssueDraft(t *testing.T) {
 	root := createPackSkeleton(t)
-	repo := setupPackRepo(t)
+	repo, _ := setupPackRepoWithPublish(t)
 	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"false"}, nil, nil)
 
 	result := RunTaskPack(context.Background(), root, repo)
@@ -184,7 +207,7 @@ func TestRunTaskPackWritesFailureIssueDraft(t *testing.T) {
 
 func TestRunTaskPackPreparesBranchesWithoutCheckout(t *testing.T) {
 	root := createPackSkeleton(t)
-	repo := setupPackRepo(t)
+	repo, _ := setupPackRepoWithPublish(t)
 	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"printf a"}, nil, nil)
 	writePackTask(t, filepath.Join(root, "inbox"), "b.md", "task-b", "inbox", "ptolemy/task-b", "sequential", nil, []string{"printf b"}, nil, nil)
 
@@ -204,6 +227,9 @@ func TestRunTaskPackPreparesBranchesWithoutCheckout(t *testing.T) {
 	}
 	if len(result.PreparedBranches) != 2 {
 		t.Fatalf("expected prepared branches map, got %+v", result.PreparedBranches)
+	}
+	if result.IntegrationBranch == "" {
+		t.Fatalf("expected integration branch, got %+v", result)
 	}
 }
 
@@ -295,10 +321,13 @@ func mustWriteTaskFile(t *testing.T, path string, content string) {
 	}
 }
 
-func setupPackRepo(t *testing.T) string {
+func setupPackRepoWithPublish(t *testing.T) (string, string) {
 	t.Helper()
 
 	dir := t.TempDir()
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	fakeBin := t.TempDir()
+	ghLogPath := filepath.Join(fakeBin, "gh.log")
 	run := func(args ...string) {
 		t.Helper()
 		cmd := exec.Command("git", args...)
@@ -309,14 +338,24 @@ func setupPackRepo(t *testing.T) string {
 		}
 	}
 
-	run("init")
+	run("init", "-b", "main")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test User")
 	mustWriteTaskFile(t, filepath.Join(dir, "README.md"), "repo\n")
 	run("add", ".")
 	run("commit", "-m", "chore: init repo")
+	run("init", "--bare", remote)
+	run("remote", "add", "origin", remote)
+	run("push", "-u", "origin", "main")
 
-	return dir
+	ghScriptPath := filepath.Join(fakeBin, "gh")
+	ghScript := fmt.Sprintf("#!/usr/bin/env bash\nprintf '%%s\\n' \"$*\" > %s\nprintf '%%s\\n' 'https://example.com/pr/123'\n", shellQuoteForScript(ghLogPath))
+	if err := os.WriteFile(ghScriptPath, []byte(ghScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakeBin+":"+os.Getenv("PATH"))
+
+	return dir, ghLogPath
 }
 
 func gitOutput(t *testing.T, dir string, args ...string) string {
@@ -328,4 +367,28 @@ func gitOutput(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
 	}
 	return strings.TrimSpace(string(out))
+}
+
+func createFeatureBranchCommit(t *testing.T, dir string, branch string, filename string, content string) {
+	t.Helper()
+	runGit(t, dir, "checkout", "-b", branch)
+	mustWriteTaskFile(t, filepath.Join(dir, filename), content)
+	runGit(t, dir, "add", filename)
+	runGit(t, dir, "commit", "-m", "feat(test): add "+filename)
+	runGit(t, dir, "push", "-u", "origin", branch)
+	runGit(t, dir, "checkout", "main")
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
+	}
+}
+
+func shellQuoteForScript(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }

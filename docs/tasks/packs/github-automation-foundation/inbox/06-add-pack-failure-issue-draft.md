@@ -10,7 +10,7 @@ depends_on:
   - add-pack-artifact-logging
   - add-pack-branch-preparation
 allowed_files:
-  - internal/tasks/pack.go
+  - internal/tasks/pack_runtime.go
   - internal/tasks/pack_test.go
 validation:
   - go test ./internal/tasks

@@ -7,13 +7,16 @@ status: inbox
 branch: ptolemy/add-pack-final-validation
 execution_group: final
 depends_on:
+  - add-pack-integration-branch-merge
+  - add-pack-push-integration-branch
+  - add-pack-success-pr-create
   - add-pack-failure-issue-draft
-  - add-pack-success-pr-draft
 allowed_files:
-  - internal/tasks/pack.go
+  - internal/tasks/pack_runtime.go
   - internal/tasks/pack_test.go
   - internal/gitops/gitops.go
   - internal/gitops/gitops_test.go
+  - internal/worktree/worktree.go
 validation:
   - go test ./internal/tasks ./internal/gitops
 created_by: codex
@@ -23,11 +26,13 @@ created_by: codex
 
 ## Goal
 
-Confirm the first local Git/GitHub handoff foundation works end to end.
+Confirm the integration-branch and publish flow works end to end.
 
 ## Required behavior
 
-- keep the implementation limited to local deterministic artifacts and branch preparation
+- merge task branches into one integration branch before publish
+- push that integration branch
+- open a pull request to `main`
 - verify tests cover success and failure paths
 
 ## Done when

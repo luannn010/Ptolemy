@@ -62,6 +62,33 @@ func (m *Manager) Create(ctx context.Context, name string, branch string) Result
 	return result
 }
 
+func (m *Manager) AddExisting(ctx context.Context, name string, branch string) Result {
+	if name == "" {
+		return fail("add_worktree", m.RepoPath, "", branch, "name is required")
+	}
+	if branch == "" {
+		return fail("add_worktree", m.RepoPath, "", branch, "branch is required")
+	}
+
+	worktreePath := filepath.Join(m.WorktreeDir, sanitize(name))
+
+	if err := os.MkdirAll(m.WorktreeDir, 0o755); err != nil {
+		return fail("mkdir worktree dir", m.RepoPath, worktreePath, branch, err.Error())
+	}
+
+	cmd := fmt.Sprintf(
+		"git worktree add %s %s",
+		shellQuote(worktreePath),
+		shellQuote(branch),
+	)
+
+	result := m.run(ctx, cmd)
+	result.Worktree = worktreePath
+	result.Branch = branch
+
+	return result
+}
+
 func (m *Manager) Remove(ctx context.Context, name string) Result {
 	if name == "" {
 		return fail("remove_worktree", m.RepoPath, "", "", "name is required")

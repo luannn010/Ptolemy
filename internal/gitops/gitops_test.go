@@ -24,7 +24,7 @@ func setupGitRepo(t *testing.T) string {
 		}
 	}
 
-	run("init")
+	run("init", "-b", "main")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test User")
 
@@ -142,6 +142,74 @@ func TestEnsureBranchSucceedsWhenBranchAlreadyExists(t *testing.T) {
 	}
 	if !strings.Contains(second.Output, "branch already exists") {
 		t.Fatalf("expected already-exists output, got %q", second.Output)
+	}
+}
+
+func TestCreateOrResetBranchFrom(t *testing.T) {
+	repo := setupGitRepo(t)
+	git := New(repo)
+
+	result := git.CreateOrResetBranchFrom(context.Background(), "feature/reset", "HEAD")
+	if !result.Success {
+		t.Fatalf("expected success, got %s", result.Output)
+	}
+
+	branchList := git.run(context.Background(), "git branch --list feature/reset")
+	if !strings.Contains(branchList.Output, "feature/reset") {
+		t.Fatalf("expected branch list to contain feature/reset, got %q", branchList.Output)
+	}
+}
+
+func TestMergeNoFF(t *testing.T) {
+	repo := setupGitRepo(t)
+	git := New(repo)
+
+	_ = git.CreateBranch(context.Background(), "feature/merge-me")
+	if err := os.WriteFile(filepath.Join(repo, "feature.txt"), []byte("feature\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = git.CommitConventional(context.Background(), "feat(test): add feature")
+	_ = git.Checkout(context.Background(), "main")
+
+	result := git.MergeNoFF(context.Background(), "feature/merge-me")
+	if !result.Success {
+		t.Fatalf("expected success, got %s", result.Output)
+	}
+
+	diff := git.run(context.Background(), "git show --stat --oneline -1")
+	if !strings.Contains(diff.Output, "Merge") && !strings.Contains(diff.Output, "feature.txt") {
+		t.Fatalf("expected merge commit output, got %q", diff.Output)
+	}
+}
+
+func TestCreatePullRequestUsesGHCLI(t *testing.T) {
+	repo := setupGitRepo(t)
+	fakeBin := t.TempDir()
+	logPath := filepath.Join(fakeBin, "gh.log")
+	scriptPath := filepath.Join(fakeBin, "gh")
+	script := "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" > " + shellQuote(logPath) + "\nprintf '%s\\n' 'https://example.com/pr/123'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("PATH", fakeBin+":"+os.Getenv("PATH"))
+	bodyFile := filepath.Join(repo, "pr.md")
+	if err := os.WriteFile(bodyFile, []byte("body\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	git := New(repo)
+	result := git.CreatePullRequest(context.Background(), "main", "feature/test", "PR title", bodyFile)
+	if !result.Success {
+		t.Fatalf("expected success, got %s", result.Output)
+	}
+
+	logData, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(logData), "pr create") || !strings.Contains(string(logData), "--head feature/test") {
+		t.Fatalf("unexpected gh invocation: %s", string(logData))
 	}
 }
 
