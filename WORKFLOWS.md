@@ -16,6 +16,7 @@ Agents should read this file first, then open only the workflow file relevant to
 
 - Codex Execution: `docs/workflows/agent/codex-execution.md`
 - Task-File Driven Execution: `docs/workflows/agent/task-file-driven.md`
+- Task Pack Runner: `docs/workflows/agent/task-pack-runner.md`
 - Navigator: `docs/workflows/agent/navigator.md`
 - File Search / Read: `docs/workflows/agent/file-search-read.md`
 - Planner vs Executor: `docs/workflows/agent/planner-vs-executor.md`

@@ -14,6 +14,7 @@ Use this page as the documentation hub for Ptolemy.
 
 - [Task System Overview](./tasks/README.md)
 - [Task-File Driven Workflow](./workflows/agent/task-file-driven.md)
+- [Task Pack Runner Workflow](./workflows/agent/task-pack-runner.md)
 - [Multi-Task Execution](./workflows/multi-task-execution.md)
 - [Task Pack Template](./tasks/templates/task-pack-template/README.md)
 
