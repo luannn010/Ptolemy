@@ -67,6 +67,8 @@ func RunTaskPack(ctx context.Context, packDir string, workspace string) Schedule
 		PlannedTaskIDs:   []string{},
 		CompletedTaskIDs: []string{},
 		ValidationErrors: []ValidationError{},
+		TaskLogPaths:     map[string]string{},
+		PreparedBranches: map[string]string{},
 	}
 
 	pack, err := LoadTaskPack(packDir)
@@ -79,7 +81,7 @@ func RunTaskPack(ctx context.Context, packDir string, workspace string) Schedule
 		return result
 	}
 
-	return runTaskList(ctx, pack.Tasks, workspace)
+	return runTaskPackList(ctx, pack, workspace)
 }
 
 func LoadTaskPack(packDir string) (TaskPack, error) {

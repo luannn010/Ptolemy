@@ -107,6 +107,44 @@ func TestCreateBranch(t *testing.T) {
 	}
 }
 
+func TestEnsureBranchCreatesBranchWithoutCheckout(t *testing.T) {
+	repo := setupGitRepo(t)
+	git := New(repo)
+
+	before := strings.TrimSpace(git.run(context.Background(), "git branch --show-current").Output)
+	result := git.EnsureBranch(context.Background(), "feature/ensure-branch")
+	after := strings.TrimSpace(git.run(context.Background(), "git branch --show-current").Output)
+	branchList := git.run(context.Background(), "git branch --list feature/ensure-branch")
+
+	if !result.Success {
+		t.Fatalf("expected success, got %s", result.Output)
+	}
+	if before != after {
+		t.Fatalf("expected current branch to stay %q, got %q", before, after)
+	}
+	if !strings.Contains(branchList.Output, "feature/ensure-branch") {
+		t.Fatalf("expected branch list to contain feature/ensure-branch, got %q", branchList.Output)
+	}
+}
+
+func TestEnsureBranchSucceedsWhenBranchAlreadyExists(t *testing.T) {
+	repo := setupGitRepo(t)
+	git := New(repo)
+
+	first := git.EnsureBranch(context.Background(), "feature/existing")
+	second := git.EnsureBranch(context.Background(), "feature/existing")
+
+	if !first.Success {
+		t.Fatalf("expected first ensure to succeed, got %s", first.Output)
+	}
+	if !second.Success {
+		t.Fatalf("expected second ensure to succeed, got %s", second.Output)
+	}
+	if !strings.Contains(second.Output, "branch already exists") {
+		t.Fatalf("expected already-exists output, got %q", second.Output)
+	}
+}
+
 func TestCommitConventional(t *testing.T) {
 	repo := setupGitRepo(t)
 	git := New(repo)

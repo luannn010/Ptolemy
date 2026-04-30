@@ -60,6 +60,11 @@ type SchedulerResult struct {
 	CompletedTaskIDs []string
 	FailedTaskID     string
 	ValidationErrors []ValidationError
+	TaskLogPaths     map[string]string
+	PreparedBranches map[string]string
+	SummaryPath      string
+	IssueDraftPath   string
+	PRDraftPath      string
 }
 
 func NewScheduler(inboxDir string, workspace string) *Scheduler {

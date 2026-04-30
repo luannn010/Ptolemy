@@ -3,6 +3,7 @@ package tasks
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -122,6 +123,90 @@ func TestRunTaskPackRunsTasksInDependencyOrder(t *testing.T) {
 	}
 }
 
+func TestRunTaskPackWritesArtifactsAndPullRequestDraft(t *testing.T) {
+	root := createPackSkeleton(t)
+	repo := setupPackRepo(t)
+	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"printf a"}, nil, nil)
+	writePackTask(t, filepath.Join(root, "inbox"), "b.md", "task-b", "inbox", "ptolemy/task-b", "sequential", []string{"task-a"}, []string{"printf b"}, nil, nil)
+
+	result := RunTaskPack(context.Background(), root, repo)
+	if result.FailedTaskID != "" || len(result.ValidationErrors) != 0 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if result.PRDraftPath == "" {
+		t.Fatalf("expected PR draft path, got %+v", result)
+	}
+	if result.SummaryPath == "" {
+		t.Fatalf("expected summary path, got %+v", result)
+	}
+	if len(result.TaskLogPaths) != 2 {
+		t.Fatalf("expected task logs, got %+v", result.TaskLogPaths)
+	}
+
+	logData, err := os.ReadFile(result.TaskLogPaths["task-a"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(logData), "command: printf a") {
+		t.Fatalf("expected task log content, got %s", string(logData))
+	}
+
+	prData, err := os.ReadFile(result.PRDraftPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(prData), "Base: \"main\"") || !strings.Contains(string(prData), "`ptolemy/task-a`") {
+		t.Fatalf("unexpected PR draft: %s", string(prData))
+	}
+}
+
+func TestRunTaskPackWritesFailureIssueDraft(t *testing.T) {
+	root := createPackSkeleton(t)
+	repo := setupPackRepo(t)
+	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"false"}, nil, nil)
+
+	result := RunTaskPack(context.Background(), root, repo)
+	if result.FailedTaskID != "task-a" {
+		t.Fatalf("expected failed task-a, got %+v", result)
+	}
+	if result.IssueDraftPath == "" {
+		t.Fatalf("expected issue draft path, got %+v", result)
+	}
+
+	issueData, err := os.ReadFile(result.IssueDraftPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(issueData), "Task pack \"Sample Pack\" failed") {
+		t.Fatalf("unexpected issue draft: %s", string(issueData))
+	}
+}
+
+func TestRunTaskPackPreparesBranchesWithoutCheckout(t *testing.T) {
+	root := createPackSkeleton(t)
+	repo := setupPackRepo(t)
+	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"printf a"}, nil, nil)
+	writePackTask(t, filepath.Join(root, "inbox"), "b.md", "task-b", "inbox", "ptolemy/task-b", "sequential", nil, []string{"printf b"}, nil, nil)
+
+	before := gitOutput(t, repo, "branch", "--show-current")
+	result := RunTaskPack(context.Background(), root, repo)
+	after := gitOutput(t, repo, "branch", "--show-current")
+	branchList := gitOutput(t, repo, "branch", "--list", "ptolemy/task-a", "ptolemy/task-b")
+
+	if result.FailedTaskID != "" || len(result.ValidationErrors) != 0 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if before != after {
+		t.Fatalf("expected branch to stay %q, got %q", before, after)
+	}
+	if !strings.Contains(branchList, "ptolemy/task-a") || !strings.Contains(branchList, "ptolemy/task-b") {
+		t.Fatalf("expected prepared branches, got %q", branchList)
+	}
+	if len(result.PreparedBranches) != 2 {
+		t.Fatalf("expected prepared branches map, got %+v", result.PreparedBranches)
+	}
+}
+
 func createPackSkeleton(t *testing.T) string {
 	t.Helper()
 
@@ -208,4 +293,39 @@ func mustWriteTaskFile(t *testing.T, path string, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func setupPackRepo(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
+		}
+	}
+
+	run("init")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test User")
+	mustWriteTaskFile(t, filepath.Join(dir, "README.md"), "repo\n")
+	run("add", ".")
+	run("commit", "-m", "chore: init repo")
+
+	return dir
+}
+
+func gitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
+	}
+	return strings.TrimSpace(string(out))
 }

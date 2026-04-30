@@ -52,6 +52,37 @@ func (g *GitOps) CreateBranch(ctx context.Context, branch string) Result {
 	return g.run(ctx, fmt.Sprintf("git checkout -b %s", shellQuote(branch)))
 }
 
+func (g *GitOps) EnsureBranch(ctx context.Context, branch string) Result {
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		return Result{
+			Command:  "git branch",
+			RepoPath: g.RepoPath,
+			ExitCode: 1,
+			Output:   "branch is required",
+			Success:  false,
+		}
+	}
+
+	exists := g.run(ctx, fmt.Sprintf("git show-ref --verify --quiet refs/heads/%s", branch))
+	if exists.Success {
+		return Result{
+			Command:    fmt.Sprintf("git branch %s", shellQuote(branch)),
+			RepoPath:   g.RepoPath,
+			ExitCode:   0,
+			Output:     "branch already exists",
+			DurationMS: exists.DurationMS,
+			Success:    true,
+		}
+	}
+	if exists.ExitCode != 1 {
+		exists.Command = fmt.Sprintf("git show-ref --verify --quiet refs/heads/%s", branch)
+		return exists
+	}
+
+	return g.run(ctx, fmt.Sprintf("git branch %s", shellQuote(branch)))
+}
+
 func (g *GitOps) CommitConventional(ctx context.Context, message string) Result {
 	if !isConventionalCommit(message) {
 		return Result{
