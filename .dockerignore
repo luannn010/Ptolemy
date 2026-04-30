@@ -1,0 +1,10 @@
+.git
+bin
+tmp
+state
+node_modules
+dist
+build
+coverage
+*.log
+*.db

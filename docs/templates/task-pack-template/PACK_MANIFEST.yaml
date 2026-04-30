@@ -1,0 +1,29 @@
+pack_id: multitask-scheduler-pack
+name: Multi-task Scheduler Pack
+version: 1
+created_by: chatgpt
+
+entrypoint: TASK_PLAN.md
+
+folders:
+  inbox: inbox
+  scripts: scripts
+  task_scripts: task-scripts
+  snippets: snippets
+
+execution_mode: sequential_first
+
+requires:
+  - go
+  - git
+  - bash
+
+validation:
+  - go test ./internal/tasks
+  - go test ./...
+
+rules:
+  max_allowed_files: 8
+  require_validation: true
+  require_branch: true
+  stop_on_failure: true

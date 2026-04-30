@@ -1,0 +1,12 @@
+FROM golang:latest
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    git \
+    bash \
+    sqlite3 \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+CMD ["bash"]
