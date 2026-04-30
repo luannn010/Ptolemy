@@ -43,7 +43,7 @@ Ptolemy uses two kinds of memory:
 - SQLite execution memory for sessions, command logs, actions, logs, and approvals
 - Markdown knowledge memory for architecture notes, conventions, decisions, and known issues
 
-For deeper design notes, see [docs/Architecture.md](/home/luannn010/projects/ptolemy/docs/Architecture.md) and [docs/memory/projects/ptolemy](/home/luannn010/projects/ptolemy/docs/memory/projects/ptolemy).
+For deeper design notes, see [Architecture](./docs/Architecture.md) and [Project Memory](./docs/memory/projects/ptolemy).
 
 ## Repository Layout
 
@@ -73,54 +73,67 @@ docs/
 
 ## Docs
 
-Core docs are now split into smaller files:
+Core docs are split into focused entry points:
 
-- [Documentation Hub](/home/luannn010/projects/ptolemy/docs/README.md)
-- [Setup](/home/luannn010/projects/ptolemy/docs/Setup.md)
-- [CLI Guide](/home/luannn010/projects/ptolemy/docs/CLI.md)
-- [Worker API](/home/luannn010/projects/ptolemy/docs/Worker_API.md)
-- [Development Workflow](/home/luannn010/projects/ptolemy/docs/Development.md)
+- [Documentation Hub](./docs/README.md)
+- [Setup](./docs/Setup.md)
+- [CLI Guide](./docs/CLI.md)
+- [Worker API](./docs/Worker_API.md)
+- [Development Workflow](./docs/Development.md)
 
 ## Task System
 
-Tasks live in `docs/tasks/` and are intended to describe one bounded change. Root task files use the naming format `<Priority>-<task-slug>.md`, where the priority prefix is `Urgent`, `Normal`, or `Low`.
+Tasks live under [`docs/tasks`](./docs/tasks), and the system is built around small, bounded work items with explicit metadata and file scope. For a single isolated change, a loose task file is enough. For anything that needs shared context, reusable snippets, or multiple related task files, use a task pack.
 
-Each task starts with YAML metadata such as `priority`, `task_id`, `parent_task`, `owner`, `status`, `branch`, `allowed_files`, and `created_by`. Agents work on one `task_id` per session, use the declared task branch, and only edit paths listed in `allowed_files`.
+Task packs are the best way to model multi-step work because they keep planning, inputs, and runnable tasks together in one place:
 
-Split tasks inherit the parent priority, parent task ID, and allowed file scope unless a child task narrows it. Each child receives its own unique `task_id` and branch.
+```text
+docs/tasks/packs/<pack-name>/
+├── PACK_MANIFEST.yaml
+├── README.md
+├── TASK_PLAN.md
+├── inbox/
+│   ├── 01-*.md
+│   ├── 02-*.md
+│   └── 99-final-validation.md
+├── scripts/
+├── snippets/
+└── task-scripts/
+```
 
-Task templates:
+What a pack gives you:
 
-- `docs/tasks/templates/task-file-template.md`
-- `docs/tasks/templates/split-task-template.md`
-- `docs/tasks/templates/task-pack-template/`
+- One shared plan in `TASK_PLAN.md`
+- Pack-level metadata in `PACK_MANIFEST.yaml`
+- Runnable task files in `inbox/`
+- Reusable references in `snippets/` and `task-scripts/`
+- Optional helper assets in `scripts/`
 
-Use a loose task file for one bounded change with no shared task assets. Use a task pack when multiple tasks need a shared execution plan, shared snippets, or shared task-script references.
+In v1, Ptolemy executes a pack directly from its folder, validates referenced assets, and runs the pack `inbox/` tasks in dependency order. It does not automatically execute pack shell hooks in `scripts/`.
 
-Task packs contain:
-
-- `TASK_PLAN.md`
-- `PACK_MANIFEST.yaml`
-- `README.md`
-- `scripts/`
-- `task-scripts/`
-- `snippets/`
-- `inbox/`
-
-Pack `inbox/` tasks run directly from the pack directory in v1 through:
+Pack commands:
 
 ```bash
 go run ./cmd/ptolemy-task-runner plan --pack <pack-dir>
 go run ./cmd/ptolemy-task-runner run --pack <pack-dir> --workspace .
 ```
 
-Pack assets are validated references only in v1. The runner verifies referenced `task-scripts/` and `snippets/` files exist, but it does not auto-run pack shell hooks under `scripts/`.
+See [Task System Overview](./docs/tasks/README.md), [Task-File Driven Workflow](./docs/workflows/agent/task-file-driven.md), and example packs in [`docs/tasks/packs`](./docs/tasks/packs).
 
-## Workflow System
+## [Workflow System](./WORKFLOWS.md)
 
-`WORKFLOWS.md` is the workflow index. Agents read it first, then load only the workflow file relevant to the current task.
+Ptolemy workflows exist so agents do not improvise the execution model on every task. The workflow system defines the safe, repeatable path for reading context, selecting tools, editing files, recovering from worker drops, and committing changes.
 
-Workflow documents are split by purpose:
+Why workflows matter:
+
+- They keep execution deterministic instead of prompt-driven
+- They tell the agent what to read first and what to skip
+- They separate task execution, editing, recovery, and Git safety into focused docs
+- They reduce broad rewrites by favoring targeted, observable steps
+
+`WORKFLOWS.md` is the index entry point. An agent reads it first, then opens only the workflow document needed for the current task.
+
+Workflow docs are grouped by purpose:
 
 ```text
 docs/tasks/inbox
@@ -227,6 +240,16 @@ Still in progress:
 
 See `docs/Worker_Progress_Checklist.md` for the detailed phase checklist.
 
+High-signal workflow highlights:
+
+- `core/` covers worker health, sessions, command execution, terminal runners, and worktrees
+- `agent/` explains navigator usage, file search/read flow, task-file execution, and planner vs executor boundaries
+- `editing/` documents marker-based edits and patch conventions for small, safe changes
+- `recovery/` covers EOF or invalid multi-action failures without blindly restarting work
+- `git/` defines safe commit behavior, including explicit staging and verification
+
+Start with [Workflow Index](./WORKFLOWS.md), then drill into [workflow docs](./docs/workflows) for the implementation details.
+
 ## Design Principles
 
 ```text
@@ -240,11 +263,11 @@ Agent-compatible architecture.
 
 ## More Documentation
 
-- [docs/README.md](/home/luannn010/projects/ptolemy/docs/README.md) is the main documentation hub
-- [WORKFLOWS.md](/home/luannn010/projects/ptolemy/WORKFLOWS.md) indexes supported execution workflows
-- [docs/workflows](/home/luannn010/projects/ptolemy/docs/workflows) contains focused workflow files for core runtime, agent operation, editing, recovery, Git, and Pull Request handling
-- [docs/tasks/templates](/home/luannn010/projects/ptolemy/docs/tasks/templates) contains task templates, including task packs
-- [docs/plans/MVP_Design.md](/home/luannn010/projects/ptolemy/docs/plans/MVP_Design.md) describes the planner/executor/runtime model
-- [docs/plans/Build Plan.md](/home/luannn010/projects/ptolemy/docs/plans/Build%20Plan.md) lays out the build phases
-- [docs/plans/Future Updates.md](/home/luannn010/projects/ptolemy/docs/plans/Future%20Updates.md) lists future MCP, infrastructure, and safety ideas
-- [docs/memory/projects/ptolemy](/home/luannn010/projects/ptolemy/docs/memory/projects/ptolemy) contains agent-readable architecture, conventions, decisions, and known issues
+- [docs/README.md](./docs/README.md) is the main documentation hub
+- [WORKFLOWS.md](./WORKFLOWS.md) indexes supported execution workflows
+- [docs/workflows](./docs/workflows) contains focused workflow files for core runtime, agent operation, editing, recovery, and Git safety
+- [docs/tasks](./docs/tasks) contains the task system docs and pack examples
+- [docs/plans/MVP_Design.md](./docs/plans/MVP_Design.md) describes the planner/executor/runtime model
+- [docs/plans/Build Plan.md](./docs/plans/Build%20Plan.md) lays out the build phases
+- [docs/plans/Future Updates.md](./docs/plans/Future%20Updates.md) lists future MCP, infrastructure, and safety ideas
+- [docs/memory/projects/ptolemy](./docs/memory/projects/ptolemy) contains agent-readable architecture, conventions, decisions, and known issues
