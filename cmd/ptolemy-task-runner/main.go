@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/luannn010/ptolemy/internal/tasks"
 )
 
 const (
@@ -54,10 +58,81 @@ type agentRunner func(taskPath string, maxSteps int) ([]byte, error)
 var runAgent = runAgentTask
 
 func main() {
-	if err := run(os.Stdout); err != nil {
+	if err := runCLI(os.Args[1:], os.Stdout); err != nil {
 		fmt.Fprintf(os.Stdout, "Result: failed\nError: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func runCLI(args []string, out io.Writer) error {
+	if len(args) == 0 {
+		return run(out)
+	}
+
+	switch args[0] {
+	case "plan":
+		return runPlanCommand(args[1:], out)
+	case "run":
+		return runSchedulerCommand(args[1:], out)
+	default:
+		return run(out)
+	}
+}
+
+func runPlanCommand(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("plan", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	inbox := fs.String("inbox", inboxDir, "task inbox directory")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	ids, validationErrs, err := tasks.BuildPlanPreview(*inbox)
+	if err != nil {
+		return err
+	}
+	if len(validationErrs) > 0 {
+		for _, validationErr := range validationErrs {
+			fmt.Fprintf(out, "Validation error [%s] %s: %s\n", validationErr.TaskID, validationErr.Field, validationErr.Reason)
+		}
+		return errors.New("validation errors present")
+	}
+
+	fmt.Fprintln(out, "Execution plan:")
+	for i, id := range ids {
+		fmt.Fprintf(out, "%d. %s\n", i+1, id)
+	}
+	return nil
+}
+
+func runSchedulerCommand(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	inbox := fs.String("inbox", inboxDir, "task inbox directory")
+	workspace := fs.String("workspace", ".", "workspace directory")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	result := tasks.RunInboxScheduler(context.Background(), *inbox, *workspace)
+
+	for _, id := range result.PlannedTaskIDs {
+		fmt.Fprintf(out, "Planned: %s\n", id)
+	}
+	for _, id := range result.CompletedTaskIDs {
+		fmt.Fprintf(out, "Completed: %s\n", id)
+	}
+	if result.FailedTaskID != "" {
+		fmt.Fprintf(out, "Failed: %s\n", result.FailedTaskID)
+		return errors.New("task run failed")
+	}
+	if len(result.ValidationErrors) > 0 {
+		for _, validationErr := range result.ValidationErrors {
+			fmt.Fprintf(out, "Validation error [%s] %s: %s\n", validationErr.TaskID, validationErr.Field, validationErr.Reason)
+		}
+		return errors.New("validation errors present")
+	}
+	return nil
 }
 
 func run(out io.Writer) error {

@@ -47,7 +47,7 @@ func (h *TasksHandler) RunInbox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	state := tasks.NewMemoryStateStore()
-	runner := tasks.Runner{State: state, Executor: inboxExecutor{}, MaxBatch: req.MaxBatch}
+	runner := tasks.BatchRunner{State: state, Executor: inboxExecutor{}, MaxBatch: req.MaxBatch}
 	runErr := runner.RunInbox(taskList)
 
 	resp := runInboxResponse{OK: runErr == nil}
