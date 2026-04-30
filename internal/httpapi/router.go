@@ -92,5 +92,8 @@ func NewRouter(
 	r.Post("/worktree/list", worktreeHandler.List)
 	r.Post("/worktree/remove", worktreeHandler.Remove)
 
+	tasksHandler := NewTasksHandler()
+	r.Post("/tasks/run-inbox", tasksHandler.RunInbox)
+
 	return r
 }
