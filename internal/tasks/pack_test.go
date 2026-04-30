@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadTaskPackRejectsMissingManifest(t *testing.T) {
@@ -66,6 +67,22 @@ func TestLoadTaskPackRejectsMissingInboxFolderSetting(t *testing.T) {
 	}
 }
 
+func TestParsePackManifestReadsContractFields(t *testing.T) {
+	manifest, err := ParsePackManifest([]byte(packManifest("sequential_first")))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if manifest.DefaultMaxSteps != 8 {
+		t.Fatalf("expected default max steps 8, got %+v", manifest)
+	}
+	if manifest.AgentMode != AgentModeBoundedMarkdownContract {
+		t.Fatalf("expected bounded contract mode, got %+v", manifest)
+	}
+	if len(manifest.GlobalConstraints) != 1 || manifest.GlobalConstraints[0] != "never edit files outside allowed_files" {
+		t.Fatalf("unexpected global constraints: %+v", manifest.GlobalConstraints)
+	}
+}
+
 func TestBuildPackPlanPreviewReturnsOrderedTaskIDs(t *testing.T) {
 	root := createPackSkeleton(t)
 	writePackTask(t, filepath.Join(root, "inbox"), "b.md", "task-b", "inbox", "ptolemy/task-b", "parallel", []string{"task-a"}, []string{"printf b"}, nil, nil)
@@ -101,8 +118,14 @@ func TestBuildPackPlanPreviewReturnsValidationErrorsForMissingAssets(t *testing.
 func TestRunTaskPackRunsTasksInDependencyOrder(t *testing.T) {
 	root := createPackSkeleton(t)
 	repo, _ := setupPackRepoWithPublish(t)
-	first := writePackTask(t, filepath.Join(root, "inbox"), "b.md", "task-b", "inbox", "ptolemy/task-b", "sequential", []string{"task-a"}, []string{"printf b"}, nil, nil)
-	second := writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"printf a"}, nil, nil)
+	restore := SetTaskContractExecutor(func(ctx context.Context, workspace string, task Task, contract string) ([]byte, error) {
+		return []byte("agent ok"), nil
+	})
+	defer restore()
+	packArchiveNow = func() time.Time { return time.Date(2026, time.April, 30, 9, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() { packArchiveNow = time.Now })
+	writePackTask(t, filepath.Join(root, "inbox"), "b.md", "task-b", "inbox", "ptolemy/task-b", "sequential", []string{"task-a"}, []string{"printf b"}, nil, nil)
+	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"printf a"}, nil, nil)
 
 	result := RunTaskPack(context.Background(), root, repo)
 	if result.FailedTaskID != "" || len(result.ValidationErrors) != 0 {
@@ -112,11 +135,12 @@ func TestRunTaskPackRunsTasksInDependencyOrder(t *testing.T) {
 		t.Fatalf("unexpected plan: %+v", result.PlannedTaskIDs)
 	}
 
-	aData, err := os.ReadFile(second)
+	archivedInbox := filepath.Join(result.ArchivedPackPath, "inbox")
+	aData, err := os.ReadFile(filepath.Join(archivedInbox, "a.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	bData, err := os.ReadFile(first)
+	bData, err := os.ReadFile(filepath.Join(archivedInbox, "b.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,6 +152,12 @@ func TestRunTaskPackRunsTasksInDependencyOrder(t *testing.T) {
 func TestRunTaskPackWritesArtifactsAndPullRequestDraft(t *testing.T) {
 	root := createPackSkeleton(t)
 	repo, ghLogPath := setupPackRepoWithPublish(t)
+	restore := SetTaskContractExecutor(func(ctx context.Context, workspace string, task Task, contract string) ([]byte, error) {
+		return []byte("agent ok"), nil
+	})
+	defer restore()
+	packArchiveNow = func() time.Time { return time.Date(2026, time.April, 30, 9, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() { packArchiveNow = time.Now })
 	createFeatureBranchCommit(t, repo, "ptolemy/task-a", "task-a.txt", "A\n")
 	createFeatureBranchCommit(t, repo, "ptolemy/task-b", "task-b.txt", "B\n")
 	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"printf a"}, nil, nil)
@@ -149,8 +179,21 @@ func TestRunTaskPackWritesArtifactsAndPullRequestDraft(t *testing.T) {
 	if result.SummaryPath == "" {
 		t.Fatalf("expected summary path, got %+v", result)
 	}
+	wantArchivedRoot := filepath.Join(repo, "docs", "tasks", "packs", "done", "300426", filepath.Base(root))
+	if result.ArchivedPackPath != wantArchivedRoot {
+		t.Fatalf("expected archived pack path %q, got %q", wantArchivedRoot, result.ArchivedPackPath)
+	}
+	if _, err := os.Stat(result.ArchivedPackPath); err != nil {
+		t.Fatalf("expected archived pack to exist: %v", err)
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatalf("expected original pack root to be moved, stat err = %v", err)
+	}
 	if len(result.TaskLogPaths) != 2 {
 		t.Fatalf("expected task logs, got %+v", result.TaskLogPaths)
+	}
+	if !strings.HasPrefix(result.PRDraftPath, wantArchivedRoot) || !strings.HasPrefix(result.SummaryPath, wantArchivedRoot) {
+		t.Fatalf("expected archived artifact paths, got summary=%q pr=%q", result.SummaryPath, result.PRDraftPath)
 	}
 
 	logData, err := os.ReadFile(result.TaskLogPaths["task-a"])
@@ -186,6 +229,10 @@ func TestRunTaskPackWritesArtifactsAndPullRequestDraft(t *testing.T) {
 func TestRunTaskPackWritesFailureIssueDraft(t *testing.T) {
 	root := createPackSkeleton(t)
 	repo, _ := setupPackRepoWithPublish(t)
+	restore := SetTaskContractExecutor(func(ctx context.Context, workspace string, task Task, contract string) ([]byte, error) {
+		return []byte("agent ok"), nil
+	})
+	defer restore()
 	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"false"}, nil, nil)
 
 	result := RunTaskPack(context.Background(), root, repo)
@@ -194,6 +241,9 @@ func TestRunTaskPackWritesFailureIssueDraft(t *testing.T) {
 	}
 	if result.IssueDraftPath == "" {
 		t.Fatalf("expected issue draft path, got %+v", result)
+	}
+	if result.ArchivedPackPath != "" {
+		t.Fatalf("did not expect failed pack to be archived, got %+v", result)
 	}
 
 	issueData, err := os.ReadFile(result.IssueDraftPath)
@@ -208,6 +258,10 @@ func TestRunTaskPackWritesFailureIssueDraft(t *testing.T) {
 func TestRunTaskPackPreparesBranchesWithoutCheckout(t *testing.T) {
 	root := createPackSkeleton(t)
 	repo, _ := setupPackRepoWithPublish(t)
+	restore := SetTaskContractExecutor(func(ctx context.Context, workspace string, task Task, contract string) ([]byte, error) {
+		return []byte("agent ok"), nil
+	})
+	defer restore()
 	writePackTask(t, filepath.Join(root, "inbox"), "a.md", "task-a", "inbox", "ptolemy/task-a", "sequential", nil, []string{"printf a"}, nil, nil)
 	writePackTask(t, filepath.Join(root, "inbox"), "b.md", "task-b", "inbox", "ptolemy/task-b", "sequential", nil, []string{"printf b"}, nil, nil)
 
@@ -255,6 +309,10 @@ func packManifest(mode string) string {
 		"version: 1\n" +
 		"created_by: test\n" +
 		"entrypoint: TASK_PLAN.md\n" +
+		"default_max_steps: 8\n" +
+		"agent_mode: bounded_markdown_contract\n" +
+		"global_constraints:\n" +
+		"  - never edit files outside allowed_files\n" +
 		"folders:\n" +
 		"  inbox: inbox\n" +
 		"  scripts: scripts\n" +
@@ -279,6 +337,9 @@ func writePackTask(t *testing.T, dir string, name string, id string, status stri
 		"branch: " + branch + "\n" +
 		"priority: normal\n" +
 		"execution_group: " + group + "\n" +
+		"max_steps: 8\n" +
+		"requires_approval: false\n" +
+		"stop_on_error: true\n" +
 		"allowed_files:\n" +
 		"  - internal/tasks/example.go\n"
 
@@ -307,7 +368,46 @@ func writePackTask(t *testing.T, dir string, name string, id string, status stri
 	for _, cmd := range validation {
 		content += "  - " + cmd + "\n"
 	}
-	content += "---\nbody\n"
+	content += `---
+# Task
+
+## Goal
+Complete the bounded task.
+
+## Scope
+Only modify the allowed files.
+
+## Constraints
+Keep changes small and deterministic.
+
+## Inputs
+`
+	for _, script := range scripts {
+		content += "- `" + script + "`\n"
+	}
+	for _, snippet := range snippets {
+		content += "- `" + snippet + "`\n"
+	}
+	if len(scripts) == 0 && len(snippets) == 0 {
+		content += "- None.\n"
+	}
+	content += `
+## Execution Steps
+1. Read the referenced assets.
+2. Make the requested change.
+
+## Acceptance Checks
+`
+	for _, cmd := range validation {
+		content += "- `" + cmd + "`\n"
+	}
+	content += `
+## Failure / Escalation
+- Stop and report the blocking issue.
+
+## Done When
+- Validation passes.
+`
 
 	path := filepath.Join(dir, name)
 	mustWriteTaskFile(t, path, content)

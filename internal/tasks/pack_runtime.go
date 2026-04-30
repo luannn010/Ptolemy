@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/luannn010/ptolemy/internal/gitops"
 	"github.com/luannn010/ptolemy/internal/worktree"
@@ -80,7 +81,37 @@ func runTaskPackList(ctx context.Context, pack TaskPack, workspace string) Sched
 			return result
 		}
 
-		runResult := runner.RunValidation(ctx, task)
+		runResult := TaskRunResult{
+			TaskID:  task.ID,
+			Success: true,
+			Results: []CommandResult{},
+		}
+		if usesBoundedMarkdownContract(task) {
+			contract, err := BuildTaskExecutionContract(task)
+			if err != nil {
+				result.FailedTaskID = task.ID
+				_ = UpdateTaskStatusFile(task.Path, StatusFailed)
+				result.ValidationErrors = append(result.ValidationErrors, ValidationError{
+					TaskID: task.ID,
+					Field:  "contract",
+					Reason: err.Error(),
+				})
+				result.SummaryPath, _ = writePackSummary(pack, artifactDir, result)
+				return result
+			}
+			runResult.ExecutionContract = contract
+			output, execErr := executeTaskContract(ctx, workspace, task, contract)
+			runResult.ExecutionOutput = string(output)
+			if execErr != nil {
+				runResult.Success = false
+				runResult.ExecutionError = execErr.Error()
+			}
+		}
+		if runResult.Success {
+			validationResult := runner.RunValidation(ctx, task)
+			runResult.Results = validationResult.Results
+			runResult.Success = validationResult.Success
+		}
 		logPath, logErr := writePackTaskLog(artifactDir, task, runResult)
 		if logErr == nil {
 			result.TaskLogPaths[task.ID] = logPath
@@ -166,7 +197,85 @@ func runTaskPackList(ctx context.Context, pack TaskPack, workspace string) Sched
 	}
 
 	result.SummaryPath, _ = writePackSummary(pack, artifactDir, result)
-	return result
+	archivedPackPath, archivedResult, archiveErr := archiveCompletedPack(pack, workspace, result)
+	if archiveErr != nil {
+		result.ValidationErrors = append(result.ValidationErrors, ValidationError{
+			TaskID: pack.Manifest.PackID,
+			Field:  "archive",
+			Reason: archiveErr.Error(),
+		})
+		return result
+	}
+	archivedResult.ArchivedPackPath = archivedPackPath
+	return archivedResult
+}
+
+var packArchiveNow = time.Now
+
+func PackArchiveNowForTest(now func() time.Time) {
+	packArchiveNow = now
+}
+
+func archiveCompletedPack(pack TaskPack, workspace string, result SchedulerResult) (string, SchedulerResult, error) {
+	resolvedWorkspace, err := resolveWorkspace(workspace)
+	if err != nil {
+		return "", result, err
+	}
+
+	dateDir := packArchiveNow().Format("020106")
+	targetRoot := filepath.Join(resolvedWorkspace, "docs", "tasks", "packs", "done", dateDir)
+	if err := os.MkdirAll(targetRoot, 0o755); err != nil {
+		return "", result, fmt.Errorf("create done pack directory: %w", err)
+	}
+
+	targetPath := uniqueDirectoryPath(targetRoot, filepath.Base(pack.Root))
+	if err := os.Rename(pack.Root, targetPath); err != nil {
+		return "", result, fmt.Errorf("move completed pack: %w", err)
+	}
+
+	relocatePackResultPaths(&result, pack.Root, targetPath)
+	return targetPath, result, nil
+}
+
+func relocatePackResultPaths(result *SchedulerResult, oldRoot string, newRoot string) {
+	result.ArchivedPackPath = newRoot
+	result.SummaryPath = remapPackPath(result.SummaryPath, oldRoot, newRoot)
+	result.IssueDraftPath = remapPackPath(result.IssueDraftPath, oldRoot, newRoot)
+	result.PRDraftPath = remapPackPath(result.PRDraftPath, oldRoot, newRoot)
+	result.MergeLogPath = remapPackPath(result.MergeLogPath, oldRoot, newRoot)
+	result.PushLogPath = remapPackPath(result.PushLogPath, oldRoot, newRoot)
+	result.PRCreateLogPath = remapPackPath(result.PRCreateLogPath, oldRoot, newRoot)
+	for taskID, path := range result.TaskLogPaths {
+		result.TaskLogPaths[taskID] = remapPackPath(path, oldRoot, newRoot)
+	}
+}
+
+func remapPackPath(path string, oldRoot string, newRoot string) string {
+	if path == "" {
+		return ""
+	}
+	rel, err := filepath.Rel(oldRoot, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return path
+	}
+	return filepath.Join(newRoot, rel)
+}
+
+func uniqueDirectoryPath(dir string, name string) string {
+	candidate := filepath.Join(dir, name)
+	if _, err := os.Stat(candidate); os.IsNotExist(err) {
+		return candidate
+	}
+
+	base := name
+	suffix := ""
+	if ext := filepath.Ext(name); ext != "" {
+		base = strings.TrimSuffix(name, ext)
+		suffix = ext
+	}
+
+	timestamp := time.Now().UTC().Format("150405")
+	return filepath.Join(dir, fmt.Sprintf("%s-%s%s", base, timestamp, suffix))
 }
 
 func ensurePackArtifactDir(pack TaskPack) (string, error) {
@@ -232,6 +341,27 @@ func writePackTaskLog(artifactDir string, task Task, runResult TaskRunResult) (s
 	builder.WriteString(fmt.Sprintf("task_id: %s\n", task.ID))
 	builder.WriteString(fmt.Sprintf("branch: %s\n", task.Branch))
 	builder.WriteString(fmt.Sprintf("success: %t\n", runResult.Success))
+	if strings.TrimSpace(runResult.ExecutionContract) != "" {
+		builder.WriteString("\n## execution contract\n")
+		builder.WriteString(runResult.ExecutionContract)
+		if !strings.HasSuffix(runResult.ExecutionContract, "\n") {
+			builder.WriteString("\n")
+		}
+	}
+	if strings.TrimSpace(runResult.ExecutionOutput) != "" {
+		builder.WriteString("\n## agent output\n")
+		builder.WriteString(runResult.ExecutionOutput)
+		if !strings.HasSuffix(runResult.ExecutionOutput, "\n") {
+			builder.WriteString("\n")
+		}
+	}
+	if strings.TrimSpace(runResult.ExecutionError) != "" {
+		builder.WriteString("\n## agent error\n")
+		builder.WriteString(runResult.ExecutionError)
+		if !strings.HasSuffix(runResult.ExecutionError, "\n") {
+			builder.WriteString("\n")
+		}
+	}
 
 	for i, commandResult := range runResult.Results {
 		builder.WriteString(fmt.Sprintf("\n## command %d\n", i+1))

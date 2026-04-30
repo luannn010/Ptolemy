@@ -17,10 +17,14 @@ type PackManifest struct {
 	Version       int
 	CreatedBy     string
 	Entrypoint    string
+	WorkspaceRoot string
 	Folders       PackFolders
 	Requires      []string
 	Validation    []string
 	ExecutionMode string
+	DefaultMaxSteps int
+	AgentMode     string
+	GlobalConstraints []string
 	Rules         PackRules
 }
 
@@ -49,9 +53,14 @@ type TaskPack struct {
 
 type TaskPackContext struct {
 	Root           string
+	PackID         string
 	ScriptsDir     string
 	TaskScriptsDir string
 	SnippetsDir    string
+	DefaultMaxSteps int
+	AgentMode      string
+	GlobalConstraints []string
+	WorkspaceRoot  string
 }
 
 func BuildPackPlanPreview(packDir string) ([]string, []ValidationError, error) {
@@ -156,12 +165,20 @@ func LoadTaskPack(packDir string) (TaskPack, error) {
 
 	context := &TaskPackContext{
 		Root:           root,
+		PackID:         manifest.PackID,
 		ScriptsDir:     normalizeRelativeDir(manifest.Folders.Scripts),
 		TaskScriptsDir: normalizeRelativeDir(manifest.Folders.TaskScripts),
 		SnippetsDir:    normalizeRelativeDir(manifest.Folders.Snippets),
+		DefaultMaxSteps: manifest.DefaultMaxSteps,
+		AgentMode:      manifest.AgentMode,
+		GlobalConstraints: append([]string{}, manifest.GlobalConstraints...),
+		WorkspaceRoot:  manifest.WorkspaceRoot,
 	}
 
 	for i := range tasks {
+		if tasks[i].MaxSteps == 0 && manifest.DefaultMaxSteps > 0 {
+			tasks[i].MaxSteps = manifest.DefaultMaxSteps
+		}
 		tasks[i].PackContext = context
 	}
 	pack.Tasks = tasks
@@ -174,6 +191,8 @@ func ParsePackManifest(content []byte) (PackManifest, error) {
 		Requires:      []string{},
 		Validation:    []string{},
 		ExecutionMode: supportedPackExecutionMode,
+		DefaultMaxSteps: 8,
+		GlobalConstraints: []string{},
 	}
 
 	lines := strings.Split(string(content), "\n")
@@ -196,9 +215,9 @@ func ParsePackManifest(content []byte) (PackManifest, error) {
 			if strings.HasSuffix(trimmed, ":") {
 				section := strings.TrimSuffix(trimmed, ":")
 				switch section {
-				case "folders", "rules", "requires", "validation":
+				case "folders", "rules", "requires", "validation", "global_constraints":
 					currentSection = section
-					if section == "requires" || section == "validation" {
+					if section == "requires" || section == "validation" || section == "global_constraints" {
 						currentList = section
 					}
 					continue
@@ -228,6 +247,8 @@ func ParsePackManifest(content []byte) (PackManifest, error) {
 				manifest.Requires = append(manifest.Requires, item)
 			case "validation":
 				manifest.Validation = append(manifest.Validation, item)
+			case "global_constraints":
+				manifest.GlobalConstraints = append(manifest.GlobalConstraints, item)
 			default:
 				return PackManifest{}, fmt.Errorf("unexpected list item in %s: %q", currentSection, trimmed)
 			}
@@ -288,6 +309,20 @@ func assignManifestScalar(manifest *PackManifest, key string, value string) erro
 		manifest.Entrypoint = value
 	case "execution_mode":
 		manifest.ExecutionMode = value
+	case "workspace_root":
+		manifest.WorkspaceRoot = value
+	case "default_max_steps":
+		if value == "" {
+			manifest.DefaultMaxSteps = 0
+			return nil
+		}
+		parsed, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid default_max_steps: %w", err)
+		}
+		manifest.DefaultMaxSteps = parsed
+	case "agent_mode":
+		manifest.AgentMode = value
 	default:
 		return fmt.Errorf("unsupported manifest key: %s", key)
 	}

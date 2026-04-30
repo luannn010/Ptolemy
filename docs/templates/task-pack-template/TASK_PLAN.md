@@ -1,12 +1,18 @@
 # Task Plan: Example Pack
 
 ## Goal
-Describe the feature this task pack implements.
+Describe the single pack-level outcome this pack must deliver.
 
 ## Execution Strategy
 Use sequential-first execution.
 
-Do not run final integration tasks until all required tasks are completed.
+Do not run final integration tasks until all prerequisite tasks are completed.
+
+## Global Constraints
+
+- Do not edit files outside each task's `allowed_files`.
+- Do not run scripts from `scripts/` automatically.
+- Stop immediately on validation failure unless a task explicitly says otherwise.
 
 ## Execution Order
 
@@ -26,6 +32,15 @@ Do not run final integration tasks until all required tasks are completed.
 go test ./...
 ```
 
+## Completion Policy
+
+The pack is complete only when:
+
+- every required task is completed
+- task validations pass
+- global validation passes
+- final integration checks pass
+
 ## Failure Rule
 
-If any task fails validation, stop immediately and mark the task as failed.
+If any task fails validation or the agent blocks on an unsafe change, stop immediately and mark the task as failed.

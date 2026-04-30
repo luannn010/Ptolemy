@@ -1,35 +1,28 @@
-pack_id: multitask-scheduler-pack
-name: Multi-task Scheduler Pack
+pack_id: ptolemy-client-server-pack
+name: Ptolemy Client Server Pack
 version: 1
 created_by: chatgpt
-
 entrypoint: TASK_PLAN.md
 workspace_root: .
 default_max_steps: 8
-agent_mode: bounded_markdown_contract
-global_constraints:
-  - never edit files outside allowed_files
-  - do not auto-run scripts from scripts/
-
 folders:
   inbox: inbox
   scripts: scripts
   task_scripts: task-scripts
   snippets: snippets
-
 execution_mode: sequential_first
-
+global_constraints:
+  - never edit files outside allowed_files
+  - do not require Docker
+  - stop on the first failed validation
 requires:
   - go
   - git
   - bash
-
 validation:
-  - go test ./internal/tasks
   - go test ./...
-
 rules:
-  max_allowed_files: 8
+  max_allowed_files: 12
   require_validation: true
   require_branch: true
   stop_on_failure: true

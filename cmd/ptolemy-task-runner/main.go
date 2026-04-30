@@ -142,6 +142,10 @@ func runSchedulerCommand(args []string, out io.Writer) error {
 
 	var result tasks.SchedulerResult
 	if *pack != "" {
+		restoreExecutor := tasks.SetTaskContractExecutor(func(ctx context.Context, workspace string, task tasks.Task, contract string) ([]byte, error) {
+			return runAgentTaskContract(workspace, task.ID, contract, task.MaxSteps)
+		})
+		defer restoreExecutor()
 		result = tasks.RunTaskPack(context.Background(), *pack, *workspace)
 	} else {
 		result = tasks.RunInboxScheduler(context.Background(), *inbox, *workspace)
@@ -152,6 +156,9 @@ func runSchedulerCommand(args []string, out io.Writer) error {
 	}
 	for _, id := range result.CompletedTaskIDs {
 		fmt.Fprintf(out, "Completed: %s\n", id)
+	}
+	if result.ArchivedPackPath != "" {
+		fmt.Fprintf(out, "Archived pack: %s\n", result.ArchivedPackPath)
 	}
 	if result.FailedTaskID != "" {
 		fmt.Fprintf(out, "Failed: %s\n", result.FailedTaskID)
@@ -600,5 +607,34 @@ func goBinary() string {
 
 func runAgentTask(taskPath string, maxSteps int) ([]byte, error) {
 	cmd := exec.Command(goBinary(), "run", "./cmd/ptolemy-agent", "--task-file", taskPath, "--max-steps", strconv.Itoa(maxSteps))
+	return cmd.CombinedOutput()
+}
+
+func runAgentTaskContract(workspace string, taskID string, contract string, maxSteps int) ([]byte, error) {
+	contractDir := filepath.Join(workspace, taskRunnerStateDir, "contracts")
+	if err := os.MkdirAll(contractDir, 0o755); err != nil {
+		return nil, err
+	}
+
+	safeTaskID := strings.NewReplacer("/", "-", "\\", "-", ":", "-").Replace(taskID)
+	contractFile, err := os.CreateTemp(contractDir, safeTaskID+"-*.md")
+	if err != nil {
+		return nil, err
+	}
+	contractPath := contractFile.Name()
+	if _, err := contractFile.WriteString(contract); err != nil {
+		_ = contractFile.Close()
+		return nil, err
+	}
+	if err := contractFile.Close(); err != nil {
+		return nil, err
+	}
+
+	if maxSteps <= 0 {
+		maxSteps = 8
+	}
+
+	cmd := exec.Command(goBinary(), "run", "./cmd/ptolemy-agent", "--task-file", contractPath, "--max-steps", strconv.Itoa(maxSteps))
+	cmd.Dir = workspace
 	return cmd.CombinedOutput()
 }

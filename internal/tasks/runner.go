@@ -54,9 +54,12 @@ type CommandResult struct {
 }
 
 type TaskRunResult struct {
-	TaskID  string
-	Success bool
-	Results []CommandResult
+	TaskID             string
+	Success            bool
+	Results            []CommandResult
+	ExecutionContract  string
+	ExecutionOutput    string
+	ExecutionError     string
 }
 
 type Runner struct {

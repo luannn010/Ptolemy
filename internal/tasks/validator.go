@@ -73,6 +73,14 @@ func ValidateTask(task Task) []ValidationError {
 		})
 	}
 
+	if task.HasMaxSteps && task.MaxSteps <= 0 {
+		errs = append(errs, ValidationError{
+			TaskID: taskID,
+			Field:  "max_steps",
+			Reason: "must be greater than zero",
+		})
+	}
+
 	for _, dep := range task.DependsOn {
 		if strings.TrimSpace(dep) == strings.TrimSpace(task.ID) && strings.TrimSpace(dep) != "" {
 			errs = append(errs, ValidationError{
@@ -90,6 +98,9 @@ func ValidateTask(task Task) []ValidationError {
 		}
 		for _, snippet := range task.Snippets {
 			errs = append(errs, validatePackReference(taskID, "snippets", snippet, task.PackContext.Root, task.PackContext.SnippetsDir)...)
+		}
+		if usesBoundedMarkdownContract(task) {
+			errs = append(errs, validateTaskContract(taskID, task)...)
 		}
 	}
 
@@ -155,7 +166,7 @@ func validateAllowedFile(taskID string, allowed string) []ValidationError {
 		}
 	}
 
-	if strings.HasSuffix(trimmed, "/") || strings.HasSuffix(trimmed, "\\") || filepath.Base(cleaned) == "." {
+	if filepath.Base(cleaned) == "." {
 		errs = append(errs, ValidationError{
 			TaskID: taskID,
 			Field:  "allowed_files",
@@ -231,6 +242,51 @@ func validatePackReference(taskID string, field string, value string, packRoot s
 			Field:  field,
 			Reason: fmt.Sprintf("expected file, found directory: %s", cleaned),
 		})
+	}
+
+	return errs
+}
+
+func validateTaskContract(taskID string, task Task) []ValidationError {
+	errs := make([]ValidationError, 0)
+	if !task.HasMaxSteps {
+		errs = append(errs, ValidationError{TaskID: taskID, Field: "max_steps", Reason: "is required for bounded_markdown_contract"})
+	}
+	if !task.HasRequiresApproval {
+		errs = append(errs, ValidationError{TaskID: taskID, Field: "requires_approval", Reason: "is required for bounded_markdown_contract"})
+	}
+	if !task.HasStopOnError {
+		errs = append(errs, ValidationError{TaskID: taskID, Field: "stop_on_error", Reason: "is required for bounded_markdown_contract"})
+	}
+
+	for _, heading := range requiredTaskContractSections {
+		if strings.TrimSpace(task.Sections[heading]) == "" {
+			errs = append(errs, ValidationError{
+				TaskID: taskID,
+				Field:  "body",
+				Reason: fmt.Sprintf("missing required section: %s", heading),
+			})
+		}
+	}
+
+	inputs := task.Sections["Inputs"]
+	for _, ref := range task.Scripts {
+		if !strings.Contains(inputs, ref) {
+			errs = append(errs, ValidationError{
+				TaskID: taskID,
+				Field:  "inputs",
+				Reason: fmt.Sprintf("inputs section must reference %s", ref),
+			})
+		}
+	}
+	for _, ref := range task.Snippets {
+		if !strings.Contains(inputs, ref) {
+			errs = append(errs, ValidationError{
+				TaskID: taskID,
+				Field:  "inputs",
+				Reason: fmt.Sprintf("inputs section must reference %s", ref),
+			})
+		}
 	}
 
 	return errs
