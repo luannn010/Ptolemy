@@ -2,6 +2,8 @@
 
 Use structured instructions instead of free-form prompts.
 
+Task files that participate in this workflow should also follow `docs/workflows/agent/task-flags-and-isolation.md`, and new task files should use the templates in `docs/tasks/templates/`.
+
 ```text
 Agent
   -> Ensures task lifecycle folders exist

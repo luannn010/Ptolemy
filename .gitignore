@@ -18,5 +18,7 @@ Thumbs.db
 !/docs/tasks/packs/
 !/docs/tasks/packs/**
 /docs/tasks/packs/**/.state/
+!/docs/tasks/templates/
+!/docs/tasks/templates/*.md
 /docs/plans/*
 /deploy/*
