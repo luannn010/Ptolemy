@@ -1,9 +1,18 @@
 package tasks
 
+func effectiveStatus(task Task, state StateStore) string {
+	if state != nil {
+		if status, ok := state.Get(task.ID); ok {
+			return status
+		}
+	}
+	return task.Status
+}
+
 func RunnableTasks(tasks []Task, state StateStore) []Task {
 	out := make([]Task, 0)
 	for _, task := range tasks {
-		if task.Status != StatusInbox {
+		if effectiveStatus(task, state) != StatusInbox {
 			continue
 		}
 		ok := true
@@ -23,7 +32,7 @@ func RunnableTasks(tasks []Task, state StateStore) []Task {
 func BlockedTasks(tasks []Task, state StateStore) []Task {
 	out := make([]Task, 0)
 	for _, task := range tasks {
-		if task.Status != StatusInbox {
+		if effectiveStatus(task, state) != StatusInbox {
 			continue
 		}
 		for _, dep := range task.DependsOn {

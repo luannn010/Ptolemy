@@ -98,3 +98,14 @@ func TestRunnerFinalTaskBlockedUntilDepsComplete(t *testing.T) {
 		t.Fatalf("unexpected execution order: %v", exec.calls)
 	}
 }
+
+func TestRunnableTasksSkipsCompletedStateOverride(t *testing.T) {
+	state := NewMemoryStateStore()
+	state.Set("a", StatusCompleted)
+
+	tasks := []Task{{ID: "a", Status: StatusInbox}}
+
+	if got := RunnableTasks(tasks, state); len(got) != 0 {
+		t.Fatalf("expected completed task to be skipped, got %+v", got)
+	}
+}
