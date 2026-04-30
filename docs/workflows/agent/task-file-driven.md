@@ -5,6 +5,7 @@ Use structured instructions instead of free-form prompts.
 ```text
 Agent
   -> Ensures task lifecycle folders exist
+  -> Can preview inbox execution order with the plan CLI
   -> Selects exactly one task by queue priority
   -> Classifies the selected task
   -> Moves executable tasks through active/process
@@ -43,3 +44,17 @@ Artifacts:
 - failure notifications are written to `.state/task-runner/notifications`
 
 Status: working for deterministic one-task-per-run execution; task-file decomposition is simple bullet/paragraph splitting.
+
+Related commands:
+
+```bash
+go run ./cmd/ptolemy-task-runner
+go run ./cmd/ptolemy-task-runner plan --inbox docs/tasks/inbox
+go run ./cmd/ptolemy-task-runner run --inbox docs/tasks/inbox --workspace .
+```
+
+Notes:
+
+- the default command uses the queue-driven one-task-at-a-time workflow above
+- `plan` previews deterministic task order from metadata without running validations
+- `run` uses the sequential scheduler to validate inbox tasks and update their statuses

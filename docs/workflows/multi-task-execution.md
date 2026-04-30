@@ -1,8 +1,16 @@
 # Multi-Task Execution
 
-## 1. Current MVP: dependency-aware sequential multi-task runner
+## 1. Current MVP: deterministic sequential task scheduler
 
-The current scheduler scans inbox tasks, checks dependencies, filters conflicts, and executes selected tasks sequentially.
+The current scheduler can:
+
+- scan inbox tasks from Markdown frontmatter
+- validate task metadata before execution
+- build a deterministic plan from dependencies, priority, and execution group
+- check `allowed_files` conflicts
+- run validation commands sequentially
+- update task status to `running`, `completed`, or `failed`
+- stop at the first failed task
 
 ## 2. Why true parallel execution needs worktrees
 
@@ -19,7 +27,12 @@ git worktree add ../ptolemy-worktrees/add-queue-store ptolemy/add-queue-store
 
 ## 4. File conflict rules using allowed_files
 
-Tasks can run together only when `allowed_files` sets do not overlap exactly.
+Tasks can run together only when cleaned `allowed_files` paths do not overlap.
+
+Current helpers:
+
+- `FindAllowedFileConflicts(tasks []Task) []FileConflict`
+- `CanRunTogether(tasks []Task) bool`
 
 ## 5. Safe merge sequence
 
@@ -39,3 +52,19 @@ Require approval when:
 - merges produce conflicts
 
 True parallel execution should only run tasks together when dependencies are completed, `allowed_files` do not overlap, each task has its own branch, and each task has its own worktree.
+
+## 8. Current CLI entrypoints
+
+Preview plan:
+
+```bash
+go run ./cmd/ptolemy-task-runner plan --inbox docs/tasks/inbox
+```
+
+Run sequential scheduler:
+
+```bash
+go run ./cmd/ptolemy-task-runner run --inbox docs/tasks/inbox --workspace .
+```
+
+These commands operate on task metadata and validation commands only. They do not create branches, worktrees, or true parallel execution yet.

@@ -16,6 +16,9 @@ The project is intentionally local-first: Codex or another planner decides what 
 - Stores agent-readable project knowledge in Markdown.
 - Exposes the worker through an MCP adapter (`ptolemy-mcp`).
 - Includes prototypes for a local LLM executor (`ptolemy-agent`) and task queue runner (`ptolemy-task-runner`).
+- Builds deterministic execution plans from task metadata.
+- Validates task files before sequential execution.
+- Supports CLI plan and run commands for inbox task workflows.
 
 ## Architecture
 
@@ -49,7 +52,7 @@ cmd/
   workerd/              HTTP worker daemon
   ptolemy-mcp/          MCP adapter for the worker API
   ptolemy-agent/        local LLM-driven executor prototype
-  ptolemy-task-runner/  markdown task queue runner prototype
+  ptolemy-task-runner/  markdown queue runner and task planning CLI
 
 internal/
   action/ approval/ logs/ store/   SQLite execution memory
@@ -101,7 +104,8 @@ DB_PATH=./state/ptolemy.db
 make run         # run workerd
 make build       # build bin/workerd
 make build-mcp   # build bin/ptolemy-mcp
-make test        # run go test ./...
+make test        # run go test -p 1 ./...
+make test-integration  # run integration-tagged tests
 make fmt         # run go fmt ./...
 make tidy        # run go mod tidy
 ```
@@ -111,6 +115,8 @@ You can also run commands directly:
 ```bash
 go run ./cmd/workerd
 go run ./cmd/ptolemy-task-runner
+go run ./cmd/ptolemy-task-runner plan --inbox docs/tasks/inbox
+go run ./cmd/ptolemy-task-runner run --inbox docs/tasks/inbox --workspace .
 go run ./cmd/ptolemy-agent --task-file docs/tasks/<task>.md --max-steps 8
 ```
 
@@ -152,6 +158,7 @@ The HTTP API is implemented in `internal/httpapi`.
 | Navigator | `POST /navigator/index`, `/navigator/context`, `/navigator/session/start`, `/navigator/session/note` |
 | Git | `POST /git/status`, `/git/diff`, `/git/log`, `/git/checkout`, `/git/branch`, `/git/commit`, `/git/push` |
 | Worktrees | `POST /worktree/create`, `/worktree/list`, `/worktree/remove` |
+| Tasks | `POST /tasks/run-inbox` |
 
 Create a session:
 
@@ -240,7 +247,7 @@ Allow script creation or execution only when the task explicitly needs it:
 go run ./cmd/ptolemy-agent --allow-scripts --task-file docs/tasks/<task>.md --max-steps 3
 ```
 
-`ptolemy-task-runner` scans Markdown tasks under `docs/tasks`, classifies task size, moves work through active/done/failed queues, and invokes `ptolemy-agent` with an appropriate step budget.
+`ptolemy-task-runner` supports both queue-driven task-file execution and metadata-driven planning for inbox tasks.
 
 Task queues:
 
@@ -259,6 +266,35 @@ Run the task runner:
 ```bash
 go run ./cmd/ptolemy-task-runner
 ```
+
+Preview the deterministic inbox execution plan:
+
+```bash
+go run ./cmd/ptolemy-task-runner plan --inbox docs/tasks/inbox
+```
+
+Expected shape:
+
+```text
+Execution plan:
+1. <task_id>
+2. <task_id>
+```
+
+Run the sequential inbox scheduler:
+
+```bash
+go run ./cmd/ptolemy-task-runner run --inbox docs/tasks/inbox --workspace .
+```
+
+The metadata-driven scheduler:
+
+- scans inbox tasks
+- validates parsed metadata
+- builds an execution plan from dependencies, priority, and execution group
+- runs validation commands with `bash -lc`
+- updates task file status to `running`, `completed`, or `failed`
+- stops on the first failure
 
 ## Task System
 
@@ -301,14 +337,14 @@ Before editing behavior:
 
 ```bash
 git status --short
-go test ./...
+go test -p 1 ./...
 ```
 
 For normal changes:
 
 ```bash
 go fmt ./...
-go test ./...
+go test -p 1 ./...
 git diff --stat
 git diff --name-only
 ```
@@ -337,6 +373,7 @@ Completed or mostly complete:
 - Markdown knowledge memory structure.
 - Basic local-brain agent loop and task runner prototype.
 - Split workflow documentation, task metadata rules, and safe commit/PR guidance.
+- Deterministic task planning, validation, sequential scheduling, and CLI preview/run commands.
 
 Still in progress:
 
