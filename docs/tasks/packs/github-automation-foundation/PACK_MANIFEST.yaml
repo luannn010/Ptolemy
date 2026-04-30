@@ -1,0 +1,28 @@
+pack_id: github-automation-foundation
+name: GitHub Automation Foundation
+version: 1
+created_by: codex
+
+entrypoint: TASK_PLAN.md
+
+folders:
+  inbox: inbox
+  scripts: scripts
+  task_scripts: task-scripts
+  snippets: snippets
+
+execution_mode: sequential_first
+
+requires:
+  - go
+  - git
+  - bash
+
+validation:
+  - go test ./internal/tasks ./internal/gitops
+
+rules:
+  max_allowed_files: 10
+  require_validation: true
+  require_branch: true
+  stop_on_failure: true
