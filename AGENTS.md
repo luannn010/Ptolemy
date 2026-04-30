@@ -98,6 +98,50 @@ Before executing a task:
 5. Follow `docs/workflows/git/safe-commit.md` before committing.
 6. If Ptolemy returns EOF, timeout, or no response, follow `docs/workflows/recovery/eof-worker-drop.md`.
 
+## Task Flags, Isolation, and PR Rules
+
+Before starting a task:
+
+1. Read `WORKFLOWS.md`.
+2. Load `docs/workflows/agent/task-flags-and-isolation.md`.
+3. Confirm the task file has valid metadata.
+4. Work on only one `task_id` at a time.
+5. Use the task metadata `branch` field for branch creation.
+6. Do not edit outside `allowed_files`.
+
+When splitting tasks:
+
+1. Child tasks inherit `priority`, `parent_task`, and `allowed_files`.
+2. Child tasks must receive unique `task_id` values.
+3. Child branches must use each child task ID.
+
+After a task is tested and committed:
+
+1. Follow `docs/workflows/git/pull-request.md` if PR creation is requested.
+2. If GitHub CLI is unavailable or unauthenticated, write fallback PR instructions under `.state/pr/`.
+3. Do not auto-merge PRs unless a task explicitly requests it.
+
+## Task Branch Workflow
+
+Before starting a task:
+
+1. Read `WORKFLOWS.md`.
+2. Ensure working branch is clean.
+3. Create branch: `ptolemy/<task-slug>`.
+
+After task:
+
+1. Run tests.
+2. Stage explicit files only.
+3. Commit on task branch.
+4. Merge only if working branch is clean.
+5. If conflict occurs → STOP and report.
+
+Never:
+- use `git add .`
+- auto-resolve runtime conflicts
+- overwrite user files
+
 ### General safety
 
 - Never push without explicit user approval.
