@@ -1,6 +1,0 @@
-task_id: add-pack-artifact-logging
-branch: ptolemy/add-pack-artifact-logging
-success: true
-command: git branch 'ptolemy/add-pack-artifact-logging'
-exit_code: 0
-output:

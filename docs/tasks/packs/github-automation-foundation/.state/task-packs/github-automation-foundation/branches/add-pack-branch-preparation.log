@@ -1,6 +1,0 @@
-task_id: add-pack-branch-preparation
-branch: ptolemy/add-pack-branch-preparation
-success: true
-command: git branch 'ptolemy/add-pack-branch-preparation'
-exit_code: 0
-output:

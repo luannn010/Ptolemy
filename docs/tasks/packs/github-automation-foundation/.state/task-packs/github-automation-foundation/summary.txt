@@ -1,6 +1,0 @@
-pack_id: github-automation-foundation
-planned: add-pack-artifact-logging,add-pack-branch-preparation,add-pack-failure-issue-draft,add-pack-success-pr-draft,add-pack-final-validation
-completed: add-pack-artifact-logging,add-pack-branch-preparation,add-pack-failure-issue-draft,add-pack-success-pr-draft,add-pack-final-validation
-failed: 
-issue_draft: 
-pr_draft: /home/luannn010/projects/ptolemy/docs/tasks/packs/github-automation-foundation/.state/task-packs/github-automation-foundation/github/pull-request-draft.md

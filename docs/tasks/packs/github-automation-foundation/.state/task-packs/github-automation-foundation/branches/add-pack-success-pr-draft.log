@@ -1,6 +1,0 @@
-task_id: add-pack-success-pr-draft
-branch: ptolemy/add-pack-success-pr-draft
-success: true
-command: git branch 'ptolemy/add-pack-success-pr-draft'
-exit_code: 0
-output:
