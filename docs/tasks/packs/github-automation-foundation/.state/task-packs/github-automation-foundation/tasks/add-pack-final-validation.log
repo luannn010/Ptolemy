@@ -1,0 +1,12 @@
+task_id: add-pack-final-validation
+branch: ptolemy/add-pack-final-validation
+success: true
+
+## command 1
+command: go test ./internal/tasks ./internal/gitops
+exit_code: 0
+stdout:
+ok  	github.com/luannn010/ptolemy/internal/tasks	(cached)
+ok  	github.com/luannn010/ptolemy/internal/gitops	(cached)
+stderr:
+

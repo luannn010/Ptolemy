@@ -4,6 +4,8 @@
 
 This file tells Codex/agents how to work inside this repository.
 
+Codex should use Ptolemy as the default execution path every time when working in this repo. Direct local shell execution should be treated as fallback-only for recovery, verification, or when Ptolemy is unavailable.
+
 Ptolemy is a local worker/agent system written in Go. It exposes a worker daemon (`workerd`), an MCP adapter (`ptolemy-mcp`), a local LLM-driven agent (`ptolemy-agent`), and a task runner prototype (`ptolemy-task-runner`).
 
 The current development goal is to continue building a safe autonomous coding workflow:
@@ -93,10 +95,11 @@ Before executing a task:
 
 1. Read `WORKFLOWS.md`.
 2. Select only the workflow file relevant to the task.
-3. Use Ptolemy for command execution when available.
-4. Do not load every workflow file unless the task explicitly requires a full workflow audit.
-5. Follow `docs/workflows/git/safe-commit.md` before committing.
-6. If Ptolemy returns EOF, timeout, or no response, follow `docs/workflows/recovery/eof-worker-drop.md`.
+3. Use Ptolemy for command execution every time by default.
+4. Use direct local shell execution only as fallback for recovery, verification, or when Ptolemy is unavailable.
+5. Do not load every workflow file unless the task explicitly requires a full workflow audit.
+6. Follow `docs/workflows/git/safe-commit.md` before committing.
+7. If Ptolemy returns EOF, timeout, or no response, follow `docs/workflows/recovery/eof-worker-drop.md`.
 
 ## Task Flags, Isolation, and PR Rules
 

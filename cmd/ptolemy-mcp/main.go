@@ -2,40 +2,26 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"github.com/luannn010/ptolemy/internal/mcp"
-	"github.com/luannn010/ptolemy/internal/mcp/executortools"
-	"github.com/luannn010/ptolemy/internal/mcp/filetools"
-	"github.com/luannn010/ptolemy/internal/mcp/gittools"
-	"github.com/luannn010/ptolemy/internal/mcp/navigatortools"
-	"github.com/luannn010/ptolemy/internal/mcp/sessiontools"
-	"github.com/luannn010/ptolemy/internal/mcp/worktreetools"
+	"github.com/luannn010/ptolemy/internal/mcp/remotetools"
 )
 
 func main() {
-	workerURL := os.Getenv("PTOLEMY_WORKER_URL")
-	if workerURL == "" {
-		workerURL = "http://localhost:8080"
+	baseURL := strings.TrimSpace(os.Getenv("PTOLEMY_BASE_URL"))
+	if baseURL == "" {
+		baseURL = "http://127.0.0.1:8080"
 	}
 
-	client := mcp.NewWorkerClient(workerURL)
+	client := mcp.NewWorkerClient(baseURL)
 
 	server := mcp.NewServer(
 		client,
-		sessiontools.Tools(),
-		executortools.Tools(),
-		filetools.Tools(),
-		navigatortools.Tools(),
-		gittools.Tools(),
-		worktreetools.Tools(),
+		remotetools.Tools(),
 	)
 
-	server.RegisterHandler(sessiontools.Handle)
-	server.RegisterHandler(executortools.Handle)
-	server.RegisterHandler(filetools.Handle)
-	server.RegisterHandler(navigatortools.Handle)
-	server.RegisterHandler(gittools.Handle)
-	server.RegisterHandler(worktreetools.Handle)
+	server.RegisterHandler(remotetools.Handle)
 
 	server.Run(os.Stdin, os.Stdout)
 }

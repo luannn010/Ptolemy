@@ -122,15 +122,15 @@ See [Task System Overview](./docs/tasks/README.md), [Task-File Driven Workflow](
 
 ## Remote MCP Wrapper
 
-If you want Codex or ChatGPT Custom MCP running on another machine to call your existing worker over HTTP or Tailscale, use the lightweight STDIO bridge at `scripts/mcp/ptolemy_mcp.py`.
+If you want Codex or another MCP client to call your existing worker over HTTP or Tailscale, use the Go STDIO bridge at `cmd/ptolemy-mcp`.
 
-This wrapper does not replace `workerd`. It translates MCP tool calls into the existing worker HTTP API:
+This adapter does not replace `workerd`. It translates MCP tool calls into the existing worker HTTP API:
 
 ```text
 Codex or ChatGPT MCP client
         |
         v
-scripts/mcp/ptolemy_mcp.py
+bin/ptolemy-mcp.exe
         |
         v
 PTOLEMY_BASE_URL over HTTP or Tailscale
@@ -149,17 +149,27 @@ Supported bridge tools:
 Environment variables:
 
 - `PTOLEMY_BASE_URL` defaults to `http://127.0.0.1:8080`
-- `PTOLEMY_DEFAULT_SESSION_ID` is optional
-- `PTOLEMY_AUTH_TOKEN` is optional future support
 
 Codex Custom MCP fields:
 
 - Name: `Ptolemy`
 - Type: `STDIO`
-- Command: `python`
-- Arguments: `scripts/mcp/ptolemy_mcp.py`
+- Command: `./bin/ptolemy-mcp.exe`
+- Arguments: none
 - Working directory: repo root
 - Environment variable: `PTOLEMY_BASE_URL=http://<tailscale-ip>:8080`
+
+Windows build command:
+
+```bash
+GOOS=windows GOARCH=amd64 go build -o bin/ptolemy-mcp.exe ./cmd/ptolemy-mcp
+```
+
+Smoke test against a remote worker:
+
+```bash
+curl -s http://<tailscale-ip>:8080/health | jq
+```
 
 ## [Workflow System](./WORKFLOWS.md)
 

@@ -2,14 +2,12 @@ package main
 
 import (
 	"bytes"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/luannn010/ptolemy/internal/mcp"
-	"github.com/luannn010/ptolemy/internal/mcp/executortools"
-	"github.com/luannn010/ptolemy/internal/mcp/filetools"
-	"github.com/luannn010/ptolemy/internal/mcp/gittools"
-	"github.com/luannn010/ptolemy/internal/mcp/sessiontools"
+	"github.com/luannn010/ptolemy/internal/mcp/remotetools"
 )
 
 func TestMCPServerBootAndListTools(t *testing.T) {
@@ -17,27 +15,22 @@ func TestMCPServerBootAndListTools(t *testing.T) {
 
 	server := mcp.NewServer(
 		client,
-		sessiontools.Tools(),
-		executortools.Tools(),
-		filetools.Tools(),
-		gittools.Tools(),
+		remotetools.Tools(),
 	)
 
-	server.RegisterHandler(sessiontools.Handle)
-	server.RegisterHandler(executortools.Handle)
-	server.RegisterHandler(filetools.Handle)
-	server.RegisterHandler(gittools.Handle)
+	server.RegisterHandler(remotetools.Handle)
 
-	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n")
+	request := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
+	input := strings.NewReader("Content-Length: " + strconv.Itoa(len(request)) + "\r\n\r\n" + request)
 	var output bytes.Buffer
 
 	server.Run(input, &output)
 
-	if !strings.Contains(output.String(), "ptolemy.execute") {
+	if !strings.Contains(output.String(), "ptolemy_execute") {
 		t.Fatalf("expected execute tool in MCP, got %s", output.String())
 	}
 
-	if !strings.Contains(output.String(), "ptolemy.git_status") {
-		t.Fatalf("expected git tool in MCP, got %s", output.String())
+	if !strings.Contains(output.String(), "ptolemy_health") {
+		t.Fatalf("expected health tool in MCP, got %s", output.String())
 	}
 }

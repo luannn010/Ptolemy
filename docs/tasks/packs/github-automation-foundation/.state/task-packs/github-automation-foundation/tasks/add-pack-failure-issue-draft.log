@@ -1,0 +1,11 @@
+task_id: add-pack-failure-issue-draft
+branch: ptolemy/add-pack-failure-issue-draft
+success: true
+
+## command 1
+command: go test ./internal/tasks
+exit_code: 0
+stdout:
+ok  	github.com/luannn010/ptolemy/internal/tasks	(cached)
+stderr:
+

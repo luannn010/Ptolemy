@@ -87,57 +87,30 @@ Run it:
 Override the worker URL when needed:
 
 ```bash
-PTOLEMY_WORKER_URL=http://localhost:8080 ./bin/ptolemy-mcp
+PTOLEMY_BASE_URL=http://127.0.0.1:8080 ./bin/ptolemy-mcp
 ```
 
-Exposed MCP groups include:
-
-- `ptolemy.create_session`, `ptolemy.list_sessions`, `ptolemy.get_session`, `ptolemy.close_session`
-- `ptolemy.execute`
-- `ptolemy.read_file`, `ptolemy.write_file`, `ptolemy.list_directory`, `ptolemy.search_codebase`, `ptolemy.apply_patch`
-- `ptolemy.index_workspace`, `ptolemy.read_context`, `ptolemy.start_task_session`, `ptolemy.append_session_note`
-- `ptolemy.git_status`, `ptolemy.git_diff`, `ptolemy.git_log`, `ptolemy.git_checkout`, `ptolemy.git_create_branch`, `ptolemy.git_commit`, `ptolemy.git_push`
-- `ptolemy.create_worktree`, `ptolemy.list_worktrees`, `ptolemy.remove_worktree`
-
-## Python STDIO Wrapper
-
-For a thin remote bridge that runs on a Codex or ChatGPT machine and forwards calls to an existing worker, use:
-
-```bash
-python scripts/mcp/ptolemy_mcp.py
-```
-
-This wrapper keeps `workerd` as the real backend and calls the configured worker URL over HTTP.
-
-Environment variables:
-
-- `PTOLEMY_BASE_URL` default `http://127.0.0.1:8080`
-- `PTOLEMY_DEFAULT_SESSION_ID` optional
-- `PTOLEMY_AUTH_TOKEN` optional future support
-- `PTOLEMY_HTTP_TIMEOUT_SECONDS` optional override for general requests
-- `PTOLEMY_HEALTH_TIMEOUT_SECONDS` optional override for health checks
-
-The wrapper exposes these MCP tools:
+This adapter speaks MCP STDIO framing with `Content-Length` headers and exposes:
 
 - `ptolemy_health` -> `GET /health`
-- `ptolemy_create_session` -> `POST /sessions`
+- `ptolemy_create_session` -> `POST /sessions/`
 - `ptolemy_execute` -> `POST /execute`
 - `ptolemy_run_task_file` -> best-effort `POST /agent/run`
 
-If `POST /agent/run` is not available on the worker, the wrapper returns a clean fallback response instead of hiding the failure.
+If `POST /agent/run` is not available on the worker, the adapter returns a clean fallback response instead of hiding the failure.
 
 Codex Custom MCP UI values:
 
 - Name: `Ptolemy`
 - Type: `STDIO`
-- Command: `python`
-- Arguments: `scripts/mcp/ptolemy_mcp.py`
+- Command: `./bin/ptolemy-mcp.exe`
+- Arguments: none
 - Working directory: repo root
 - Environment variable: `PTOLEMY_BASE_URL=http://<tailscale-ip>:8080`
 
 Smoke test:
 
 ```bash
-python scripts/mcp/ptolemy_mcp.py --self-test
-curl -s http://127.0.0.1:8080/health
+GOOS=windows GOARCH=amd64 go build -o bin/ptolemy-mcp.exe ./cmd/ptolemy-mcp
+curl -s http://<tailscale-ip>:8080/health | jq
 ```
