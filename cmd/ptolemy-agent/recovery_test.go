@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	actionpkg "github.com/luannn010/ptolemy/internal/action"
-	"github.com/luannn010/ptolemy/internal/logs"
+	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/worker"
 )
@@ -24,44 +24,32 @@ func (noopWorkerClient) RunCommand(ctx context.Context, sessionID string, reqBod
 }
 
 func (noopWorkerClient) ReadFile(ctx context.Context, reqBody worker.ReadFileRequest) (*worker.ReadFileResponse, error) {
-	return nil, nil
+	return &worker.ReadFileResponse{Path: reqBody.Path, Content: "test content"}, nil
 }
 
 func (noopWorkerClient) WriteFile(ctx context.Context, reqBody worker.WriteFileRequest) (*worker.WriteFileResponse, error) {
 	return nil, nil
 }
 
-func TestProcessBrainReplyInvalidOutputCreatesActionAndLog(t *testing.T) {
+func TestProcessBrainReplyMultiObjectOutputRecoversFirstActionAndCreatesWarningLog(t *testing.T) {
 	chdirTemp(t)
 	runtime, db := newTestRuntime(t)
 
-	reply := "{\"action\":\"read_file\"}\n{\"action\":\"run_command\"}"
-	_, result, ok := processBrainReply(context.Background(), runtime, "session-1", ".", "my-task", 2, reply, false)
-	if ok {
-		t.Fatal("processBrainReply() ok = true, want false")
+	reply := "{\"action\":\"read_file\",\"path\":\"README.md\"}\n{\"action\":\"run_command\"}"
+	_, result, ok := processBrainReply(context.Background(), runtime, "session-1", ".", "my-task", 2, reply, false, "")
+	if !ok {
+		t.Fatal("processBrainReply() ok = false, want true")
 	}
-	if !strings.Contains(result.Display, "invalid_model_output") {
-		t.Fatalf("result.Display = %q, want invalid_model_output", result.Display)
-	}
-
-	var status string
-	var input string
-	if err := db.QueryRow(`SELECT status, input FROM actions LIMIT 1`).Scan(&status, &input); err != nil {
-		t.Fatalf("query actions: %v", err)
-	}
-	if status != "invalid_model_output" {
-		t.Fatalf("status = %q, want invalid_model_output", status)
-	}
-	if input != reply {
-		t.Fatalf("input = %q, want %q", input, reply)
+	if !strings.Contains(result.Display, "FILE READ OK") {
+		t.Fatalf("result.Display = %q, want read_file execution result", result.Display)
 	}
 
 	var message string
 	if err := db.QueryRow(`SELECT message FROM logs LIMIT 1`).Scan(&message); err != nil {
 		t.Fatalf("query logs: %v", err)
 	}
-	if !strings.Contains(message, "multiple JSON objects returned") {
-		t.Fatalf("message = %q, want multiple JSON objects returned", message)
+	if !strings.Contains(message, "recovered first JSON action") {
+		t.Fatalf("message = %q, want recovery warning", message)
 	}
 }
 
@@ -131,7 +119,7 @@ func newTestRuntime(t *testing.T) (*agentRuntime, *sql.DB) {
 	return &agentRuntime{
 		workerClient: noopWorkerClient{},
 		actionStore:  actionpkg.NewStore(baseStore.SQLDB()),
-		logStore:     logs.NewStore(baseStore.SQLDB()),
+		logStore:     logging.NewStore(baseStore.SQLDB()),
 		splitter:     actionpkg.PlaceholderTaskSplitter{},
 	}, baseStore.SQLDB()
 }

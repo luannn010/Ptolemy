@@ -1,5 +1,3 @@
-# Ptolemy
-
 Ptolemy is a codebase navigator, not a whole-codebase reader.
 
 When available, use the `ptolemy-workflows` Codex skill to select the right workflow from
