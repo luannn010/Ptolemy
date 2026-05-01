@@ -5,13 +5,15 @@ bin/
 state/*.db
 
 # logs
-logs/
+
 
 # OS
 .DS_Store
 Thumbs.db
 
 .env
+.env.*
+!.env.example
 
 .state/
 /docs/tasks/*
