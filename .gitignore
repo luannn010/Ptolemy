@@ -15,5 +15,16 @@ Thumbs.db
 
 .state/
 /docs/tasks/*
+!/docs/tasks/packs/
+!/docs/tasks/packs/**
+/docs/tasks/packs/**/.state/
+
+scripts/**/__pycache__/
+*.pyc
+
+/ptolemy-client
+/ptolemy-mcp
+/workerd
+
 /docs/plans/*
 /deploy/*

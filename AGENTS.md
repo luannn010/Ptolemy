@@ -483,6 +483,16 @@ Prefer:
 go test ./...
 ```
 
+### Client-server local workflow (no Docker)
+
+```bash
+ptolemy-client init --workspace .
+ptolemy-client skills list --workspace .
+ptolemy-client sync-skills --workspace .
+ptolemy-client scan --workspace .
+ptolemy-client exec --workspace . --command "go test ./..."
+```
+
 ### Run agent
 
 ```bash

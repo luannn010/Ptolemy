@@ -1,0 +1,19 @@
+.ptolemy/
+├── context/
+│   ├── architecture.md
+│   ├── conventions.md
+│   ├── workflows.md
+│   ├── commands.md
+│   └── decisions.md
+├── tasks/
+│   ├── inbox/
+│   ├── process/
+│   ├── done/
+│   └── packs/
+├── memory/
+│   ├── codebase-map.md
+│   ├── dependency-map.md
+│   └── recent-changes.md
+├── cache/
+│   └── skills/
+└── client.yaml

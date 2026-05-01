@@ -120,6 +120,47 @@ go run ./cmd/ptolemy-task-runner run --pack <pack-dir> --workspace .
 
 See [Task System Overview](./docs/tasks/README.md), [Task-File Driven Workflow](./docs/workflows/agent/task-file-driven.md), and example packs in [`docs/tasks/packs`](./docs/tasks/packs).
 
+## Remote MCP Wrapper
+
+If you want Codex or ChatGPT Custom MCP running on another machine to call your existing worker over HTTP or Tailscale, use the lightweight STDIO bridge at `scripts/mcp/ptolemy_mcp.py`.
+
+This wrapper does not replace `workerd`. It translates MCP tool calls into the existing worker HTTP API:
+
+```text
+Codex or ChatGPT MCP client
+        |
+        v
+scripts/mcp/ptolemy_mcp.py
+        |
+        v
+PTOLEMY_BASE_URL over HTTP or Tailscale
+        |
+        v
+workerd
+```
+
+Supported bridge tools:
+
+- `ptolemy_health`
+- `ptolemy_create_session`
+- `ptolemy_execute`
+- `ptolemy_run_task_file`
+
+Environment variables:
+
+- `PTOLEMY_BASE_URL` defaults to `http://127.0.0.1:8080`
+- `PTOLEMY_DEFAULT_SESSION_ID` is optional
+- `PTOLEMY_AUTH_TOKEN` is optional future support
+
+Codex Custom MCP fields:
+
+- Name: `Ptolemy`
+- Type: `STDIO`
+- Command: `python`
+- Arguments: `scripts/mcp/ptolemy_mcp.py`
+- Working directory: repo root
+- Environment variable: `PTOLEMY_BASE_URL=http://<tailscale-ip>:8080`
+
 ## [Workflow System](./WORKFLOWS.md)
 
 Ptolemy workflows exist so agents do not improvise the execution model on every task. The workflow system defines the safe, repeatable path for reading context, selecting tools, editing files, recovering from worker drops, and committing changes.

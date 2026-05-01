@@ -1,0 +1,38 @@
+pack_id: ptolemy-mcp-wrapper-pack
+name: Ptolemy MCP Wrapper Pack
+version: 1
+created_by: chatgpt
+
+entrypoint: TASK_PLAN.md
+workspace_root: .
+default_max_steps: 8
+agent_mode: bounded_markdown_contract
+
+folders:
+  inbox: inbox
+  scripts: scripts
+  task_scripts: task-scripts
+  snippets: snippets
+
+execution_mode: sequential_first
+
+global_constraints:
+  - never edit files outside each task allowed_files
+  - prefer the smallest targeted change over broad rewrites
+  - keep the wrapper as a bridge to workerd instead of replacing workerd
+  - do not expose secrets in logs, docs, or example config
+
+requires:
+  - python
+  - git
+  - bash
+
+validation:
+  - python scripts/mcp/ptolemy_mcp.py --self-test
+  - curl -s http://127.0.0.1:8080/health
+
+rules:
+  max_allowed_files: 8
+  require_validation: true
+  require_branch: true
+  stop_on_failure: true

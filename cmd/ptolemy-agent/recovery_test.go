@@ -31,37 +31,28 @@ func (noopWorkerClient) WriteFile(ctx context.Context, reqBody worker.WriteFileR
 	return nil, nil
 }
 
-func TestProcessBrainReplyInvalidOutputCreatesActionAndLog(t *testing.T) {
+func TestProcessBrainReplyMultipleObjectsUsesFirstValidActionAndWarns(t *testing.T) {
 	chdirTemp(t)
 	runtime, db := newTestRuntime(t)
 
-	reply := "{\"action\":\"read_file\"}\n{\"action\":\"run_command\"}"
-	_, result, ok := processBrainReply(context.Background(), runtime, "session-1", ".", "my-task", 2, reply, false)
-	if ok {
-		t.Fatal("processBrainReply() ok = true, want false")
+	reply := "{\"action\":\"explain\",\"reason\":\"done\"}\n{\"action\":\"run_command\"}"
+	action, result, ok := processBrainReply(context.Background(), runtime, "session-1", ".", "my-task", 2, reply, false, &progressGuard{})
+	if !ok {
+		t.Fatal("processBrainReply() ok = false, want true")
 	}
-	if !strings.Contains(result.Display, "invalid_model_output") {
-		t.Fatalf("result.Display = %q, want invalid_model_output", result.Display)
+	if action.Action != "explain" {
+		t.Fatalf("action.Action = %q, want explain", action.Action)
 	}
-
-	var status string
-	var input string
-	if err := db.QueryRow(`SELECT status, input FROM actions LIMIT 1`).Scan(&status, &input); err != nil {
-		t.Fatalf("query actions: %v", err)
-	}
-	if status != "invalid_model_output" {
-		t.Fatalf("status = %q, want invalid_model_output", status)
-	}
-	if input != reply {
-		t.Fatalf("input = %q, want %q", input, reply)
+	if !strings.Contains(result.Display, "ignored extra JSON objects") {
+		t.Fatalf("result.Display = %q, want warning", result.Display)
 	}
 
 	var message string
 	if err := db.QueryRow(`SELECT message FROM logs LIMIT 1`).Scan(&message); err != nil {
 		t.Fatalf("query logs: %v", err)
 	}
-	if !strings.Contains(message, "multiple JSON objects returned") {
-		t.Fatalf("message = %q, want multiple JSON objects returned", message)
+	if !strings.Contains(message, "ignored extra JSON objects") {
+		t.Fatalf("message = %q, want ignored extra JSON objects", message)
 	}
 }
 

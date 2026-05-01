@@ -51,6 +51,10 @@ func BuildTaskExecutionContract(task Task) (string, error) {
 			builder.WriteString(fmt.Sprintf("  - %s\n", constraint))
 		}
 	}
+	if len(task.Scripts) > 0 || len(task.Snippets) > 0 {
+		builder.WriteString("- Referenced pack assets are embedded below.\n")
+		builder.WriteString("- Do not call read_file on task-scripts/... or snippets/... paths; treat their embedded contents as the source of truth.\n")
+	}
 	builder.WriteString("\n")
 
 	for _, heading := range requiredTaskContractSections {

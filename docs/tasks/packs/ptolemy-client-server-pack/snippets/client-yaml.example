@@ -1,0 +1,8 @@
+server_url: "http://localhost:8080"
+project_name: "example-project"
+workspace: "."
+skills_cache: ".ptolemy/cache/skills"
+allow_delete: false
+allow_shell: true
+shell: "/bin/bash"
+timeout_seconds: 120

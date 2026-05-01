@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -17,11 +19,14 @@ import (
 	"github.com/luannn010/ptolemy/internal/inspect"
 	logspkg "github.com/luannn010/ptolemy/internal/logs"
 	storepkg "github.com/luannn010/ptolemy/internal/store"
+	taskspkg "github.com/luannn010/ptolemy/internal/tasks"
 	"github.com/luannn010/ptolemy/internal/worker"
 )
 
 const maxBrainPreviewChars = 1200
 const artifactDir = ".state/agent-artifacts"
+
+var errNoJSONObject = errors.New("no JSON object found")
 
 type ActionResult struct {
 	Display string
@@ -40,6 +45,12 @@ type agentRuntime struct {
 	actionStore  *actionpkg.Store
 	logStore     *logspkg.Store
 	splitter     actionpkg.TaskSplitter
+	taskPackRoot string
+}
+
+type progressGuard struct {
+	lastSignature string
+	repeatCount   int
 }
 
 func main() {
@@ -49,6 +60,7 @@ func main() {
 	flag.Parse()
 
 	task := strings.Join(flag.Args(), " ")
+	taskPackRoot := ""
 
 	if *taskFile != "" {
 		data, err := os.ReadFile(*taskFile)
@@ -56,7 +68,11 @@ func main() {
 			fmt.Printf("failed to read task file: %v\n", err)
 			os.Exit(1)
 		}
-		task = string(data)
+		task, taskPackRoot, err = loadTaskInput(*taskFile, data)
+		if err != nil {
+			fmt.Printf("failed to prepare task file: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	if strings.TrimSpace(task) == "" {
@@ -70,6 +86,16 @@ func main() {
 	if err != nil {
 		fmt.Printf("failed to get workspace: %v\n", err)
 		os.Exit(1)
+	}
+	if strings.TrimSpace(taskPackRoot) != "" {
+		if rel, relErr := filepath.Rel(workspace, taskPackRoot); relErr == nil {
+			cleanedRel := filepath.ToSlash(filepath.Clean(rel))
+			if cleanedRel == "." {
+				taskPackRoot = ""
+			} else if cleanedRel != ".." && !strings.HasPrefix(cleanedRel, "../") {
+				taskPackRoot = cleanedRel
+			}
+		}
 	}
 
 	snapshot := inspect.InspectWorkspace(workspace)
@@ -107,6 +133,7 @@ func main() {
 		actionStore:  actionpkg.NewStore(baseStore.SQLDB()),
 		logStore:     logspkg.NewStore(baseStore.SQLDB()),
 		splitter:     actionpkg.PlaceholderTaskSplitter{},
+		taskPackRoot: taskPackRoot,
 	}
 
 	session, err := runtime.workerClient.CreateSession(ctx, worker.CreateSessionRequest{
@@ -122,6 +149,7 @@ func main() {
 	fmt.Printf("session: %s\n", session.ID)
 
 	observations := []string{}
+	guard := &progressGuard{}
 
 	for step := 1; step <= *maxSteps; step++ {
 		fmt.Printf("\n--- step %d/%d ---\n", step, *maxSteps)
@@ -163,6 +191,7 @@ Rules:
 - You must return EXACTLY ONE JSON object per response.
 - Never return multiple JSON objects.
 - Never chain multiple actions in one response.
+- If you think multiple actions are needed, return only the FIRST action now and wait for the next turn.
 - If multiple changes are needed, do them step-by-step across multiple iterations.
 - For insert_after, you MUST provide both marker and content fields.
 - The marker field must be the exact text to search for.
@@ -188,7 +217,7 @@ Observations so far:
 			os.Exit(1)
 		}
 
-		action, result, ok := processBrainReply(ctx, runtime, session.ID, workspace, taskName, step, reply, *allowScripts)
+		action, result, ok := processBrainReply(ctx, runtime, session.ID, workspace, taskName, step, reply, *allowScripts, guard)
 		if !ok {
 			fmt.Println(result.Display)
 			observations = append(observations, result.Brain)
@@ -276,9 +305,14 @@ func executeAction(
 			return both("ERROR: empty path")
 		}
 
+		path := action.Path
+		if remappedPath, ok := resolvePackReferencePath(runtime.taskPackRoot, action.Path); ok {
+			path = remappedPath
+		}
+
 		result, err := runtime.workerClient.ReadFile(ctx, worker.ReadFileRequest{
 			SessionID: sessionID,
-			Path:      action.Path,
+			Path:      path,
 		})
 		if err != nil {
 			return both(fmt.Sprintf("ERROR reading file: %v", err))
@@ -362,6 +396,12 @@ func executeAction(
 			Path:      action.Path,
 		})
 		if err != nil {
+			if isMissingFileError(err) {
+				return both(fmt.Sprintf(
+					"ERROR: insert_after target file does not exist: %s. Use write_file to create a new file inside allowed_files, or read an existing implementation file first.",
+					action.Path,
+				))
+			}
 			return both(fmt.Sprintf("ERROR reading file for insert_after: %v", err))
 		}
 
@@ -434,6 +474,12 @@ func executeAction(
 			Path:      action.Path,
 		})
 		if err != nil {
+			if isMissingFileError(err) {
+				return both(fmt.Sprintf(
+					"ERROR: replace_block target file does not exist: %s. Use write_file to create a new file inside allowed_files, or read an existing implementation file first.",
+					action.Path,
+				))
+			}
 			return both(fmt.Sprintf("ERROR reading file for replace_block: %v", err))
 		}
 
@@ -484,14 +530,290 @@ func processBrainReply(
 	step int,
 	reply string,
 	allowScripts bool,
+	guard *progressGuard,
 ) (*actionpkg.ActionEnvelope, ActionResult, bool) {
-	action, err := actionpkg.ValidateSingleJSONAction(reply)
+	action, warning, err := parseFirstValidJSONAction(reply)
 	if err != nil {
 		return nil, handleInvalidModelOutput(ctx, runtime, sessionID, taskName, step, reply, err), false
 	}
+	if warning != "" {
+		_, _ = runtime.logStore.Create(ctx, logspkg.Log{
+			SessionID: sessionID,
+			Level:     "warn",
+			Message:   warning,
+			Metadata: mustMarshalJSON(map[string]any{
+				"warning": "ignored_extra_json_objects",
+			}),
+		})
+	}
+
+	if corrective := validateAndNormalizeAction(action); corrective != "" {
+		_, _ = runtime.logStore.Create(ctx, logspkg.Log{
+			SessionID: sessionID,
+			Level:     "warn",
+			Message:   "incomplete action ignored",
+			Metadata: mustMarshalJSON(map[string]any{
+				"action":     action.Action,
+				"corrective": corrective,
+			}),
+		})
+
+		display := "INCOMPLETE ACTION\n" + corrective + "\nNo tools were executed."
+		brain := corrective
+		if warning != "" {
+			display += "\nwarning: " + warning
+			brain += "\nwarning: " + warning
+		}
+		return nil, ActionResult{Display: display, Brain: brain}, false
+	}
+
+	if corrective := guard.observe(action); corrective != "" {
+		_, _ = runtime.logStore.Create(ctx, logspkg.Log{
+			SessionID: sessionID,
+			Level:     "warn",
+			Message:   "repeated action blocked",
+			Metadata: mustMarshalJSON(map[string]any{
+				"action":     action.Action,
+				"path":       action.Path,
+				"command":    action.Command,
+				"corrective": corrective,
+			}),
+		})
+
+		display := "PROGRESS GUARD\n" + corrective + "\nNo tools were executed."
+		brain := corrective
+		if warning != "" {
+			display += "\nwarning: " + warning
+			brain += "\nwarning: " + warning
+		}
+		return nil, ActionResult{Display: display, Brain: brain}, false
+	}
 
 	result := executeAction(ctx, runtime, sessionID, workspace, taskName, step, action, allowScripts)
+	if warning != "" {
+		result.Display = result.Display + "\nwarning: " + warning
+		result.Brain = result.Brain + "\nwarning: " + warning
+	}
 	return action, result, true
+}
+
+func (g *progressGuard) observe(action *actionpkg.ActionEnvelope) string {
+	if g == nil || action == nil {
+		return ""
+	}
+
+	signature, ok := repeatedActionSignature(action)
+	if !ok {
+		g.lastSignature = ""
+		g.repeatCount = 0
+		return ""
+	}
+
+	if signature == g.lastSignature {
+		g.repeatCount++
+	} else {
+		g.lastSignature = signature
+		g.repeatCount = 1
+	}
+
+	if g.repeatCount < 2 {
+		return ""
+	}
+
+	switch action.Action {
+	case "read_file":
+		return fmt.Sprintf(
+			`Stop rereading the same file. You already requested read_file for "%s". Return exactly one JSON object that makes one concrete code edit inside allowed_files, or use explain to state the blocking scope mismatch.`,
+			strings.TrimSpace(action.Path),
+		)
+	case "run_command":
+		return fmt.Sprintf(
+			`Stop rerunning the same command without a change. You already requested run_command "%s". Return exactly one JSON object that makes one concrete code edit inside allowed_files, or use explain to state what specific missing context blocks progress.`,
+			strings.TrimSpace(action.Command),
+		)
+	default:
+		return fmt.Sprintf(
+			`This action repeated without making progress. Return exactly one JSON object for a different next step that makes a concrete implementation change inside allowed_files, or use explain to describe the blocker.`,
+		)
+	}
+}
+
+func repeatedActionSignature(action *actionpkg.ActionEnvelope) (string, bool) {
+	if action == nil {
+		return "", false
+	}
+
+	switch strings.TrimSpace(action.Action) {
+	case "read_file":
+		path := strings.TrimSpace(action.Path)
+		if path == "" {
+			return "", false
+		}
+		return "read_file|" + path, true
+	case "run_command":
+		command := strings.TrimSpace(action.Command)
+		if command == "" {
+			return "", false
+		}
+		return "run_command|" + command, true
+	case "insert_after":
+		path := strings.TrimSpace(action.Path)
+		marker := strings.TrimSpace(action.Marker)
+		content := strings.TrimSpace(action.Content)
+		if path == "" || marker == "" || content == "" {
+			return "", false
+		}
+		return "insert_after|" + path + "|" + marker + "|" + content, true
+	case "replace_block":
+		path := strings.TrimSpace(action.Path)
+		old := strings.TrimSpace(action.Old)
+		newValue := strings.TrimSpace(action.New)
+		if path == "" || old == "" || newValue == "" {
+			return "", false
+		}
+		return "replace_block|" + path + "|" + old + "|" + newValue, true
+	case "write_file":
+		path := strings.TrimSpace(action.Path)
+		content := strings.TrimSpace(action.Content)
+		if path == "" || content == "" {
+			return "", false
+		}
+		return "write_file|" + path + "|" + content, true
+	default:
+		return "", false
+	}
+}
+
+func validateAndNormalizeAction(action *actionpkg.ActionEnvelope) string {
+	path := strings.TrimSpace(action.Path)
+	if isMutatingAction(action.Action) && isInstructionAssetPath(path) {
+		return `This action targets instruction assets and is not allowed. Do not edit task files, task-scripts, snippets, or pack metadata. Return exactly one JSON object that modifies only implementation files.`
+	}
+
+	switch strings.TrimSpace(action.Action) {
+	case "replace_block":
+		if strings.TrimSpace(action.Path) == "" {
+			return `Your replace_block action is incomplete. Return exactly one JSON object with "action":"replace_block", "path", and either "old" (old_block) or "marker" (anchor), plus "new" (new_block).`
+		}
+		if strings.TrimSpace(action.Old) == "" && strings.TrimSpace(action.Marker) == "" {
+			return `Your replace_block action is incomplete. Return exactly one JSON object with "action":"replace_block", "path", and either "old" (old_block) or "marker" (anchor), plus "new" (new_block).`
+		}
+		if strings.TrimSpace(action.New) == "" {
+			return `Your replace_block action is incomplete. Return exactly one JSON object with "action":"replace_block", "path", and either "old" (old_block) or "marker" (anchor), plus "new" (new_block).`
+		}
+		if strings.TrimSpace(action.Old) == "" && strings.TrimSpace(action.Marker) != "" {
+			action.Old = action.Marker
+		}
+	case "insert_after":
+		if strings.TrimSpace(action.Path) == "" || strings.TrimSpace(action.Marker) == "" || strings.TrimSpace(action.Content) == "" {
+			return `Your insert_after action is incomplete. Return exactly one JSON object with "action":"insert_after", "path" (target_file), "marker" (anchor), and "content" (snippet).`
+		}
+	case "create_file":
+		if strings.TrimSpace(action.Path) == "" || strings.TrimSpace(action.Content) == "" {
+			return `Your create_file action is incomplete. Return exactly one JSON object with "action":"create_file", "path" (target_file), and "content".`
+		}
+		action.Action = "write_file"
+	case "update_file":
+		if strings.TrimSpace(action.Path) == "" {
+			return `Your update_file action is incomplete. Return exactly one JSON object with "action":"update_file", "path" (target_file), and either "content" or a patch pair ("old" + "new").`
+		}
+		if strings.TrimSpace(action.Content) != "" {
+			action.Action = "write_file"
+			break
+		}
+		if strings.TrimSpace(action.Old) != "" && strings.TrimSpace(action.New) != "" {
+			action.Action = "replace_block"
+			break
+		}
+		return `Your update_file action is incomplete. Return exactly one JSON object with "action":"update_file", "path" (target_file), and either "content" or a patch pair ("old" + "new").`
+	case "write_file":
+		if strings.TrimSpace(action.Path) == "" || strings.TrimSpace(action.Content) == "" {
+			return `Your write_file action is incomplete. Return exactly one JSON object with "action":"write_file", "path", and "content".`
+		}
+	}
+	return ""
+}
+
+func isMutatingAction(action string) bool {
+	switch strings.TrimSpace(action) {
+	case "replace_block", "insert_after", "write_file", "create_file", "update_file":
+		return true
+	default:
+		return false
+	}
+}
+
+func isInstructionAssetPath(path string) bool {
+	if path == "" {
+		return false
+	}
+	norm := strings.ToLower(filepath.ToSlash(filepath.Clean(path)))
+	if strings.HasPrefix(norm, "docs/tasks/packs/") {
+		if strings.Contains(norm, "/task-scripts/") || strings.Contains(norm, "/snippets/") || strings.Contains(norm, "/inbox/") {
+			return true
+		}
+		if strings.HasSuffix(norm, "/pack_manifest.yaml") || strings.HasSuffix(norm, "/task_plan.md") || strings.HasSuffix(norm, "/readme.md") {
+			return true
+		}
+	}
+	return false
+}
+
+func parseFirstValidJSONAction(raw string) (*actionpkg.ActionEnvelope, string, error) {
+	jsonText, remainder, err := extractFirstJSONObject(raw)
+	if err != nil {
+		return nil, "", err
+	}
+
+	action, err := actionpkg.ValidateSingleJSONAction(jsonText)
+	if err != nil {
+		return nil, "", err
+	}
+
+	warning := ""
+	if _, _, extraErr := extractFirstJSONObject(remainder); extraErr == nil {
+		warning = "ignored extra JSON objects after the first valid action"
+	} else if extraErr != nil && !errors.Is(extraErr, errNoJSONObject) && !errors.Is(extraErr, actionpkg.ErrEmptyResponse) {
+		return nil, "", extraErr
+	}
+
+	return action, warning, nil
+}
+
+func extractFirstJSONObject(raw string) (string, string, error) {
+	cleaned := strings.TrimSpace(raw)
+	if cleaned == "" {
+		return "", "", actionpkg.ErrEmptyResponse
+	}
+
+	var lastErr error
+	for i := 0; i < len(cleaned); i++ {
+		if cleaned[i] != '{' {
+			continue
+		}
+
+		dec := json.NewDecoder(strings.NewReader(cleaned[i:]))
+		dec.UseNumber()
+
+		var rawValue json.RawMessage
+		if err := dec.Decode(&rawValue); err != nil {
+			lastErr = err
+			continue
+		}
+
+		trimmed := bytes.TrimSpace(rawValue)
+		if len(trimmed) == 0 || trimmed[0] != '{' {
+			continue
+		}
+
+		offset := int(dec.InputOffset())
+		return string(trimmed), cleaned[i+offset:], nil
+	}
+
+	if lastErr != nil {
+		return "", "", fmt.Errorf("invalid JSON: %w", lastErr)
+	}
+	return "", "", errNoJSONObject
 }
 
 func handleInvalidModelOutput(
@@ -764,6 +1086,113 @@ func deriveTaskName(taskFile string, task string) string {
 	}
 
 	return "task"
+}
+
+func loadTaskInput(taskFile string, data []byte) (string, string, error) {
+	task := string(data)
+
+	parsedTask, err := taskspkg.ParseTaskMarkdown(taskFile, data)
+	if err != nil {
+		return task, "", nil
+	}
+
+	if len(parsedTask.Scripts) == 0 && len(parsedTask.Snippets) == 0 {
+		return task, "", nil
+	}
+
+	packRoot, ok := findTaskPackRoot(taskFile)
+	if !ok {
+		return task, "", nil
+	}
+
+	pack, err := taskspkg.LoadTaskPack(packRoot)
+	if err != nil {
+		return "", "", err
+	}
+
+	taskPath, err := filepath.Abs(taskFile)
+	if err != nil {
+		return "", "", err
+	}
+
+	var matched *taskspkg.Task
+	for i := range pack.Tasks {
+		candidatePath, candidateErr := filepath.Abs(pack.Tasks[i].Path)
+		if candidateErr != nil {
+			continue
+		}
+		if filepath.Clean(candidatePath) == filepath.Clean(taskPath) {
+			matched = &pack.Tasks[i]
+			break
+		}
+	}
+	if matched == nil {
+		return task, packRoot, nil
+	}
+
+	resolvedTask := *matched
+	if resolvedTask.PackContext != nil {
+		ctxCopy := *resolvedTask.PackContext
+		ctxCopy.AgentMode = taskspkg.AgentModeBoundedMarkdownContract
+		resolvedTask.PackContext = &ctxCopy
+	}
+
+	contract, err := taskspkg.BuildTaskExecutionContract(resolvedTask)
+	if err != nil {
+		return "", "", err
+	}
+	return contract, packRoot, nil
+}
+
+func findTaskPackRoot(taskFile string) (string, bool) {
+	current, err := filepath.Abs(filepath.Dir(taskFile))
+	if err != nil {
+		return "", false
+	}
+
+	for {
+		manifestPath := filepath.Join(current, "PACK_MANIFEST.yaml")
+		planPath := filepath.Join(current, "TASK_PLAN.md")
+
+		if fileExists(manifestPath) && fileExists(planPath) {
+			return current, true
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", false
+		}
+		current = parent
+	}
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func resolvePackReferencePath(packRoot string, actionPath string) (string, bool) {
+	if strings.TrimSpace(packRoot) == "" {
+		return "", false
+	}
+
+	cleaned := filepath.ToSlash(filepath.Clean(strings.TrimSpace(actionPath)))
+	switch {
+	case strings.HasPrefix(cleaned, "task-scripts/"),
+		strings.HasPrefix(cleaned, "snippets/"),
+		strings.HasPrefix(cleaned, "scripts/"):
+		return filepath.ToSlash(filepath.Join(packRoot, filepath.FromSlash(cleaned))), true
+	default:
+		return "", false
+	}
+}
+
+func isMissingFileError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such file or directory")
 }
 
 func previewText(text string, maxChars int) string {
