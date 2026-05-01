@@ -25,6 +25,9 @@ import (
 
 const maxBrainPreviewChars = 1200
 const artifactDir = ".state/agent-artifacts"
+const defaultBrainURL = "http://127.0.0.1:8088"
+const defaultWorkerURL = "http://127.0.0.1:8080"
+const defaultBrainModel = "gemma-4-e2b"
 
 var errNoJSONObject = errors.New("no JSON object found")
 
@@ -127,9 +130,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	brainClient := brain.NewClient("http://127.0.0.1:8088", "gemma-4-e2b")
+	brainURL := getenvDefault("PTOLEMY_BRAIN_URL", defaultBrainURL)
+	workerURL := getenvDefault("PTOLEMY_WORKER_URL", defaultWorkerURL)
+	brainModel := getenvDefault("PTOLEMY_BRAIN_MODEL", defaultBrainModel)
+
+	brainClient := brain.NewClient(brainURL, brainModel)
 	runtime := &agentRuntime{
-		workerClient: worker.NewClient("http://127.0.0.1:8080"),
+		workerClient: worker.NewClient(workerURL),
 		actionStore:  actionpkg.NewStore(baseStore.SQLDB()),
 		logStore:     logspkg.NewStore(baseStore.SQLDB()),
 		splitter:     actionpkg.PlaceholderTaskSplitter{},
@@ -1253,4 +1260,12 @@ func splitterMessage(splitter actionpkg.TaskSplitter) string {
 	}
 
 	return "splitter available"
+}
+
+func getenvDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }
