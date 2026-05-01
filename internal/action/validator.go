@@ -93,6 +93,48 @@ func ValidateSingleJSONAction(raw string) (*ActionEnvelope, error) {
 	return &envelope, nil
 }
 
+func ValidateLeadingJSONAction(raw string) (*ActionEnvelope, error) {
+	cleaned := trimJSONCodeFence(raw)
+	if cleaned == "" {
+		return nil, ErrEmptyResponse
+	}
+
+	trimmed := strings.TrimSpace(cleaned)
+	if strings.HasPrefix(trimmed, "[") {
+		return nil, ErrJSONArray
+	}
+
+	dec := json.NewDecoder(strings.NewReader(trimmed))
+	dec.UseNumber()
+
+	var rawValue json.RawMessage
+	if err := dec.Decode(&rawValue); err != nil {
+		return nil, fmt.Errorf("invalid JSON: %w", err)
+	}
+
+	if strings.TrimSpace(string(rawValue)) == "" {
+		return nil, ErrEmptyResponse
+	}
+
+	var envelope ActionEnvelope
+	if err := json.Unmarshal(rawValue, &envelope); err != nil {
+		return nil, fmt.Errorf("invalid action object: %w", err)
+	}
+
+	envelope.Action = normalizeKind(envelope.Action, envelope.Type)
+	if envelope.Action == "" {
+		return nil, ErrMissingActionType
+	}
+
+	if envelope.Action == "create_task_batch" {
+		if err := validateTaskBatch(&envelope); err != nil {
+			return nil, err
+		}
+	}
+
+	return &envelope, nil
+}
+
 func (t BatchTask) NormalizedType() string {
 	return normalizeKind(t.Action, t.Type)
 }

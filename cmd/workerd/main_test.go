@@ -8,7 +8,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/httpapi"
-	"github.com/luannn010/ptolemy/internal/logs"
+	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
@@ -27,7 +27,7 @@ func TestWorkerdBootRouter(t *testing.T) {
 	sessionStore := session.NewStore(baseStore)
 	commandStore := command.NewStore(baseStore)
 	actionStore := action.NewStore(baseStore.SQLDB())
-	logStore := logs.NewStore(baseStore.SQLDB())
+	logStore := logging.NewStore(baseStore.SQLDB())
 	runner := terminal.NewTmuxRunner()
 
 	approvalStore := approval.NewStore(baseStore.SQLDB())

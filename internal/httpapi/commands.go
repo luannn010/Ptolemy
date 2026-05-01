@@ -10,7 +10,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/approval"
 	"github.com/luannn010/ptolemy/internal/command"
-	"github.com/luannn010/ptolemy/internal/logs"
+	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/memory"
 	"github.com/luannn010/ptolemy/internal/policy"
 	"github.com/luannn010/ptolemy/internal/session"
@@ -24,7 +24,7 @@ type CommandHandler struct {
 	sessionStore  *session.Store
 	commandStore  *command.Store
 	actionStore   *action.Store
-	logStore      *logs.Store
+	logStore      *logging.Store
 	approvalStore *approval.Store
 	runner        *terminal.TmuxRunner
 }
@@ -33,7 +33,7 @@ func NewCommandHandler(
 	sessionStore *session.Store,
 	commandStore *command.Store,
 	actionStore *action.Store,
-	logStore *logs.Store,
+	logStore *logging.Store,
 	approvalStore *approval.Store,
 	runner *terminal.TmuxRunner,
 ) *CommandHandler {
@@ -111,7 +111,7 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 	decision := policy.CheckCommand(req.Command)
 
 	if decision.Mode == policy.ModeDeny {
-		_, _ = h.logStore.Create(r.Context(), logs.Log{
+		_, _ = h.logStore.Create(r.Context(), logging.Log{
 			SessionID: sessionID,
 			Level:     "warn",
 			Message:   "command denied by policy",
@@ -190,7 +190,7 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = h.logStore.Create(r.Context(), logs.Log{
+	_, _ = h.logStore.Create(r.Context(), logging.Log{
 		SessionID: sessionID,
 		ActionID:  act.ID,
 		Level:     "info",

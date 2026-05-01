@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,7 +16,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/brain"
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/inspect"
-	logspkg "github.com/luannn010/ptolemy/internal/logs"
+	logpkg "github.com/luannn010/ptolemy/internal/logging"
 	storepkg "github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/worker"
 )
@@ -38,7 +39,7 @@ type workerClient interface {
 type agentRuntime struct {
 	workerClient workerClient
 	actionStore  *actionpkg.Store
-	logStore     *logspkg.Store
+	logStore     *logpkg.Store
 	splitter     actionpkg.TaskSplitter
 }
 
@@ -65,6 +66,7 @@ func main() {
 	}
 
 	taskName := deriveTaskName(*taskFile, task)
+	defaultTarget := extractSingleAllowedFile(task)
 
 	workspace, err := os.Getwd()
 	if err != nil {
@@ -105,7 +107,7 @@ func main() {
 	runtime := &agentRuntime{
 		workerClient: worker.NewClient("http://127.0.0.1:8080"),
 		actionStore:  actionpkg.NewStore(baseStore.SQLDB()),
-		logStore:     logspkg.NewStore(baseStore.SQLDB()),
+		logStore:     logpkg.NewStore(baseStore.SQLDB()),
 		splitter:     actionpkg.PlaceholderTaskSplitter{},
 	}
 
@@ -188,7 +190,7 @@ Observations so far:
 			os.Exit(1)
 		}
 
-		action, result, ok := processBrainReply(ctx, runtime, session.ID, workspace, taskName, step, reply, *allowScripts)
+		action, result, ok := processBrainReply(ctx, runtime, session.ID, workspace, taskName, step, reply, *allowScripts, defaultTarget)
 		if !ok {
 			fmt.Println(result.Display)
 			observations = append(observations, result.Brain)
@@ -215,6 +217,7 @@ func executeAction(
 	runtime *agentRuntime,
 	sessionID string,
 	workspace string,
+	defaultTarget string,
 	taskName string,
 	step int,
 	action *actionpkg.ActionEnvelope,
@@ -273,6 +276,10 @@ func executeAction(
 
 	case "read_file":
 		if strings.TrimSpace(action.Path) == "" {
+			action.Path = defaultTarget
+		}
+		action.Path = resolveWorkspacePath(workspace, normalizeWorkspaceRelativePath(workspace, action.Path))
+		if strings.TrimSpace(action.Path) == "" {
 			return both("ERROR: empty path")
 		}
 
@@ -304,6 +311,10 @@ func executeAction(
 		return ActionResult{Display: display, Brain: brain}
 
 	case "write_file":
+		if strings.TrimSpace(action.Path) == "" {
+			action.Path = defaultTarget
+		}
+		action.Path = resolveWorkspacePath(workspace, normalizeWorkspaceRelativePath(workspace, action.Path))
 		if strings.TrimSpace(action.Path) == "" {
 			return both("ERROR: empty path")
 		}
@@ -341,6 +352,10 @@ func executeAction(
 		return ActionResult{Display: msg, Brain: msg}
 
 	case "insert_after":
+		if strings.TrimSpace(action.Path) == "" {
+			action.Path = defaultTarget
+		}
+		action.Path = resolveWorkspacePath(workspace, normalizeWorkspaceRelativePath(workspace, action.Path))
 		if strings.TrimSpace(action.Path) == "" {
 			return both("ERROR: empty path")
 		}
@@ -414,6 +429,10 @@ func executeAction(
 
 	case "replace_block":
 		if strings.TrimSpace(action.Path) == "" {
+			action.Path = defaultTarget
+		}
+		action.Path = resolveWorkspacePath(workspace, normalizeWorkspaceRelativePath(workspace, action.Path))
+		if strings.TrimSpace(action.Path) == "" {
 			return both("ERROR: empty path")
 		}
 
@@ -484,13 +503,31 @@ func processBrainReply(
 	step int,
 	reply string,
 	allowScripts bool,
+	defaultTarget string,
 ) (*actionpkg.ActionEnvelope, ActionResult, bool) {
 	action, err := actionpkg.ValidateSingleJSONAction(reply)
 	if err != nil {
+		if strings.Contains(err.Error(), actionpkg.ErrMultipleObjects.Error()) {
+			firstAction, firstErr := actionpkg.ValidateLeadingJSONAction(reply)
+			if firstErr == nil {
+				metadata := mustMarshalJSON(map[string]any{
+					"recovered_from": "multiple_json_objects",
+				})
+				_, _ = runtime.logStore.Create(ctx, logpkg.Log{
+					SessionID: sessionID,
+					Level:     "warn",
+					Message:   "recovered first JSON action from multi-object model output",
+					Metadata:  metadata,
+				})
+
+				result := executeAction(ctx, runtime, sessionID, workspace, defaultTarget, taskName, step, firstAction, allowScripts)
+				return firstAction, result, true
+			}
+		}
 		return nil, handleInvalidModelOutput(ctx, runtime, sessionID, taskName, step, reply, err), false
 	}
 
-	result := executeAction(ctx, runtime, sessionID, workspace, taskName, step, action, allowScripts)
+	result := executeAction(ctx, runtime, sessionID, workspace, defaultTarget, taskName, step, action, allowScripts)
 	return action, result, true
 }
 
@@ -530,7 +567,7 @@ func handleInvalidModelOutput(
 		Metadata:  mustMarshalJSON(metadata),
 	})
 	if createErr == nil {
-		_, _ = runtime.logStore.Create(ctx, logspkg.Log{
+		_, _ = runtime.logStore.Create(ctx, logpkg.Log{
 			SessionID: sessionID,
 			ActionID:  recordedAction.ID,
 			Level:     "warn",
@@ -585,7 +622,7 @@ func queueTaskBatch(ctx context.Context, runtime *agentRuntime, sessionID string
 		}
 	}
 
-	_, _ = runtime.logStore.Create(ctx, logspkg.Log{
+		_, _ = runtime.logStore.Create(ctx, logpkg.Log{
 		SessionID: sessionID,
 		ActionID:  parent.ID,
 		Level:     "info",
@@ -764,6 +801,154 @@ func deriveTaskName(taskFile string, task string) string {
 	}
 
 	return "task"
+}
+
+func extractSingleAllowedFile(task string) string {
+	lines := strings.Split(task, "\n")
+	inAllowedFiles := false
+	var allowed []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "allowed_files:" {
+			inAllowedFiles = true
+			continue
+		}
+
+		if !inAllowedFiles {
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "- ") {
+			allowed = append(allowed, strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+			continue
+		}
+
+		if trimmed == "" {
+			continue
+		}
+
+		if !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "\t") {
+			break
+		}
+	}
+
+	if len(allowed) == 1 {
+		return allowed[0]
+	}
+
+	return ""
+}
+
+func normalizeWorkspaceRelativePath(workspace string, path string) string {
+	cleaned := strings.TrimSpace(path)
+	cleaned = strings.TrimPrefix(cleaned, "./")
+	cleaned = strings.TrimPrefix(cleaned, ".\\")
+
+	base := filepath.Base(workspace)
+	for _, prefix := range []string{
+		base + "/",
+		base + "\\",
+	} {
+		if strings.HasPrefix(cleaned, prefix) {
+			cleaned = strings.TrimPrefix(cleaned, prefix)
+			break
+		}
+	}
+
+	return cleaned
+}
+
+func resolveWorkspacePath(workspace string, relPath string) string {
+	cleaned := strings.TrimSpace(relPath)
+	if cleaned == "" {
+		return cleaned
+	}
+
+	candidates := []string{
+		cleaned,
+		strings.TrimPrefix(cleaned, "/"),
+		strings.TrimPrefix(cleaned, ".ptolemy/../"),
+	}
+	if !strings.HasPrefix(cleaned, ".ptolemy/") {
+		candidates = append(candidates, path.Join(".ptolemy", cleaned))
+	}
+
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if fileExists(filepath.Join(workspace, filepath.FromSlash(candidate))) {
+			return filepath.ToSlash(candidate)
+		}
+	}
+
+	base := path.Base(cleaned)
+	if base == "." || base == "/" || base == "" {
+		return cleaned
+	}
+
+	matches := findWorkspaceBasenameMatches(workspace, base)
+	if len(matches) == 1 {
+		return filepath.ToSlash(matches[0])
+	}
+
+	return cleaned
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func findWorkspaceBasenameMatches(workspace string, base string) []string {
+	var matches []string
+	skipDirs := map[string]bool{
+		".git":              true,
+		".state":            true,
+		".ptolemy-worktrees": true,
+		"bin":               true,
+		"build":             true,
+		"coverage":          true,
+		"dist":              true,
+		"logs":              true,
+		"node_modules":      true,
+		"state":             true,
+		"tmp":               true,
+		"vendor":            true,
+	}
+
+	_ = filepath.WalkDir(workspace, func(current string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if d.IsDir() && skipDirs[d.Name()] {
+			return filepath.SkipDir
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		if d.Name() != base {
+			return nil
+		}
+
+		rel, relErr := filepath.Rel(workspace, current)
+		if relErr != nil {
+			return nil
+		}
+
+		matches = append(matches, rel)
+		if len(matches) > 1 {
+			return filepath.SkipAll
+		}
+		return nil
+	})
+
+	return matches
 }
 
 func previewText(text string, maxChars int) string {
