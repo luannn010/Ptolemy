@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 
 	clientexec "github.com/luannn010/ptolemy/internal/client/exec"
@@ -12,6 +13,7 @@ import (
 	clientinit "github.com/luannn010/ptolemy/internal/client/init"
 	clientscan "github.com/luannn010/ptolemy/internal/client/scan"
 	clientskillsync "github.com/luannn010/ptolemy/internal/client/skillsync"
+	"github.com/luannn010/ptolemy/internal/shellcmd"
 )
 
 func main() {
@@ -193,7 +195,7 @@ func runExec(args []string) error {
 	fs := flag.NewFlagSet("exec", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	workspace := fs.String("workspace", ".", "workspace directory")
-	shell := fs.String("shell", "/bin/bash", "shell to execute command")
+	shell := fs.String("shell", shellcmd.DefaultProgram(runtime.GOOS), "shell to execute command")
 	timeoutSeconds := fs.Int("timeout-seconds", 120, "command timeout in seconds")
 	command := fs.String("command", "", "shell command to run")
 	if err := fs.Parse(args); err != nil {

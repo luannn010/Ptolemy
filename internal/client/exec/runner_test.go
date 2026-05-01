@@ -2,19 +2,27 @@ package clientexec
 
 import (
 	"errors"
+	"runtime"
 	"testing"
+
+	"github.com/luannn010/ptolemy/internal/shellcmd"
 )
 
 func TestRunCapturesStdoutStderrAndExitCode(t *testing.T) {
 	runner, err := New(Options{
 		Workspace: t.TempDir(),
-		Shell:     "/bin/bash",
+		Shell:     shellcmd.DefaultProgram(runtime.GOOS),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := runner.Run(`echo "hello"; echo "oops" >&2; exit 3`)
+	command := `echo "hello"; echo "oops" >&2; exit 3`
+	if runtime.GOOS == "windows" {
+		command = `Write-Output "hello"; [Console]::Error.WriteLine("oops"); exit 3`
+	}
+
+	result, err := runner.Run(command)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,14 +43,19 @@ func TestRunCapturesStdoutStderrAndExitCode(t *testing.T) {
 func TestRunTimeout(t *testing.T) {
 	runner, err := New(Options{
 		Workspace:      t.TempDir(),
-		Shell:          "/bin/bash",
+		Shell:          shellcmd.DefaultProgram(runtime.GOOS),
 		TimeoutSeconds: 1,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	result, err := runner.Run(`sleep 2`)
+	command := `sleep 2`
+	if runtime.GOOS == "windows" {
+		command = `Start-Sleep -Seconds 2`
+	}
+
+	result, err := runner.Run(command)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +67,7 @@ func TestRunTimeout(t *testing.T) {
 func TestRunPolicyHook(t *testing.T) {
 	runner, err := New(Options{
 		Workspace: t.TempDir(),
-		Shell:     "/bin/bash",
+		Shell:     shellcmd.DefaultProgram(runtime.GOOS),
 		Policy: func(command string) error {
 			return errors.New("blocked")
 		},

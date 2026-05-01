@@ -1,6 +1,11 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"runtime"
+
+	"github.com/luannn010/ptolemy/internal/shellcmd"
+)
 
 type Config struct {
 	ServerURL      string
@@ -28,7 +33,7 @@ func Default(projectName string, serverURL string) Config {
 		SkillsCache:    ".ptolemy/cache/skills",
 		AllowDelete:    false,
 		AllowShell:     true,
-		Shell:          "/bin/bash",
+		Shell:          shellcmd.DefaultProgram(runtime.GOOS),
 		TimeoutSeconds: 120,
 	}
 }

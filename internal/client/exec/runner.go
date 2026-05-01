@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"time"
 
 	clientworkspace "github.com/luannn010/ptolemy/internal/client/workspace"
+	"github.com/luannn010/ptolemy/internal/shellcmd"
 )
 
 var ErrDeniedByPolicy = errors.New("command denied by policy")
@@ -46,7 +48,7 @@ func New(opts Options) (Runner, error) {
 
 	shell := opts.Shell
 	if shell == "" {
-		shell = "/bin/bash"
+		shell = shellcmd.DefaultProgram(runtime.GOOS)
 	}
 
 	timeoutSeconds := opts.TimeoutSeconds
@@ -75,7 +77,7 @@ func (r Runner) Run(command string) (Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(r.timeoutSeconds)*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, r.shell, "-lc", command)
+	cmd := shellcmd.CommandForProgram(ctx, runtime.GOOS, r.shell, command)
 	cmd.Dir = r.guard.Root()
 
 	var stdout bytes.Buffer
