@@ -4,8 +4,6 @@ bin/
 # database
 state/*.db
 
-# logs
-
 
 # OS
 .DS_Store
@@ -14,7 +12,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-
 .state/
 /docs/tasks/*
 !/docs/tasks/packs/
