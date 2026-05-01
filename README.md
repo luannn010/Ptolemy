@@ -9,6 +9,7 @@ The project is intentionally local-first: Codex or another planner decides what 
 - Runs a local HTTP worker daemon (`workerd`).
 - Creates persistent workspace-bound sessions.
 - Executes commands through tmux-backed runners.
+- Chooses an OS-native shell for generic command execution: PowerShell on Windows and Bash on Unix-like systems.
 - Provides file read, write, list, search, and basic patch operations.
 - Exposes Git status, diff, log, checkout, branch, commit, and push helpers.
 - Creates isolated Git worktrees for safer parallel task work.
@@ -57,6 +58,7 @@ cmd/
 internal/
   action/ approval/ logs/ store/   SQLite execution memory
   command/ terminal/ executor/     command execution path
+  shellcmd/                        OS-aware shell selection helpers
   fileops/ navigator/ memory/      workspace and context tools
   gitops/ worktree/                Git and isolation helpers
   httpapi/                         HTTP routes
