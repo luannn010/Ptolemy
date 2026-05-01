@@ -11,6 +11,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/executor"
 	"github.com/luannn010/ptolemy/internal/logs"
 	"github.com/luannn010/ptolemy/internal/session"
+	"github.com/luannn010/ptolemy/internal/skills"
 	"github.com/luannn010/ptolemy/internal/terminal"
 	"github.com/rs/zerolog/log"
 )
@@ -28,6 +29,7 @@ func NewRouter(
 	logStore *logs.Store,
 	approvalStore *approval.Store,
 	runner *terminal.TmuxRunner,
+	skillRegistry *skills.Registry,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -94,6 +96,12 @@ func NewRouter(
 
 	tasksHandler := NewTasksHandler()
 	r.Post("/tasks/run-inbox", tasksHandler.RunInbox)
+
+	bootstrapHandler := NewBootstrapHandler()
+	r.Post("/bootstrap", bootstrapHandler.Handle)
+
+	skillsHandler := NewSkillsHandler(skillRegistry)
+	r.Mount("/skills", skillsHandler.Routes())
 
 	return r
 }

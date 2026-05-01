@@ -1,13 +1,16 @@
 package tasks
 
+import (
+	"path/filepath"
+	"strings"
+)
+
 func Conflicts(a Task, b Task) bool {
-	set := map[string]struct{}{}
-	for _, f := range a.AllowedFiles {
-		set[f] = struct{}{}
-	}
-	for _, f := range b.AllowedFiles {
-		if _, ok := set[f]; ok {
-			return true
+	for _, left := range a.AllowedFiles {
+		for _, right := range b.AllowedFiles {
+			if allowedPathsOverlap(left, right) {
+				return true
+			}
 		}
 	}
 	return false
@@ -32,4 +35,26 @@ func PickNonConflictingBatch(tasks []Task, max int) []Task {
 		}
 	}
 	return out
+}
+
+func allowedPathsOverlap(left string, right string) bool {
+	leftNorm, leftIsDir := normalizeAllowedPath(left)
+	rightNorm, rightIsDir := normalizeAllowedPath(right)
+
+	switch {
+	case leftIsDir && rightIsDir:
+		return leftNorm == rightNorm || strings.HasPrefix(leftNorm, rightNorm+"/") || strings.HasPrefix(rightNorm, leftNorm+"/")
+	case leftIsDir:
+		return rightNorm == leftNorm || strings.HasPrefix(rightNorm, leftNorm+"/")
+	case rightIsDir:
+		return leftNorm == rightNorm || strings.HasPrefix(leftNorm, rightNorm+"/")
+	default:
+		return leftNorm == rightNorm
+	}
+}
+
+func normalizeAllowedPath(path string) (string, bool) {
+	trimmed := strings.TrimSpace(path)
+	isDir := strings.HasSuffix(trimmed, "/") || strings.HasSuffix(trimmed, "\\")
+	return filepath.ToSlash(filepath.Clean(trimmed)), isDir
 }

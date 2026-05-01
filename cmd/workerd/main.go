@@ -16,6 +16,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/logs"
 	"github.com/luannn010/ptolemy/internal/session"
+	"github.com/luannn010/ptolemy/internal/skills"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
 
@@ -46,6 +47,14 @@ func main() {
 	actionStore := action.NewStore(baseStore.SQLDB())
 	logStore := logs.NewStore(baseStore.SQLDB())
 	approvalStore := approval.NewStore(baseStore.SQLDB())
+	workingDir, err := os.Getwd()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to resolve working directory")
+	}
+	skillRegistry, err := skills.NewRegistry(workingDir, cfg.SkillDir)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create skill registry")
+	}
 
 	runner := terminal.NewTmuxRunner()
 
@@ -56,6 +65,7 @@ func main() {
 		logStore,
 		approvalStore,
 		runner,
+		skillRegistry,
 	)
 
 	server := &http.Server{
@@ -71,6 +81,7 @@ func main() {
 		Str("http_port", cfg.HTTPPort).
 		Str("state_dir", cfg.StateDir).
 		Str("db_path", cfg.DBPath).
+		Str("skill_dir", cfg.SkillDir).
 		Msg("starting workerd")
 
 	go func() {

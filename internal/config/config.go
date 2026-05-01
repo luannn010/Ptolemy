@@ -13,6 +13,7 @@ type Config struct {
 	LogLevel string
 	StateDir string
 	DBPath   string
+	SkillDir string
 }
 
 func Load() (Config, error) {
@@ -24,6 +25,7 @@ func Load() (Config, error) {
 		LogLevel: getEnv("LOG_LEVEL", "debug"),
 		StateDir: getEnv("STATE_DIR", "./state"),
 		DBPath:   getEnv("DB_PATH", "./state/ptolemy.db"),
+		SkillDir: getEnv("SKILL_DIR", ""),
 	}
 
 	if cfg.HTTPPort == "" {

@@ -62,6 +62,7 @@ type SchedulerResult struct {
 	ValidationErrors    []ValidationError
 	TaskLogPaths        map[string]string
 	PreparedBranches    map[string]string
+	ArchivedPackPath    string
 	SummaryPath         string
 	IssueDraftPath      string
 	PRDraftPath         string

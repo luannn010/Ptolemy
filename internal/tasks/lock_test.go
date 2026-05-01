@@ -18,6 +18,22 @@ func TestConflictsDifferentFiles(t *testing.T) {
 	}
 }
 
+func TestConflictsDirectoryContainsFile(t *testing.T) {
+	a := Task{AllowedFiles: []string{"internal/"}}
+	b := Task{AllowedFiles: []string{"internal/tasks/validator.go"}}
+	if !Conflicts(a, b) {
+		t.Fatal("expected directory/file conflict")
+	}
+}
+
+func TestConflictsNestedDirectories(t *testing.T) {
+	a := Task{AllowedFiles: []string{"internal/"}}
+	b := Task{AllowedFiles: []string{"internal/tasks/"}}
+	if !Conflicts(a, b) {
+		t.Fatal("expected nested directory conflict")
+	}
+}
+
 func TestPickNonConflictingBatch(t *testing.T) {
 	tasks := []Task{
 		{ID: "a", AllowedFiles: []string{"x.go"}},

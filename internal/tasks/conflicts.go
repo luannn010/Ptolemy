@@ -13,13 +13,30 @@ type FileConflict struct {
 func FindAllowedFileConflicts(tasks []Task) []FileConflict {
 	filesToTasks := map[string]map[string]struct{}{}
 
-	for _, task := range tasks {
-		for _, path := range task.AllowedFiles {
-			cleaned := cleanConflictPath(path)
-			if _, ok := filesToTasks[cleaned]; !ok {
-				filesToTasks[cleaned] = map[string]struct{}{}
+	for i, left := range tasks {
+		for _, leftPath := range left.AllowedFiles {
+			leftKey := cleanConflictPath(leftPath)
+			if _, ok := filesToTasks[leftKey]; !ok {
+				filesToTasks[leftKey] = map[string]struct{}{}
 			}
-			filesToTasks[cleaned][task.ID] = struct{}{}
+			filesToTasks[leftKey][left.ID] = struct{}{}
+
+			for j := i + 1; j < len(tasks); j++ {
+				right := tasks[j]
+				for _, rightPath := range right.AllowedFiles {
+					if !allowedPathsOverlap(leftPath, rightPath) {
+						continue
+					}
+
+					rightKey := cleanConflictPath(rightPath)
+					if _, ok := filesToTasks[rightKey]; !ok {
+						filesToTasks[rightKey] = map[string]struct{}{}
+					}
+					filesToTasks[leftKey][right.ID] = struct{}{}
+					filesToTasks[rightKey][left.ID] = struct{}{}
+					filesToTasks[rightKey][right.ID] = struct{}{}
+				}
+			}
 		}
 	}
 
@@ -59,5 +76,9 @@ func CanRunTogether(tasks []Task) bool {
 }
 
 func cleanConflictPath(path string) string {
-	return filepath.ToSlash(filepath.Clean(path))
+	cleaned, isDir := normalizeAllowedPath(path)
+	if isDir {
+		return cleaned + "/"
+	}
+	return cleaned
 }

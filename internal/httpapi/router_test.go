@@ -13,6 +13,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/logs"
 	"github.com/luannn010/ptolemy/internal/session"
+	"github.com/luannn010/ptolemy/internal/skills"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
 )
@@ -41,8 +42,20 @@ func newTestRouter(t *testing.T) http.Handler {
 	logStore := logs.NewStore(baseStore.SQLDB())
 	approvalStore := approval.NewStore(baseStore.SQLDB())
 	runner := terminal.NewTmuxRunner()
+	baseDir := t.TempDir()
+	skillDir := filepath.Join(baseDir, ".ptolemy", "server", "skills")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("failed to create skill dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "example.md"), []byte("# Example Skill\n"), 0o644); err != nil {
+		t.Fatalf("failed to write skill fixture: %v", err)
+	}
+	skillRegistry, err := skills.NewRegistry(baseDir, skillDir)
+	if err != nil {
+		t.Fatalf("failed to create skill registry: %v", err)
+	}
 
-	return NewRouter(sessionStore, commandStore, actionStore, logStore, approvalStore, runner)
+	return NewRouter(sessionStore, commandStore, actionStore, logStore, approvalStore, runner, skillRegistry)
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -59,6 +72,65 @@ func TestHealthEndpoint(t *testing.T) {
 
 	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
 		t.Fatalf("expected health ok response, got %s", rec.Body.String())
+	}
+}
+
+func TestSkillsEndpoints(t *testing.T) {
+	router := newTestRouter(t)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/skills", nil)
+	listRec := httptest.NewRecorder()
+	router.ServeHTTP(listRec, listReq)
+
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected list status 200, got %d body=%s", listRec.Code, listRec.Body.String())
+	}
+	if !strings.Contains(listRec.Body.String(), `"id":"example"`) {
+		t.Fatalf("expected example skill in list, got %s", listRec.Body.String())
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/skills/example", nil)
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, getReq)
+
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected get status 200, got %d body=%s", getRec.Code, getRec.Body.String())
+	}
+	if !strings.Contains(getRec.Body.String(), "# Example Skill") {
+		t.Fatalf("expected skill content, got %s", getRec.Body.String())
+	}
+}
+
+func TestSkillsEndpointReturnsNotFound(t *testing.T) {
+	router := newTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/skills/missing", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBootstrapEndpoint(t *testing.T) {
+	router := newTestRouter(t)
+
+	body := strings.NewReader(`{"server_url":"https://ptolemy.example","project_name":"demo-project"}`)
+	req := httptest.NewRequest(http.MethodPost, "/bootstrap", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"root_path":".ptolemy"`) {
+		t.Fatalf("expected root path in bootstrap payload, got %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `server_url: \"https://ptolemy.example\"`) {
+		t.Fatalf("expected server url in config template, got %s", rec.Body.String())
 	}
 }
 

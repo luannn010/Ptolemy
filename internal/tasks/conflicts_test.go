@@ -49,6 +49,16 @@ func TestFindAllowedFileConflictsCleansPaths(t *testing.T) {
 	}
 }
 
+func TestFindAllowedFileConflictsDirectoryOverlapsFile(t *testing.T) {
+	conflicts := FindAllowedFileConflicts([]Task{
+		{ID: "a", AllowedFiles: []string{"internal/"}},
+		{ID: "b", AllowedFiles: []string{"internal/x.go"}},
+	})
+	if len(conflicts) != 2 {
+		t.Fatalf("unexpected conflicts: %+v", conflicts)
+	}
+}
+
 func TestCanRunTogetherFalseWhenConflictExists(t *testing.T) {
 	if CanRunTogether([]Task{
 		{ID: "a", AllowedFiles: []string{"x.go"}},

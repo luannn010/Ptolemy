@@ -3,9 +3,13 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/luannn010/ptolemy/internal/tasks"
 )
 
 func TestRunPlanCommandPrintsExecutionPlan(t *testing.T) {
@@ -54,10 +58,28 @@ func TestRunPlanCommandPrintsPackExecutionPlan(t *testing.T) {
 }
 
 func TestRunSchedulerCommandPrintsCompletedPackTasks(t *testing.T) {
+	previousWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := createCLIPackWorkspace(t)
+	if err := os.Chdir(workspace); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previousWD); err != nil {
+			t.Fatalf("restore working directory: %v", err)
+		}
+	})
+
+	tasksTestNow := func() time.Time { return time.Date(2026, time.April, 30, 9, 0, 0, 0, time.UTC) }
+	tasks.PackArchiveNowForTest(tasksTestNow)
+	t.Cleanup(func() { tasks.PackArchiveNowForTest(time.Now) })
+
 	root := createPackFixture(t)
 
 	var out bytes.Buffer
-	if err := runCLI([]string{"run", "--pack", root, "--workspace", "."}, &out); err != nil {
+	if err := runCLI([]string{"run", "--pack", root, "--workspace", workspace}, &out); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -65,6 +87,57 @@ func TestRunSchedulerCommandPrintsCompletedPackTasks(t *testing.T) {
 	if !strings.Contains(output, "Planned: task-a") || !strings.Contains(output, "Completed: task-b") {
 		t.Fatalf("unexpected output: %s", output)
 	}
+	if !strings.Contains(output, filepath.Join(workspace, "docs", "tasks", "packs", "done", "300426")) {
+		t.Fatalf("unexpected output: %s", output)
+	}
+}
+
+func createCLIPackWorkspace(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	fakeBin := t.TempDir()
+	ghLogPath := filepath.Join(fakeBin, "gh.log")
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
+		}
+	}
+
+	run("init")
+	run("config", "user.email", "cli-pack@example.com")
+	run("config", "user.name", "CLI Pack Test")
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("workspace\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "README.md")
+	run("commit", "-m", "initial")
+	run("branch", "-M", "main")
+
+	cmd := exec.Command("git", "init", "--bare", remote)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare failed: %v\n%s", err, string(out))
+	}
+	run("remote", "add", "origin", remote)
+	run("push", "-u", "origin", "main")
+
+	ghScript := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" >> \"" + ghLogPath + "\"\n" +
+		"printf 'https://example.com/pr/123\\n'\n"
+	if err := os.WriteFile(filepath.Join(fakeBin, "gh"), []byte(ghScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	originalPath := os.Getenv("PATH")
+	t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+originalPath)
+
+	return dir
 }
 
 func TestRunPlanCommandRejectsInboxAndPackTogether(t *testing.T) {
