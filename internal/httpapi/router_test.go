@@ -11,7 +11,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/approval"
 	"github.com/luannn010/ptolemy/internal/command"
-	"github.com/luannn010/ptolemy/internal/logs"
+	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
@@ -38,7 +38,7 @@ func newTestRouter(t *testing.T) http.Handler {
 	sessionStore := session.NewStore(baseStore)
 	commandStore := command.NewStore(baseStore)
 	actionStore := action.NewStore(baseStore.SQLDB())
-	logStore := logs.NewStore(baseStore.SQLDB())
+	logStore := logging.NewStore(baseStore.SQLDB())
 	approvalStore := approval.NewStore(baseStore.SQLDB())
 	runner := terminal.NewTmuxRunner()
 
@@ -204,6 +204,23 @@ func TestNavigatorEndpointsAndFileReadTracking(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(workspace, ".ptolemy", "index", "file-tree.json")); err != nil {
 		t.Fatalf("expected file-tree index: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, ".ptolemy", "kb", "FILE_INDEX.json")); err != nil {
+		t.Fatalf("expected KB file index: %v", err)
+	}
+
+	kbReadBody := strings.NewReader(`{"session_id":"` + sessionID + `"}`)
+	kbReadReq := httptest.NewRequest(http.MethodPost, "/kb/read", kbReadBody)
+	kbReadReq.Header.Set("Content-Type", "application/json")
+	kbReadRec := httptest.NewRecorder()
+
+	router.ServeHTTP(kbReadRec, kbReadReq)
+
+	if kbReadRec.Code != http.StatusOK {
+		t.Fatalf("expected kb read status 200, got %d body=%s", kbReadRec.Code, kbReadRec.Body.String())
+	}
+	if !strings.Contains(kbReadRec.Body.String(), ".ptolemy/kb/PROJECT_MAP.md") {
+		t.Fatalf("expected kb read response to include project map, got %s", kbReadRec.Body.String())
 	}
 
 	taskBody := strings.NewReader(`{

@@ -1,0 +1,39 @@
+name: <pack-name>
+date: <ddmmyy>
+type: feature
+target_branch: main
+
+pack_branch: feature/<ddmmyy>-<pack-name>
+task_branch_pattern: feature/<ddmmyy>-<pack-name>/task-<number>
+
+tasks:
+  - id: "01"
+    file: inbox/01-discover-context.md
+    required: true
+  - id: "02"
+    file: inbox/02-implement-core.md
+    required: true
+  - id: "03"
+    file: inbox/03-add-validation.md
+    required: true
+  - id: "04"
+    file: inbox/04-refactor-cleanup.md
+    required: false
+  - id: "05"
+    file: inbox/05-update-docs.md
+    required: conditional
+  - id: "06"
+    file: inbox/06-add-follow-up-tests.md
+    required: false
+  - id: "99"
+    file: inbox/99-finalize-pack.md
+    required: true
+
+validation:
+  default_command: go test ./...
+  prefer_narrow_validation: true
+
+pull_request:
+  create_when_complete: true
+  source: feature/<ddmmyy>-<pack-name>
+  target: main
