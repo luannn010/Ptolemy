@@ -1,5 +1,3 @@
-# Ptolemy
-
 Ptolemy is a codebase navigator, not a whole-codebase reader.
 
 When available, use the `ptolemy-workflows` Codex skill to select the right workflow from
@@ -19,9 +17,11 @@ Update memory only after confirmed change.
 Default workflow:
 
 1. Read this file.
-2. Read `.ptolemy/context/project-map.md`.
-3. Search by keyword or symbol.
-4. Read only top relevant files.
-5. Make small changes.
-6. Run targeted tests.
-7. Save session notes.
+2. Read `.ptolemy/kb/PROJECT_MAP.md`.
+3. Use `.ptolemy/kb/FILE_INDEX.json` and `.ptolemy/kb/SYMBOL_INDEX.json` to choose likely files.
+4. Search by keyword or symbol only after KB triage.
+5. Read only top relevant files.
+6. Make small changes.
+7. Run targeted tests.
+8. Save session notes.
+9. Update the KB only after confirmed useful changes.

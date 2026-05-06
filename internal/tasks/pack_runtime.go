@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/luannn010/ptolemy/internal/gitops"
+	"github.com/luannn010/ptolemy/internal/navigator"
 	"github.com/luannn010/ptolemy/internal/worktree"
 )
 
@@ -131,6 +133,39 @@ func runTaskPackList(ctx context.Context, pack TaskPack, workspace string) Sched
 			Reason: mergeErr.Error(),
 		})
 		result.IssueDraftPath, _ = writePackPublishFailureIssueDraft(pack, artifactDir, "integration merge", mergeLogPath)
+		result.SummaryPath, _ = writePackSummary(pack, artifactDir, result)
+		return result
+	}
+
+	changedFiles, diffErr := packKBChangedFiles(ctx, integrationWorktree)
+	if diffErr != nil {
+		result.FailedTaskID = "<kb-update>"
+		result.ValidationErrors = append(result.ValidationErrors, ValidationError{
+			TaskID: "<kb-update>",
+			Field:  "kb",
+			Reason: diffErr.Error(),
+		})
+		result.SummaryPath, _ = writePackSummary(pack, artifactDir, result)
+		return result
+	}
+	commitSHA, shaErr := gitOutputLines(ctx, integrationWorktree, "git", "rev-parse", "HEAD")
+	if shaErr != nil {
+		result.FailedTaskID = "<kb-update>"
+		result.ValidationErrors = append(result.ValidationErrors, ValidationError{
+			TaskID: "<kb-update>",
+			Field:  "kb",
+			Reason: shaErr.Error(),
+		})
+		result.SummaryPath, _ = writePackSummary(pack, artifactDir, result)
+		return result
+	}
+	if _, err := navigator.UpdateKnowledgeBase(integrationWorktree, changedFiles, pack.Manifest.PackID, result.CompletedTaskIDs, firstLine(commitSHA)); err != nil {
+		result.FailedTaskID = "<kb-update>"
+		result.ValidationErrors = append(result.ValidationErrors, ValidationError{
+			TaskID: "<kb-update>",
+			Field:  "kb",
+			Reason: err.Error(),
+		})
 		result.SummaryPath, _ = writePackSummary(pack, artifactDir, result)
 		return result
 	}
@@ -484,4 +519,45 @@ func firstOrDefault(items []string, fallback string) string {
 		return fallback
 	}
 	return items[0]
+}
+
+func packKBChangedFiles(ctx context.Context, repo string) ([]string, error) {
+	output, err := gitOutputLines(ctx, repo, "git", "diff", "--name-only", "main...HEAD", "--")
+	if err != nil {
+		return nil, err
+	}
+
+	files := []string{}
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		line = filepath.ToSlash(line)
+		if strings.HasPrefix(line, ".ptolemy/kb/") || line == ".ptolemy/index/file-tree.json" {
+			continue
+		}
+		files = append(files, line)
+	}
+	return files, nil
+}
+
+func gitOutputLines(ctx context.Context, repo string, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = repo
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func firstLine(value string) string {
+	for _, line := range strings.Split(value, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line
+		}
+	}
+	return ""
 }
