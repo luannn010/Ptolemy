@@ -38,6 +38,31 @@ func Tools() []mcp.Tool {
 			},
 			"required": []string{"task_session_id", "note"},
 		}),
+		mcp.NewTool("ptolemy.kb_build", "Create or refresh the canonical .ptolemy/kb knowledge base and compatibility artifacts.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+				"workspace":  map[string]any{"type": "string"},
+			},
+		}),
+		mcp.NewTool("ptolemy.kb_read", "Read .ptolemy/PTOLEMY.md and .ptolemy/kb markdown files.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+				"workspace":  map[string]any{"type": "string"},
+			},
+		}),
+		mcp.NewTool("ptolemy.kb_update", "Update the canonical .ptolemy/kb knowledge base for changed files and optional task-pack metadata.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id":          map[string]any{"type": "string"},
+				"workspace":           map[string]any{"type": "string"},
+				"changed_files":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"pack_id":             map[string]any{"type": "string"},
+				"completed_task_ids":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"commit_sha":          map[string]any{"type": "string"},
+			},
+		}),
 	}
 }
 
@@ -57,6 +82,15 @@ func Handle(name string, args map[string]any, client *mcp.WorkerClient) (map[str
 
 	case "ptolemy.append_session_note":
 		body, err := client.Post("/navigator/session/note", args)
+		return mcp.TextResult(body), true, err
+	case "ptolemy.kb_build":
+		body, err := client.Post("/kb/build", args)
+		return mcp.TextResult(body), true, err
+	case "ptolemy.kb_read":
+		body, err := client.Post("/kb/read", args)
+		return mcp.TextResult(body), true, err
+	case "ptolemy.kb_update":
+		body, err := client.Post("/kb/update", args)
 		return mcp.TextResult(body), true, err
 	}
 

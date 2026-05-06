@@ -10,6 +10,9 @@ func TestNavigatorToolsRegistered(t *testing.T) {
 		"ptolemy.read_context":        false,
 		"ptolemy.start_task_session":  false,
 		"ptolemy.append_session_note": false,
+		"ptolemy.kb_build":            false,
+		"ptolemy.kb_read":             false,
+		"ptolemy.kb_update":           false,
 	}
 
 	for _, tool := range tools {

@@ -60,9 +60,7 @@ func IndexWorkspace(workspace string) (IndexResult, error) {
 	if err := ensureLayout(root); err != nil {
 		return IndexResult{}, err
 	}
-
-	contextFiles, err := ensureContextFiles(root)
-	if err != nil {
+	if _, err := ensureContextFiles(root); err != nil {
 		return IndexResult{}, err
 	}
 
@@ -71,22 +69,27 @@ func IndexWorkspace(workspace string) (IndexResult, error) {
 		return IndexResult{}, err
 	}
 
-	indexPath := filepath.Join(root, ".ptolemy", "index", "file-tree.json")
-	data, err := json.MarshalIndent(tree, "", "  ")
-	if err != nil {
-		return IndexResult{}, err
-	}
-	data = append(data, '\n')
-
-	if err := os.WriteFile(indexPath, data, 0o644); err != nil {
+	fileIndex := buildFileIndex(root, tree)
+	symbolIndex := buildSymbolIndex(root, tree)
+	if err := writeKnowledgeBase(root, tree, fileIndex, symbolIndex); err != nil {
 		return IndexResult{}, err
 	}
 
 	return IndexResult{
-		Workspace:    root,
-		FileCount:    len(tree.Files),
-		ContextFiles: contextFiles,
-		IndexFiles:   []string{".ptolemy/index/file-tree.json"},
+		Workspace: root,
+		FileCount: len(tree.Files),
+		ContextFiles: []string{
+			".ptolemy/PTOLEMY.md",
+			".ptolemy/kb/PROJECT_MAP.md",
+			".ptolemy/kb/WORKFLOWS.md",
+			".ptolemy/kb/DECISIONS.md",
+			".ptolemy/kb/CHANGELOG.md",
+		},
+		IndexFiles: []string{
+			".ptolemy/index/file-tree.json",
+			".ptolemy/kb/FILE_INDEX.json",
+			".ptolemy/kb/SYMBOL_INDEX.json",
+		},
 	}, nil
 }
 
@@ -156,17 +159,37 @@ func ReadContext(workspace string) ([]ContextFile, error) {
 	}
 
 	paths := []string{".ptolemy/PTOLEMY.md"}
-	contextRoot := filepath.Join(root, ".ptolemy", "context")
+	kbRoot := filepath.Join(root, ".ptolemy", "kb")
 
-	entries, err := os.ReadDir(contextRoot)
+	entries, err := os.ReadDir(kbRoot)
 	if err != nil {
-		return nil, err
+		contextRoot := filepath.Join(root, ".ptolemy", "context")
+		entries, legacyErr := os.ReadDir(contextRoot)
+		if legacyErr != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
+				continue
+			}
+			paths = append(paths, filepath.ToSlash(filepath.Join(".ptolemy", "context", entry.Name())))
+		}
+		sort.Strings(paths)
+		files := make([]ContextFile, 0, len(paths))
+		for _, rel := range paths {
+			data, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+			if readErr != nil {
+				return nil, readErr
+			}
+			files = append(files, ContextFile{Path: rel, Content: string(data)})
+		}
+		return files, nil
 	}
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
 			continue
 		}
-		paths = append(paths, filepath.ToSlash(filepath.Join(".ptolemy", "context", entry.Name())))
+		paths = append(paths, filepath.ToSlash(filepath.Join(".ptolemy", "kb", entry.Name())))
 	}
 
 	sort.Strings(paths)
@@ -313,6 +336,7 @@ func IgnoredDirs() []string {
 func ensureLayout(root string) error {
 	dirs := []string{
 		filepath.Join(root, ".ptolemy"),
+		filepath.Join(root, ".ptolemy", "kb"),
 		filepath.Join(root, ".ptolemy", "context"),
 		filepath.Join(root, ".ptolemy", "index"),
 		filepath.Join(root, ".ptolemy", "sessions"),
@@ -327,21 +351,12 @@ func ensureLayout(root string) error {
 
 func ensureContextFiles(root string) ([]string, error) {
 	files := map[string]string{
-		".ptolemy/PTOLEMY.md":              ptolemyGuide(),
-		".ptolemy/context/project-map.md":  projectMap(root),
-		".ptolemy/context/commands.md":     commands(root),
-		".ptolemy/context/architecture.md": architecture(root),
-		".ptolemy/context/env.md":          envNotes(root),
-		".ptolemy/context/conventions.md":  conventions(),
+		".ptolemy/PTOLEMY.md": ptolemyGuide(),
 	}
 
 	created := make([]string, 0, len(files))
 	for rel, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(rel))
-		if _, err := os.Stat(full); err == nil {
-			created = append(created, rel)
-			continue
-		}
 		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
 			return nil, err
 		}
@@ -352,8 +367,9 @@ func ensureContextFiles(root string) ([]string, error) {
 }
 
 func ptolemyGuide() string {
-	return "# Ptolemy\n\n" +
-		"Ptolemy is a codebase navigator, not a whole-codebase reader.\n\n" +
+	return "Ptolemy is a codebase navigator, not a whole-codebase reader.\n\n" +
+		"When available, use the `ptolemy-workflows` Codex skill to select the right workflow from\n" +
+		"`WORKFLOWS.md`. Codex should route the workflow; Ptolemy should execute deterministic steps.\n\n" +
 		"Golden rule:\n\n" +
 		"```text\n" +
 		"Search first.\n" +
@@ -365,12 +381,14 @@ func ptolemyGuide() string {
 		"```\n\n" +
 		"Default workflow:\n\n" +
 		"1. Read this file.\n" +
-		"2. Read `.ptolemy/context/project-map.md`.\n" +
-		"3. Search by keyword or symbol.\n" +
-		"4. Read only top relevant files.\n" +
-		"5. Make small changes.\n" +
-		"6. Run targeted tests.\n" +
-		"7. Save session notes.\n"
+		"2. Read `.ptolemy/kb/PROJECT_MAP.md`.\n" +
+		"3. Use `.ptolemy/kb/FILE_INDEX.json` and `.ptolemy/kb/SYMBOL_INDEX.json` to choose likely files.\n" +
+		"4. Search by keyword or symbol only after KB triage.\n" +
+		"5. Read only top relevant files.\n" +
+		"6. Make small changes.\n" +
+		"7. Run targeted tests.\n" +
+		"8. Save session notes.\n" +
+		"9. Update the KB only after confirmed useful changes.\n"
 }
 
 func projectMap(root string) string {
@@ -384,7 +402,31 @@ func projectMap(root string) string {
 		parts = append(parts, "- Project structure has not been summarized yet.")
 	}
 
-	return "# Project Map\n\nUseful top-level areas:\n\n" + strings.Join(parts, "\n") + "\n"
+	lines := []string{
+		"# Project Map",
+		"",
+		"## Purpose",
+		"Ptolemy is a local worker and agent execution system.",
+		"",
+		"## Main areas",
+	}
+	lines = append(lines, parts...)
+	if isDir(filepath.Join(root, "cmd", "workerd")) {
+		lines = append(lines, "- `cmd/workerd`: worker daemon entrypoint")
+	}
+	if isDir(filepath.Join(root, "cmd", "ptolemy-agent")) {
+		lines = append(lines, "- `cmd/ptolemy-agent`: local agent entrypoint")
+	}
+	if isDir(filepath.Join(root, "cmd", "ptolemy-task-runner")) {
+		lines = append(lines, "- `cmd/ptolemy-task-runner`: task-pack and inbox runner")
+	}
+	if isDir(filepath.Join(root, "internal", "navigator")) {
+		lines = append(lines, "- `internal/navigator`: repo memory and KB builder")
+	}
+	if isDir(filepath.Join(root, "internal", "tasks")) {
+		lines = append(lines, "- `internal/tasks`: task and task-pack execution runtime")
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func commands(root string) string {
@@ -440,7 +482,7 @@ func conventions() string {
 		"- Use Level 3 full-file reads only when editing or debugging that file.\n" +
 		"- Prefer small, reversible changes.\n" +
 		"- Run targeted tests immediately after edits.\n" +
-		"- Keep `.ptolemy/context` concise and reusable.\n"
+		"- Keep `.ptolemy/kb` concise and reusable.\n"
 }
 
 func shouldSkipDir(rel string, name string) bool {

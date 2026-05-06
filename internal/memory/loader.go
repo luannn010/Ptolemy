@@ -35,7 +35,25 @@ func LoadWorkspaceMemory(workspace string) (*Memory, error) {
 	}
 
 	ptolemyRoot := filepath.Join(workspace, ".ptolemy")
+	kbRoot := filepath.Join(ptolemyRoot, "kb")
 	contextRoot := filepath.Join(ptolemyRoot, "context")
+	if _, err := os.Stat(kbRoot); err == nil {
+		mem := &Memory{
+			Global:  make(map[string]string),
+			Project: make(map[string]string),
+		}
+
+		guidePath := filepath.Join(ptolemyRoot, "PTOLEMY.md")
+		if data, err := os.ReadFile(guidePath); err == nil {
+			mem.Project[guidePath] = string(data)
+		}
+
+		if err := loadMarkdownFiles(kbRoot, mem.Project); err != nil {
+			return nil, err
+		}
+
+		return mem, nil
+	}
 	if _, err := os.Stat(contextRoot); err == nil {
 		mem := &Memory{
 			Global:  make(map[string]string),
