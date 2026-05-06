@@ -9,11 +9,12 @@ The project is intentionally local-first: Codex or another planner decides what 
 - Runs a local HTTP worker daemon (`workerd`).
 - Creates persistent workspace-bound sessions.
 - Executes commands through tmux-backed runners.
+- Chooses an OS-native shell for generic command execution: PowerShell on Windows and Bash on Unix-like systems.
 - Provides file read, write, list, search, and basic patch operations.
 - Exposes Git status, diff, log, checkout, branch, commit, and push helpers.
 - Creates isolated Git worktrees for safer parallel task work.
 - Stores execution memory in SQLite.
-- Stores agent-readable project knowledge in Markdown.
+- Stores agent-readable project knowledge in a KB-first `.ptolemy/kb` workspace.
 - Exposes the worker through an MCP adapter (`ptolemy-mcp`).
 - Includes prototypes for a local LLM executor (`ptolemy-agent`) and task queue runner (`ptolemy-task-runner`).
 - Builds deterministic execution plans from task metadata.
@@ -35,15 +36,67 @@ workerd HTTP API
         +-- command execution -> tmux
         +-- file operations -> workspace filesystem
         +-- git operations -> repository/worktrees
-        +-- navigator context -> .ptolemy + docs memory
+        +-- navigator KB/context -> .ptolemy + docs memory
 ```
 
 Ptolemy uses two kinds of memory:
 
 - SQLite execution memory for sessions, command logs, actions, logs, and approvals
-- Markdown knowledge memory for architecture notes, conventions, decisions, and known issues
+- KB-first Markdown and JSON knowledge memory under `.ptolemy/kb` for project maps, file indexes, symbol indexes, workflows, decisions, and changelog history
 
 For deeper design notes, see [Architecture](./docs/Architecture.md) and [Project Memory](./docs/memory/projects/ptolemy).
+
+## KB Workspace
+
+Ptolemy now treats `.ptolemy/kb/` as the canonical repo memory layer for agents. The intended flow is:
+
+1. Read `.ptolemy/PTOLEMY.md`
+2. Read `.ptolemy/kb/PROJECT_MAP.md`
+3. Use `.ptolemy/kb/FILE_INDEX.json` and `.ptolemy/kb/SYMBOL_INDEX.json` to choose likely files
+4. Search and read the repo only after KB triage
+5. Update the KB after successful task-pack completion
+
+Canonical KB files:
+
+```text
+.ptolemy/
+├── PTOLEMY.md
+└── kb/
+    ├── PROJECT_MAP.md
+    ├── FILE_INDEX.json
+    ├── SYMBOL_INDEX.json
+    ├── WORKFLOWS.md
+    ├── DECISIONS.md
+    └── CHANGELOG.md
+```
+
+Compatibility artifacts are still emitted in MVP for older callers:
+
+- `.ptolemy/index/file-tree.json`
+- `.ptolemy/context/*.md`
+
+Generated vs curated KB files:
+
+- Generated or machine-updated: `PROJECT_MAP.md`, `FILE_INDEX.json`, `SYMBOL_INDEX.json`, `CHANGELOG.md`
+- Curated: `WORKFLOWS.md`, `DECISIONS.md`
+
+KB surfaces:
+
+```text
+POST /navigator/index      compatibility build path
+POST /navigator/context    compatibility read path
+POST /kb/build             canonical KB build path
+POST /kb/read              canonical KB read path
+POST /kb/update            canonical KB incremental update path
+
+ptolemy.index_workspace    compatibility MCP tool
+ptolemy.read_context       compatibility MCP tool
+ptolemy.kb_build           canonical MCP tool
+ptolemy.kb_read            canonical MCP tool
+ptolemy.kb_update          canonical MCP tool
+```
+
+A successful task-pack run updates the KB once after integration merge and before push or PR creation. That update refreshes changed file entries, refreshes Go symbol entries for changed Go files, removes deleted entries, and appends one KB changelog entry for the pack.
 
 ## Repository Layout
 
@@ -57,6 +110,7 @@ cmd/
 internal/
   action/ approval/ logs/ store/   SQLite execution memory
   command/ terminal/ executor/     command execution path
+  shellcmd/                        OS-aware shell selection helpers
   fileops/ navigator/ memory/      workspace and context tools
   gitops/ worktree/                Git and isolation helpers
   httpapi/                         HTTP routes

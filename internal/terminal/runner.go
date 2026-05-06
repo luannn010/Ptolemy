@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os/exec"
 	"time"
+
+	"github.com/luannn010/ptolemy/internal/shellcmd"
 )
 
 type Result struct {
@@ -31,7 +33,7 @@ func (r *Runner) Run(ctx context.Context, command string, cwd string, timeoutSec
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(runCtx, "bash", "-lc", command)
+	cmd := shellcmd.Command(runCtx, command)
 
 	if cwd != "" {
 		cmd.Dir = cwd

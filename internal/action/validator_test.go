@@ -121,3 +121,16 @@ func TestValidateSingleJSONActionRejectsInvalidTaskBatch(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateLeadingJSONActionReturnsFirstObject(t *testing.T) {
+	got, err := ValidateLeadingJSONAction("{\"action\":\"read_file\",\"path\":\"README.md\"}\n{\"action\":\"run_command\",\"command\":\"go test ./...\"}")
+	if err != nil {
+		t.Fatalf("ValidateLeadingJSONAction() error = %v", err)
+	}
+	if got.Action != "read_file" {
+		t.Fatalf("ValidateLeadingJSONAction() action = %q, want read_file", got.Action)
+	}
+	if got.Path != "README.md" {
+		t.Fatalf("ValidateLeadingJSONAction() path = %q, want README.md", got.Path)
+	}
+}
