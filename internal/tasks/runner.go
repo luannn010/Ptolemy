@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/luannn010/ptolemy/internal/shellcmd"
 )
 
 type TaskExecutor interface {
@@ -90,7 +92,7 @@ func (r *Runner) RunValidation(ctx context.Context, task Task) TaskRunResult {
 	}
 
 	for _, command := range task.Validation {
-		cmd := exec.CommandContext(ctx, "bash", "-lc", command)
+		cmd := shellcmd.Command(ctx, command)
 		cmd.Dir = workspace
 
 		var stdout bytes.Buffer

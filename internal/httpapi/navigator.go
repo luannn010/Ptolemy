@@ -14,11 +14,15 @@ type NavigatorHandler struct {
 }
 
 type navigatorRequest struct {
-	SessionID     string `json:"session_id"`
-	Workspace     string `json:"workspace"`
-	TaskSessionID string `json:"task_session_id"`
-	Task          string `json:"task"`
-	Note          string `json:"note"`
+	SessionID        string   `json:"session_id"`
+	Workspace        string   `json:"workspace"`
+	TaskSessionID    string   `json:"task_session_id"`
+	Task             string   `json:"task"`
+	Note             string   `json:"note"`
+	ChangedFiles     []string `json:"changed_files"`
+	PackID           string   `json:"pack_id"`
+	CompletedTaskIDs []string `json:"completed_task_ids"`
+	CommitSHA        string   `json:"commit_sha"`
 }
 
 func NewNavigatorHandler(sessionStore *session.Store) *NavigatorHandler {
@@ -68,6 +72,27 @@ func (h *NavigatorHandler) ReadContext(w http.ResponseWriter, r *http.Request) {
 		"workspace": workspace,
 		"files":     files,
 	})
+}
+
+func (h *NavigatorHandler) UpdateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	var req navigatorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	workspace, ok := h.workspaceForRequest(w, r, req)
+	if !ok {
+		return
+	}
+
+	result, err := navigator.UpdateKnowledgeBase(workspace, req.ChangedFiles, req.PackID, req.CompletedTaskIDs, req.CommitSHA)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *NavigatorHandler) StartTaskSession(w http.ResponseWriter, r *http.Request) {

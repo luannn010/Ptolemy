@@ -9,7 +9,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/approval"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/executor"
-	"github.com/luannn010/ptolemy/internal/logs"
+	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/terminal"
 	"github.com/rs/zerolog/log"
@@ -25,7 +25,7 @@ func NewRouter(
 	sessionStore *session.Store,
 	commandStore *command.Store,
 	actionStore *action.Store,
-	logStore *logs.Store,
+	logStore *logging.Store,
 	approvalStore *approval.Store,
 	runner *terminal.TmuxRunner,
 ) http.Handler {
@@ -75,6 +75,9 @@ func NewRouter(
 	r.Post("/navigator/context", navigatorHandler.ReadContext)
 	r.Post("/navigator/session/start", navigatorHandler.StartTaskSession)
 	r.Post("/navigator/session/note", navigatorHandler.AppendSessionNote)
+	r.Post("/kb/build", navigatorHandler.IndexWorkspace)
+	r.Post("/kb/read", navigatorHandler.ReadContext)
+	r.Post("/kb/update", navigatorHandler.UpdateKnowledgeBase)
 
 	gitHandler := NewGitHandler(sessionStore)
 
