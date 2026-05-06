@@ -1,6 +1,3 @@
 # Architecture
 
-- Go project.
-- `cmd/` contains executable entrypoints.
-- `internal/` contains application packages.
-- Keep this file high-level. Do not paste whole source files here.
+Canonical architecture notes now live in `.ptolemy/kb/PROJECT_MAP.md` and `.ptolemy/kb/DECISIONS.md`.

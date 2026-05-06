@@ -1,0 +1,2082 @@
+{
+  "Action": {
+    "file": "internal/action/store.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/action/store.go"
+  },
+  "ActionEnvelope": {
+    "file": "internal/action/validator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/action/validator.go"
+  },
+  "ActionResult": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "struct",
+    "summary": "Struct declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "AddExisting": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "method",
+    "summary": "Method AddExisting implemented in internal/worktree/worktree.go"
+  },
+  "AppendSessionNote": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function AppendSessionNote implemented in internal/navigator/navigator.go"
+  },
+  "Apply": {
+    "file": "internal/httpapi/fileops.go",
+    "kind": "method",
+    "summary": "Method Apply implemented in internal/httpapi/fileops.go"
+  },
+  "ApplyPatch": {
+    "file": "internal/fileops/fileops.go",
+    "kind": "method",
+    "summary": "Method ApplyPatch implemented in internal/fileops/fileops.go"
+  },
+  "Approval": {
+    "file": "internal/approval/store.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/approval/store.go"
+  },
+  "BashExe": {
+    "file": "internal/shellcmd/shellcmd.go",
+    "kind": "const",
+    "summary": "const declared in internal/shellcmd/shellcmd.go"
+  },
+  "BatchRunner": {
+    "file": "internal/tasks/runner.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/runner.go"
+  },
+  "BatchTask": {
+    "file": "internal/action/validator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/action/validator.go"
+  },
+  "BlockedTasks": {
+    "file": "internal/tasks/scheduler.go",
+    "kind": "func",
+    "summary": "Function BlockedTasks implemented in internal/tasks/scheduler.go"
+  },
+  "Build": {
+    "file": "internal/shellcmd/shellcmd.go",
+    "kind": "func",
+    "summary": "Function Build implemented in internal/shellcmd/shellcmd.go"
+  },
+  "BuildExecutionPlan": {
+    "file": "internal/tasks/planner.go",
+    "kind": "func",
+    "summary": "Function BuildExecutionPlan implemented in internal/tasks/planner.go"
+  },
+  "BuildFileTree": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function BuildFileTree implemented in internal/navigator/navigator.go"
+  },
+  "BuildPackPlanPreview": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function BuildPackPlanPreview implemented in internal/tasks/pack.go"
+  },
+  "BuildPlan": {
+    "file": "internal/tasks/planner.go",
+    "kind": "func",
+    "summary": "Function BuildPlan implemented in internal/tasks/planner.go"
+  },
+  "BuildPlanPreview": {
+    "file": "internal/tasks/cli.go",
+    "kind": "func",
+    "summary": "Function BuildPlanPreview implemented in internal/tasks/cli.go"
+  },
+  "CanRunTogether": {
+    "file": "internal/tasks/conflicts.go",
+    "kind": "func",
+    "summary": "Function CanRunTogether implemented in internal/tasks/conflicts.go"
+  },
+  "Chat": {
+    "file": "internal/brain/client.go",
+    "kind": "method",
+    "summary": "Method Chat implemented in internal/brain/client.go"
+  },
+  "ChatRequest": {
+    "file": "internal/brain/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/brain/client.go"
+  },
+  "ChatResponse": {
+    "file": "internal/brain/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/brain/client.go"
+  },
+  "CheckCommand": {
+    "file": "internal/policy/policy.go",
+    "kind": "func",
+    "summary": "Function CheckCommand implemented in internal/policy/policy.go"
+  },
+  "Checkout": {
+    "file": "internal/httpapi/git.go",
+    "kind": "method",
+    "summary": "Method Checkout implemented in internal/httpapi/git.go"
+  },
+  "Client": {
+    "file": "internal/worker/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worker/client.go"
+  },
+  "Close": {
+    "file": "internal/store/store.go",
+    "kind": "method",
+    "summary": "Method Close implemented in internal/store/store.go"
+  },
+  "CloseSession": {
+    "file": "internal/session/store.go",
+    "kind": "method",
+    "summary": "Method CloseSession implemented in internal/session/store.go"
+  },
+  "Command": {
+    "file": "internal/shellcmd/shellcmd.go",
+    "kind": "func",
+    "summary": "Function Command implemented in internal/shellcmd/shellcmd.go"
+  },
+  "CommandForProgram": {
+    "file": "internal/shellcmd/shellcmd.go",
+    "kind": "func",
+    "summary": "Function CommandForProgram implemented in internal/shellcmd/shellcmd.go"
+  },
+  "CommandHandler": {
+    "file": "internal/httpapi/commands.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/commands.go"
+  },
+  "CommandLog": {
+    "file": "internal/command/command.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/command/command.go"
+  },
+  "CommandResult": {
+    "file": "internal/worker/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worker/client.go"
+  },
+  "Commit": {
+    "file": "internal/httpapi/git.go",
+    "kind": "method",
+    "summary": "Method Commit implemented in internal/httpapi/git.go"
+  },
+  "CommitConventional": {
+    "file": "internal/gitops/gitops.go",
+    "kind": "method",
+    "summary": "Method CommitConventional implemented in internal/gitops/gitops.go"
+  },
+  "Completed": {
+    "file": "internal/tasks/state.go",
+    "kind": "method",
+    "summary": "Method Completed implemented in internal/tasks/state.go"
+  },
+  "Config": {
+    "file": "internal/config/config.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/config/config.go"
+  },
+  "Conflicts": {
+    "file": "internal/tasks/lock.go",
+    "kind": "func",
+    "summary": "Function Conflicts implemented in internal/tasks/lock.go"
+  },
+  "ContextFile": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/navigator/navigator.go"
+  },
+  "Create": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "method",
+    "summary": "Method Create implemented in internal/worktree/worktree.go"
+  },
+  "CreateBranch": {
+    "file": "internal/httpapi/git.go",
+    "kind": "method",
+    "summary": "Method CreateBranch implemented in internal/httpapi/git.go"
+  },
+  "CreateOrResetBranchFrom": {
+    "file": "internal/gitops/gitops.go",
+    "kind": "method",
+    "summary": "Method CreateOrResetBranchFrom implemented in internal/gitops/gitops.go"
+  },
+  "CreatePullRequest": {
+    "file": "internal/gitops/gitops.go",
+    "kind": "method",
+    "summary": "Method CreatePullRequest implemented in internal/gitops/gitops.go"
+  },
+  "CreateSession": {
+    "file": "internal/worker/client.go",
+    "kind": "method",
+    "summary": "Method CreateSession implemented in internal/worker/client.go"
+  },
+  "CreateSessionRequest": {
+    "file": "internal/worker/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worker/client.go"
+  },
+  "Decide": {
+    "file": "internal/approval/store.go",
+    "kind": "method",
+    "summary": "Method Decide implemented in internal/approval/store.go"
+  },
+  "Decision": {
+    "file": "internal/policy/policy.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/policy/policy.go"
+  },
+  "DefaultProgram": {
+    "file": "internal/shellcmd/shellcmd.go",
+    "kind": "func",
+    "summary": "Function DefaultProgram implemented in internal/shellcmd/shellcmd.go"
+  },
+  "Diff": {
+    "file": "internal/httpapi/git.go",
+    "kind": "method",
+    "summary": "Method Diff implemented in internal/httpapi/git.go"
+  },
+  "DirEntry": {
+    "file": "internal/fileops/fileops.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/fileops/fileops.go"
+  },
+  "EnsureBranch": {
+    "file": "internal/gitops/gitops.go",
+    "kind": "method",
+    "summary": "Method EnsureBranch implemented in internal/gitops/gitops.go"
+  },
+  "EnsureSession": {
+    "file": "internal/terminal/tmux_runner.go",
+    "kind": "method",
+    "summary": "Method EnsureSession implemented in internal/terminal/tmux_runner.go"
+  },
+  "ErrEmptyResponse": {
+    "file": "internal/action/validator.go",
+    "kind": "var",
+    "summary": "var declared in internal/action/validator.go"
+  },
+  "ErrEmptyTaskBatch": {
+    "file": "internal/action/validator.go",
+    "kind": "var",
+    "summary": "var declared in internal/action/validator.go"
+  },
+  "ErrJSONArray": {
+    "file": "internal/action/validator.go",
+    "kind": "var",
+    "summary": "var declared in internal/action/validator.go"
+  },
+  "ErrMissingActionType": {
+    "file": "internal/action/validator.go",
+    "kind": "var",
+    "summary": "var declared in internal/action/validator.go"
+  },
+  "ErrMultipleObjects": {
+    "file": "internal/action/validator.go",
+    "kind": "var",
+    "summary": "var declared in internal/action/validator.go"
+  },
+  "ErrNestedTaskBatch": {
+    "file": "internal/action/validator.go",
+    "kind": "var",
+    "summary": "var declared in internal/action/validator.go"
+  },
+  "ErrSessionNotFound": {
+    "file": "internal/session/store.go",
+    "kind": "var",
+    "summary": "var declared in internal/session/store.go"
+  },
+  "Error": {
+    "file": "internal/tasks/scheduler.go",
+    "kind": "method",
+    "summary": "Method Error implemented in internal/tasks/scheduler.go"
+  },
+  "Execute": {
+    "file": "internal/httpapi/tasks.go",
+    "kind": "method",
+    "summary": "Method Execute implemented in internal/httpapi/tasks.go"
+  },
+  "ExecuteHandler": {
+    "file": "internal/httpapi/execute.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/execute.go"
+  },
+  "ExecuteRequest": {
+    "file": "internal/executor/executor.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/executor/executor.go"
+  },
+  "ExecuteResponse": {
+    "file": "internal/executor/executor.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/executor/executor.go"
+  },
+  "ExecutionPlan": {
+    "file": "internal/tasks/planner.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/planner.go"
+  },
+  "Executor": {
+    "file": "internal/executor/executor.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/executor/executor.go"
+  },
+  "FileConflict": {
+    "file": "internal/tasks/conflicts.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/conflicts.go"
+  },
+  "FileEntry": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/navigator/navigator.go"
+  },
+  "FileHandler": {
+    "file": "internal/httpapi/fileops.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/fileops.go"
+  },
+  "FileIndexEntry": {
+    "file": "internal/navigator/kb.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/navigator/kb.go"
+  },
+  "FileOps": {
+    "file": "internal/fileops/fileops.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/fileops/fileops.go"
+  },
+  "FileTree": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/navigator/navigator.go"
+  },
+  "FindAllowedFileConflicts": {
+    "file": "internal/tasks/conflicts.go",
+    "kind": "func",
+    "summary": "Function FindAllowedFileConflicts implemented in internal/tasks/conflicts.go"
+  },
+  "Get": {
+    "file": "internal/tasks/state.go",
+    "kind": "method",
+    "summary": "Method Get implemented in internal/tasks/state.go"
+  },
+  "GitHandler": {
+    "file": "internal/httpapi/git.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/git.go"
+  },
+  "GitOps": {
+    "file": "internal/gitops/gitops.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/gitops/gitops.go"
+  },
+  "Handle": {
+    "file": "internal/mcp/worktreetools/tools.go",
+    "kind": "func",
+    "summary": "Function Handle implemented in internal/mcp/worktreetools/tools.go"
+  },
+  "IgnoredDirs": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function IgnoredDirs implemented in internal/navigator/navigator.go"
+  },
+  "IndexResult": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/navigator/navigator.go"
+  },
+  "IndexWorkspace": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function IndexWorkspace implemented in internal/navigator/navigator.go"
+  },
+  "InspectWorkspace": {
+    "file": "internal/inspect/inspect.go",
+    "kind": "func",
+    "summary": "Function InspectWorkspace implemented in internal/inspect/inspect.go"
+  },
+  "KBUpdateResult": {
+    "file": "internal/navigator/kb.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/navigator/kb.go"
+  },
+  "KillSession": {
+    "file": "internal/terminal/tmux_runner.go",
+    "kind": "func",
+    "summary": "Function KillSession implemented in internal/terminal/tmux_runner.go"
+  },
+  "List": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "method",
+    "summary": "Method List implemented in internal/worktree/worktree.go"
+  },
+  "ListBySession": {
+    "file": "internal/command/store.go",
+    "kind": "method",
+    "summary": "Method ListBySession implemented in internal/command/store.go"
+  },
+  "ListDirectory": {
+    "file": "internal/fileops/fileops.go",
+    "kind": "method",
+    "summary": "Method ListDirectory implemented in internal/fileops/fileops.go"
+  },
+  "Load": {
+    "file": "internal/config/config.go",
+    "kind": "func",
+    "summary": "Function Load implemented in internal/config/config.go"
+  },
+  "LoadMemory": {
+    "file": "internal/memory/loader.go",
+    "kind": "func",
+    "summary": "Function LoadMemory implemented in internal/memory/loader.go"
+  },
+  "LoadTaskPack": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function LoadTaskPack implemented in internal/tasks/pack.go"
+  },
+  "LoadWorkspaceMemory": {
+    "file": "internal/memory/loader.go",
+    "kind": "func",
+    "summary": "Function LoadWorkspaceMemory implemented in internal/memory/loader.go"
+  },
+  "Log": {
+    "file": "internal/logging/store.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/logging/store.go"
+  },
+  "Manager": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worktree/worktree.go"
+  },
+  "Memory": {
+    "file": "internal/memory/loader.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/memory/loader.go"
+  },
+  "MemoryStateStore": {
+    "file": "internal/tasks/state.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/state.go"
+  },
+  "MergeNoFF": {
+    "file": "internal/gitops/gitops.go",
+    "kind": "method",
+    "summary": "Method MergeNoFF implemented in internal/gitops/gitops.go"
+  },
+  "Message": {
+    "file": "internal/brain/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/brain/client.go"
+  },
+  "Mode": {
+    "file": "internal/policy/policy.go",
+    "kind": "type",
+    "summary": "Type declared in internal/policy/policy.go"
+  },
+  "ModeAllow": {
+    "file": "internal/policy/policy.go",
+    "kind": "const",
+    "summary": "const declared in internal/policy/policy.go"
+  },
+  "ModeAsk": {
+    "file": "internal/policy/policy.go",
+    "kind": "const",
+    "summary": "const declared in internal/policy/policy.go"
+  },
+  "ModeDeny": {
+    "file": "internal/policy/policy.go",
+    "kind": "const",
+    "summary": "const declared in internal/policy/policy.go"
+  },
+  "NavigatorHandler": {
+    "file": "internal/httpapi/navigator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/navigator.go"
+  },
+  "New": {
+    "file": "internal/gitops/gitops.go",
+    "kind": "func",
+    "summary": "Function New implemented in internal/gitops/gitops.go"
+  },
+  "NewClient": {
+    "file": "internal/worker/client.go",
+    "kind": "func",
+    "summary": "Function NewClient implemented in internal/worker/client.go"
+  },
+  "NewCommandHandler": {
+    "file": "internal/httpapi/commands.go",
+    "kind": "func",
+    "summary": "Function NewCommandHandler implemented in internal/httpapi/commands.go"
+  },
+  "NewExecuteHandler": {
+    "file": "internal/httpapi/execute.go",
+    "kind": "func",
+    "summary": "Function NewExecuteHandler implemented in internal/httpapi/execute.go"
+  },
+  "NewExecutor": {
+    "file": "internal/executor/executor.go",
+    "kind": "func",
+    "summary": "Function NewExecutor implemented in internal/executor/executor.go"
+  },
+  "NewFileHandler": {
+    "file": "internal/httpapi/fileops.go",
+    "kind": "func",
+    "summary": "Function NewFileHandler implemented in internal/httpapi/fileops.go"
+  },
+  "NewGitHandler": {
+    "file": "internal/httpapi/git.go",
+    "kind": "func",
+    "summary": "Function NewGitHandler implemented in internal/httpapi/git.go"
+  },
+  "NewManager": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "func",
+    "summary": "Function NewManager implemented in internal/worktree/worktree.go"
+  },
+  "NewMemoryStateStore": {
+    "file": "internal/tasks/state.go",
+    "kind": "func",
+    "summary": "Function NewMemoryStateStore implemented in internal/tasks/state.go"
+  },
+  "NewNavigatorHandler": {
+    "file": "internal/httpapi/navigator.go",
+    "kind": "func",
+    "summary": "Function NewNavigatorHandler implemented in internal/httpapi/navigator.go"
+  },
+  "NewRouter": {
+    "file": "internal/httpapi/router.go",
+    "kind": "func",
+    "summary": "Function NewRouter implemented in internal/httpapi/router.go"
+  },
+  "NewRunner": {
+    "file": "internal/terminal/runner.go",
+    "kind": "func",
+    "summary": "Function NewRunner implemented in internal/terminal/runner.go"
+  },
+  "NewScheduler": {
+    "file": "internal/tasks/scheduler.go",
+    "kind": "func",
+    "summary": "Function NewScheduler implemented in internal/tasks/scheduler.go"
+  },
+  "NewServer": {
+    "file": "internal/mcp/server.go",
+    "kind": "func",
+    "summary": "Function NewServer implemented in internal/mcp/server.go"
+  },
+  "NewSessionHandler": {
+    "file": "internal/httpapi/session.go",
+    "kind": "func",
+    "summary": "Function NewSessionHandler implemented in internal/httpapi/session.go"
+  },
+  "NewStore": {
+    "file": "internal/session/store.go",
+    "kind": "func",
+    "summary": "Function NewStore implemented in internal/session/store.go"
+  },
+  "NewTasksHandler": {
+    "file": "internal/httpapi/tasks.go",
+    "kind": "func",
+    "summary": "Function NewTasksHandler implemented in internal/httpapi/tasks.go"
+  },
+  "NewTmuxRunner": {
+    "file": "internal/terminal/tmux_runner.go",
+    "kind": "func",
+    "summary": "Function NewTmuxRunner implemented in internal/terminal/tmux_runner.go"
+  },
+  "NewTool": {
+    "file": "internal/mcp/tools.go",
+    "kind": "func",
+    "summary": "Function NewTool implemented in internal/mcp/tools.go"
+  },
+  "NewWorkerClient": {
+    "file": "internal/mcp/client.go",
+    "kind": "func",
+    "summary": "Function NewWorkerClient implemented in internal/mcp/client.go"
+  },
+  "NewWorktreeHandler": {
+    "file": "internal/httpapi/worktree.go",
+    "kind": "func",
+    "summary": "Function NewWorktreeHandler implemented in internal/httpapi/worktree.go"
+  },
+  "NormalizedType": {
+    "file": "internal/action/validator.go",
+    "kind": "method",
+    "summary": "Method NormalizedType implemented in internal/action/validator.go"
+  },
+  "Open": {
+    "file": "internal/store/store.go",
+    "kind": "func",
+    "summary": "Function Open implemented in internal/store/store.go"
+  },
+  "PackFolders": {
+    "file": "internal/tasks/pack.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/pack.go"
+  },
+  "PackManifest": {
+    "file": "internal/tasks/pack.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/pack.go"
+  },
+  "PackRules": {
+    "file": "internal/tasks/pack.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/pack.go"
+  },
+  "ParsePackManifest": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function ParsePackManifest implemented in internal/tasks/pack.go"
+  },
+  "ParseTaskMarkdown": {
+    "file": "internal/tasks/task.go",
+    "kind": "func",
+    "summary": "Function ParseTaskMarkdown implemented in internal/tasks/task.go"
+  },
+  "PickNonConflictingBatch": {
+    "file": "internal/tasks/lock.go",
+    "kind": "func",
+    "summary": "Function PickNonConflictingBatch implemented in internal/tasks/lock.go"
+  },
+  "PlaceholderTaskSplitter": {
+    "file": "internal/action/splitter.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/action/splitter.go"
+  },
+  "Plan": {
+    "file": "internal/tasks/planner.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/planner.go"
+  },
+  "PlanStep": {
+    "file": "internal/tasks/planner.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/planner.go"
+  },
+  "Post": {
+    "file": "internal/mcp/client.go",
+    "kind": "method",
+    "summary": "Method Post implemented in internal/mcp/client.go"
+  },
+  "PowerShellExe": {
+    "file": "internal/shellcmd/shellcmd.go",
+    "kind": "const",
+    "summary": "const declared in internal/shellcmd/shellcmd.go"
+  },
+  "Push": {
+    "file": "internal/httpapi/git.go",
+    "kind": "method",
+    "summary": "Method Push implemented in internal/httpapi/git.go"
+  },
+  "RPCError": {
+    "file": "internal/mcp/rpc.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/mcp/rpc.go"
+  },
+  "RPCRequest": {
+    "file": "internal/mcp/rpc.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/mcp/rpc.go"
+  },
+  "RPCResponse": {
+    "file": "internal/mcp/rpc.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/mcp/rpc.go"
+  },
+  "Read": {
+    "file": "internal/httpapi/fileops.go",
+    "kind": "method",
+    "summary": "Method Read implemented in internal/httpapi/fileops.go"
+  },
+  "ReadContext": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function ReadContext implemented in internal/navigator/navigator.go"
+  },
+  "ReadFile": {
+    "file": "internal/worker/client.go",
+    "kind": "method",
+    "summary": "Method ReadFile implemented in internal/worker/client.go"
+  },
+  "ReadFileRequest": {
+    "file": "internal/worker/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worker/client.go"
+  },
+  "ReadFileResponse": {
+    "file": "internal/worker/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worker/client.go"
+  },
+  "RecordFileRead": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function RecordFileRead implemented in internal/navigator/navigator.go"
+  },
+  "RegisterHandler": {
+    "file": "internal/mcp/server.go",
+    "kind": "method",
+    "summary": "Method RegisterHandler implemented in internal/mcp/server.go"
+  },
+  "Remove": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "method",
+    "summary": "Method Remove implemented in internal/worktree/worktree.go"
+  },
+  "Resolve": {
+    "file": "internal/fileops/fileops.go",
+    "kind": "method",
+    "summary": "Method Resolve implemented in internal/fileops/fileops.go"
+  },
+  "Result": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worktree/worktree.go"
+  },
+  "Routes": {
+    "file": "internal/httpapi/session.go",
+    "kind": "method",
+    "summary": "Method Routes implemented in internal/httpapi/session.go"
+  },
+  "Run": {
+    "file": "internal/terminal/tmux_runner.go",
+    "kind": "method",
+    "summary": "Method Run implemented in internal/terminal/tmux_runner.go"
+  },
+  "RunCommand": {
+    "file": "internal/worker/client.go",
+    "kind": "method",
+    "summary": "Method RunCommand implemented in internal/worker/client.go"
+  },
+  "RunCommandRequest": {
+    "file": "internal/worker/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worker/client.go"
+  },
+  "RunInbox": {
+    "file": "internal/tasks/runner.go",
+    "kind": "method",
+    "summary": "Method RunInbox implemented in internal/tasks/runner.go"
+  },
+  "RunInboxScheduler": {
+    "file": "internal/tasks/cli.go",
+    "kind": "func",
+    "summary": "Function RunInboxScheduler implemented in internal/tasks/cli.go"
+  },
+  "RunMigrations": {
+    "file": "internal/store/migrations.go",
+    "kind": "func",
+    "summary": "Function RunMigrations implemented in internal/store/migrations.go"
+  },
+  "RunTaskPack": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function RunTaskPack implemented in internal/tasks/pack.go"
+  },
+  "RunValidation": {
+    "file": "internal/tasks/runner.go",
+    "kind": "method",
+    "summary": "Method RunValidation implemented in internal/tasks/runner.go"
+  },
+  "RunnableTasks": {
+    "file": "internal/tasks/scheduler.go",
+    "kind": "func",
+    "summary": "Function RunnableTasks implemented in internal/tasks/scheduler.go"
+  },
+  "Runner": {
+    "file": "internal/terminal/runner.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/terminal/runner.go"
+  },
+  "SQLDB": {
+    "file": "internal/store/store.go",
+    "kind": "method",
+    "summary": "Method SQLDB implemented in internal/store/store.go"
+  },
+  "ScanInbox": {
+    "file": "internal/tasks/scanner.go",
+    "kind": "func",
+    "summary": "Function ScanInbox implemented in internal/tasks/scanner.go"
+  },
+  "Scheduler": {
+    "file": "internal/tasks/scheduler.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/scheduler.go"
+  },
+  "SchedulerResult": {
+    "file": "internal/tasks/scheduler.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/scheduler.go"
+  },
+  "Search": {
+    "file": "internal/httpapi/fileops.go",
+    "kind": "method",
+    "summary": "Method Search implemented in internal/httpapi/fileops.go"
+  },
+  "Server": {
+    "file": "internal/mcp/server.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/mcp/server.go"
+  },
+  "Session": {
+    "file": "internal/worker/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worker/client.go"
+  },
+  "SessionHandler": {
+    "file": "internal/httpapi/session.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/session.go"
+  },
+  "Set": {
+    "file": "internal/tasks/state.go",
+    "kind": "method",
+    "summary": "Method Set implemented in internal/tasks/state.go"
+  },
+  "Setup": {
+    "file": "internal/logging/logging.go",
+    "kind": "func",
+    "summary": "Function Setup implemented in internal/logging/logging.go"
+  },
+  "Snapshot": {
+    "file": "internal/tasks/state.go",
+    "kind": "method",
+    "summary": "Method Snapshot implemented in internal/tasks/state.go"
+  },
+  "Split": {
+    "file": "internal/action/splitter.go",
+    "kind": "method",
+    "summary": "Method Split implemented in internal/action/splitter.go"
+  },
+  "StartTaskSession": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function StartTaskSession implemented in internal/navigator/navigator.go"
+  },
+  "StateStore": {
+    "file": "internal/tasks/state.go",
+    "kind": "interface",
+    "summary": "Interface declared in internal/tasks/state.go"
+  },
+  "Status": {
+    "file": "internal/session/session.go",
+    "kind": "type",
+    "summary": "Type declared in internal/session/session.go"
+  },
+  "StatusBlocked": {
+    "file": "internal/tasks/state.go",
+    "kind": "const",
+    "summary": "const declared in internal/tasks/state.go"
+  },
+  "StatusClosed": {
+    "file": "internal/session/session.go",
+    "kind": "const",
+    "summary": "const declared in internal/session/session.go"
+  },
+  "StatusCompleted": {
+    "file": "internal/tasks/state.go",
+    "kind": "const",
+    "summary": "const declared in internal/tasks/state.go"
+  },
+  "StatusFailed": {
+    "file": "internal/tasks/state.go",
+    "kind": "const",
+    "summary": "const declared in internal/tasks/state.go"
+  },
+  "StatusInbox": {
+    "file": "internal/tasks/state.go",
+    "kind": "const",
+    "summary": "const declared in internal/tasks/state.go"
+  },
+  "StatusOpen": {
+    "file": "internal/session/session.go",
+    "kind": "const",
+    "summary": "const declared in internal/session/session.go"
+  },
+  "StatusRunning": {
+    "file": "internal/tasks/state.go",
+    "kind": "const",
+    "summary": "const declared in internal/tasks/state.go"
+  },
+  "Store": {
+    "file": "internal/store/store.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/store/store.go"
+  },
+  "SymbolIndexEntry": {
+    "file": "internal/navigator/kb.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/navigator/kb.go"
+  },
+  "Task": {
+    "file": "internal/tasks/task.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/task.go"
+  },
+  "TaskBatch": {
+    "file": "internal/action/validator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/action/validator.go"
+  },
+  "TaskExecutor": {
+    "file": "internal/tasks/runner.go",
+    "kind": "interface",
+    "summary": "Interface declared in internal/tasks/runner.go"
+  },
+  "TaskPack": {
+    "file": "internal/tasks/pack.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/pack.go"
+  },
+  "TaskPackContext": {
+    "file": "internal/tasks/pack.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/pack.go"
+  },
+  "TaskRunResult": {
+    "file": "internal/tasks/runner.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/runner.go"
+  },
+  "TaskSession": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/navigator/navigator.go"
+  },
+  "TaskSplitter": {
+    "file": "internal/action/splitter.go",
+    "kind": "interface",
+    "summary": "Interface declared in internal/action/splitter.go"
+  },
+  "TasksHandler": {
+    "file": "internal/httpapi/tasks.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/tasks.go"
+  },
+  "TextResult": {
+    "file": "internal/mcp/tools.go",
+    "kind": "func",
+    "summary": "Function TextResult implemented in internal/mcp/tools.go"
+  },
+  "TmuxRunner": {
+    "file": "internal/terminal/tmux_runner.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/terminal/tmux_runner.go"
+  },
+  "Tool": {
+    "file": "internal/mcp/tools.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/mcp/tools.go"
+  },
+  "ToolCallParams": {
+    "file": "internal/mcp/tools.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/mcp/tools.go"
+  },
+  "ToolHandler": {
+    "file": "internal/mcp/tools.go",
+    "kind": "type",
+    "summary": "Type declared in internal/mcp/tools.go"
+  },
+  "Tools": {
+    "file": "internal/mcp/worktreetools/tools.go",
+    "kind": "func",
+    "summary": "Function Tools implemented in internal/mcp/worktreetools/tools.go"
+  },
+  "Update": {
+    "file": "internal/session/store.go",
+    "kind": "method",
+    "summary": "Method Update implemented in internal/session/store.go"
+  },
+  "UpdateKnowledgeBase": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function UpdateKnowledgeBase implemented in internal/navigator/kb.go"
+  },
+  "UpdateResult": {
+    "file": "internal/action/store.go",
+    "kind": "method",
+    "summary": "Method UpdateResult implemented in internal/action/store.go"
+  },
+  "UpdateTaskStatusFile": {
+    "file": "internal/tasks/status.go",
+    "kind": "func",
+    "summary": "Function UpdateTaskStatusFile implemented in internal/tasks/status.go"
+  },
+  "ValidateLeadingJSONAction": {
+    "file": "internal/action/validator.go",
+    "kind": "func",
+    "summary": "Function ValidateLeadingJSONAction implemented in internal/action/validator.go"
+  },
+  "ValidateSingleJSONAction": {
+    "file": "internal/action/validator.go",
+    "kind": "func",
+    "summary": "Function ValidateSingleJSONAction implemented in internal/action/validator.go"
+  },
+  "ValidateTask": {
+    "file": "internal/tasks/validator.go",
+    "kind": "func",
+    "summary": "Function ValidateTask implemented in internal/tasks/validator.go"
+  },
+  "ValidateTasks": {
+    "file": "internal/tasks/validator.go",
+    "kind": "func",
+    "summary": "Function ValidateTasks implemented in internal/tasks/validator.go"
+  },
+  "ValidationError": {
+    "file": "internal/tasks/validator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/tasks/validator.go"
+  },
+  "WorkerClient": {
+    "file": "internal/mcp/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/mcp/client.go"
+  },
+  "WorktreeHandler": {
+    "file": "internal/httpapi/worktree.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/worktree.go"
+  },
+  "Write": {
+    "file": "internal/httpapi/fileops.go",
+    "kind": "method",
+    "summary": "Method Write implemented in internal/httpapi/fileops.go"
+  },
+  "WriteFile": {
+    "file": "internal/worker/client.go",
+    "kind": "method",
+    "summary": "Method WriteFile implemented in internal/worker/client.go"
+  },
+  "WriteFileRequest": {
+    "file": "internal/worker/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worker/client.go"
+  },
+  "WriteFileResponse": {
+    "file": "internal/worker/client.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/worker/client.go"
+  },
+  "activeDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "agentRunner": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "type",
+    "summary": "Type declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "agentRuntime": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "struct",
+    "summary": "Struct declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "appendFile": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function appendFile implemented in internal/navigator/navigator.go"
+  },
+  "appendKBChangelog": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function appendKBChangelog implemented in internal/navigator/kb.go"
+  },
+  "architecture": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function architecture implemented in internal/navigator/navigator.go"
+  },
+  "archiveCompletedTask": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function archiveCompletedTask implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "archiveDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "artifactDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "artifactPath": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function artifactPath implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "assignManifestFolder": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function assignManifestFolder implemented in internal/tasks/pack.go"
+  },
+  "assignManifestRule": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function assignManifestRule implemented in internal/tasks/pack.go"
+  },
+  "assignManifestScalar": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function assignManifestScalar implemented in internal/tasks/pack.go"
+  },
+  "both": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function both implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "buildFileIndex": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function buildFileIndex implemented in internal/navigator/kb.go"
+  },
+  "buildKnowledgeBasePrompt": {
+    "file": "cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function buildKnowledgeBasePrompt implemented in cmd/ptolemy-agent/main.go"
+  },
+  "buildPendingTask": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function buildPendingTask implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "buildPlanPreviewForTasks": {
+    "file": "internal/tasks/cli.go",
+    "kind": "func",
+    "summary": "Function buildPlanPreviewForTasks implemented in internal/tasks/cli.go"
+  },
+  "buildSymbolIndex": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function buildSymbolIndex implemented in internal/navigator/kb.go"
+  },
+  "capture": {
+    "file": "internal/terminal/tmux_runner.go",
+    "kind": "method",
+    "summary": "Method capture implemented in internal/terminal/tmux_runner.go"
+  },
+  "classLarge": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "classMedium": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "classSmall": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "classifyTask": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function classifyTask implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "cleanConflictPath": {
+    "file": "internal/tasks/conflicts.go",
+    "kind": "func",
+    "summary": "Function cleanConflictPath implemented in internal/tasks/conflicts.go"
+  },
+  "cleanWorkspace": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function cleanWorkspace implemented in internal/navigator/navigator.go"
+  },
+  "closeSession": {
+    "file": "internal/httpapi/session.go",
+    "kind": "method",
+    "summary": "Method closeSession implemented in internal/httpapi/session.go"
+  },
+  "commandRunsScript": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function commandRunsScript implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "commands": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function commands implemented in internal/navigator/navigator.go"
+  },
+  "comparePlanTasks": {
+    "file": "internal/tasks/planner.go",
+    "kind": "func",
+    "summary": "Function comparePlanTasks implemented in internal/tasks/planner.go"
+  },
+  "conventions": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function conventions implemented in internal/navigator/navigator.go"
+  },
+  "convergePackBranches": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function convergePackBranches implemented in internal/tasks/pack_runtime.go"
+  },
+  "copyFile": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function copyFile implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "createPackPullRequest": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function createPackPullRequest implemented in internal/tasks/pack_runtime.go"
+  },
+  "createSession": {
+    "file": "internal/httpapi/session.go",
+    "kind": "method",
+    "summary": "Method createSession implemented in internal/httpapi/session.go"
+  },
+  "defaultIntegrationBranch": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function defaultIntegrationBranch implemented in internal/tasks/pack_runtime.go"
+  },
+  "dependenciesSatisfied": {
+    "file": "internal/tasks/planner.go",
+    "kind": "func",
+    "summary": "Function dependenciesSatisfied implemented in internal/tasks/planner.go"
+  },
+  "deriveTaskName": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function deriveTaskName implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "detectFiles": {
+    "file": "internal/inspect/inspect.go",
+    "kind": "func",
+    "summary": "Function detectFiles implemented in internal/inspect/inspect.go"
+  },
+  "detectProjectTypes": {
+    "file": "internal/inspect/inspect.go",
+    "kind": "func",
+    "summary": "Function detectProjectTypes implemented in internal/inspect/inspect.go"
+  },
+  "detectWSL": {
+    "file": "internal/inspect/inspect.go",
+    "kind": "func",
+    "summary": "Function detectWSL implemented in internal/inspect/inspect.go"
+  },
+  "doneDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "effectiveStatus": {
+    "file": "internal/tasks/scheduler.go",
+    "kind": "func",
+    "summary": "Function effectiveStatus implemented in internal/tasks/scheduler.go"
+  },
+  "ensureContextFiles": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function ensureContextFiles implemented in internal/navigator/navigator.go"
+  },
+  "ensureDir": {
+    "file": "internal/config/config.go",
+    "kind": "func",
+    "summary": "Function ensureDir implemented in internal/config/config.go"
+  },
+  "ensureDirs": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function ensureDirs implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "ensureLayout": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function ensureLayout implemented in internal/navigator/navigator.go"
+  },
+  "ensurePackArtifactDir": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function ensurePackArtifactDir implemented in internal/tasks/pack_runtime.go"
+  },
+  "ensureSeedFile": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function ensureSeedFile implemented in internal/navigator/kb.go"
+  },
+  "envNotes": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function envNotes implemented in internal/navigator/navigator.go"
+  },
+  "executeAction": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function executeAction implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "executionGroupRank": {
+    "file": "internal/tasks/planner.go",
+    "kind": "func",
+    "summary": "Function executionGroupRank implemented in internal/tasks/planner.go"
+  },
+  "exists": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function exists implemented in internal/navigator/navigator.go"
+  },
+  "extractFirstURL": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function extractFirstURL implemented in internal/tasks/pack_runtime.go"
+  },
+  "extractMarkedExitCode": {
+    "file": "internal/terminal/tmux_runner.go",
+    "kind": "func",
+    "summary": "Function extractMarkedExitCode implemented in internal/terminal/tmux_runner.go"
+  },
+  "extractMarkedOutput": {
+    "file": "internal/terminal/tmux_runner.go",
+    "kind": "func",
+    "summary": "Function extractMarkedOutput implemented in internal/terminal/tmux_runner.go"
+  },
+  "extractSingleAllowedFile": {
+    "file": "cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function extractSingleAllowedFile implemented in cmd/ptolemy-agent/main.go"
+  },
+  "fail": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "func",
+    "summary": "Function fail implemented in internal/worktree/worktree.go"
+  },
+  "failedDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "fileExists": {
+    "file": "cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function fileExists implemented in cmd/ptolemy-agent/main.go"
+  },
+  "fileRequest": {
+    "file": "internal/httpapi/fileops.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/fileops.go"
+  },
+  "findWorkspaceBasenameMatches": {
+    "file": "cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function findWorkspaceBasenameMatches implemented in cmd/ptolemy-agent/main.go"
+  },
+  "firstLine": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function firstLine implemented in internal/tasks/pack_runtime.go"
+  },
+  "firstOrDefault": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function firstOrDefault implemented in internal/tasks/pack_runtime.go"
+  },
+  "getEnv": {
+    "file": "internal/config/config.go",
+    "kind": "func",
+    "summary": "Function getEnv implemented in internal/config/config.go"
+  },
+  "getOps": {
+    "file": "internal/httpapi/fileops.go",
+    "kind": "method",
+    "summary": "Method getOps implemented in internal/httpapi/fileops.go"
+  },
+  "getSession": {
+    "file": "internal/httpapi/session.go",
+    "kind": "method",
+    "summary": "Method getSession implemented in internal/httpapi/session.go"
+  },
+  "gitForSession": {
+    "file": "internal/httpapi/git.go",
+    "kind": "method",
+    "summary": "Method gitForSession implemented in internal/httpapi/git.go"
+  },
+  "gitOutputLines": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function gitOutputLines implemented in internal/tasks/pack_runtime.go"
+  },
+  "gitRequest": {
+    "file": "internal/httpapi/git.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/git.go"
+  },
+  "goBinary": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function goBinary implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "handleInvalidModelOutput": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function handleInvalidModelOutput implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "handleToolCall": {
+    "file": "internal/mcp/server.go",
+    "kind": "method",
+    "summary": "Method handleToolCall implemented in internal/mcp/server.go"
+  },
+  "hasExplicitScriptPermission": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function hasExplicitScriptPermission implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "hasTrailingValue": {
+    "file": "internal/action/validator.go",
+    "kind": "func",
+    "summary": "Function hasTrailingValue implemented in internal/action/validator.go"
+  },
+  "healthResponse": {
+    "file": "internal/httpapi/router.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/router.go"
+  },
+  "ignoredDirs": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "var",
+    "summary": "var declared in internal/navigator/navigator.go"
+  },
+  "inboxDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "inboxExecutor": {
+    "file": "internal/httpapi/tasks.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/tasks.go"
+  },
+  "isAllowedExecutionGroup": {
+    "file": "internal/tasks/validator.go",
+    "kind": "func",
+    "summary": "Function isAllowedExecutionGroup implemented in internal/tasks/validator.go"
+  },
+  "isAllowedStatus": {
+    "file": "internal/tasks/validator.go",
+    "kind": "func",
+    "summary": "Function isAllowedStatus implemented in internal/tasks/validator.go"
+  },
+  "isConventionalCommit": {
+    "file": "internal/gitops/gitops.go",
+    "kind": "func",
+    "summary": "Function isConventionalCommit implemented in internal/gitops/gitops.go"
+  },
+  "isDir": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function isDir implemented in internal/navigator/navigator.go"
+  },
+  "isSafeReplacePath": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function isSafeReplacePath implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "isScriptPath": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function isScriptPath implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "kindForType": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function kindForType implemented in internal/navigator/kb.go"
+  },
+  "lastSeenCommit": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function lastSeenCommit implemented in internal/navigator/kb.go"
+  },
+  "listCommands": {
+    "file": "internal/httpapi/commands.go",
+    "kind": "method",
+    "summary": "Method listCommands implemented in internal/httpapi/commands.go"
+  },
+  "listOrEmpty": {
+    "file": "internal/tasks/task.go",
+    "kind": "func",
+    "summary": "Function listOrEmpty implemented in internal/tasks/task.go"
+  },
+  "listSessions": {
+    "file": "internal/httpapi/session.go",
+    "kind": "method",
+    "summary": "Method listSessions implemented in internal/httpapi/session.go"
+  },
+  "loadMarkdownFiles": {
+    "file": "internal/memory/loader.go",
+    "kind": "func",
+    "summary": "Function loadMarkdownFiles implemented in internal/memory/loader.go"
+  },
+  "main": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/workerd/main.go",
+    "kind": "func",
+    "summary": "Function main implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/workerd/main.go"
+  },
+  "markdownList": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function markdownList implemented in internal/tasks/pack_runtime.go"
+  },
+  "maxBrainPreviewChars": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "maxOutputSize": {
+    "file": "internal/httpapi/commands.go",
+    "kind": "const",
+    "summary": "const declared in internal/httpapi/commands.go"
+  },
+  "mergeSymbolEntries": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function mergeSymbolEntries implemented in internal/navigator/kb.go"
+  },
+  "migrate": {
+    "file": "internal/store/store.go",
+    "kind": "method",
+    "summary": "Method migrate implemented in internal/store/store.go"
+  },
+  "moveTask": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function moveTask implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "moveToActive": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function moveToActive implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "moveToProcess": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function moveToProcess implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "mustMarshalJSON": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function mustMarshalJSON implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "navigatorRequest": {
+    "file": "internal/httpapi/navigator.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/navigator.go"
+  },
+  "normalizeChangedFiles": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function normalizeChangedFiles implemented in internal/navigator/kb.go"
+  },
+  "normalizeKind": {
+    "file": "internal/action/validator.go",
+    "kind": "func",
+    "summary": "Function normalizeKind implemented in internal/action/validator.go"
+  },
+  "normalizeRelativeDir": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function normalizeRelativeDir implemented in internal/tasks/pack.go"
+  },
+  "normalizeWorkspaceRelativePath": {
+    "file": "cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function normalizeWorkspaceRelativePath implemented in cmd/ptolemy-agent/main.go"
+  },
+  "notificationDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "nullIfEmpty": {
+    "file": "internal/logging/store.go",
+    "kind": "func",
+    "summary": "Function nullIfEmpty implemented in internal/logging/store.go"
+  },
+  "packKBChangedFiles": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function packKBChangedFiles implemented in internal/tasks/pack_runtime.go"
+  },
+  "parseFrontmatter": {
+    "file": "internal/tasks/task.go",
+    "kind": "func",
+    "summary": "Function parseFrontmatter implemented in internal/tasks/task.go"
+  },
+  "parseManifestBool": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function parseManifestBool implemented in internal/tasks/pack.go"
+  },
+  "pendingTask": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "struct",
+    "summary": "Struct declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "preparePackBranches": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function preparePackBranches implemented in internal/tasks/pack_runtime.go"
+  },
+  "previewText": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function previewText implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "priorityRank": {
+    "file": "internal/tasks/scanner.go",
+    "kind": "func",
+    "summary": "Function priorityRank implemented in internal/tasks/scanner.go"
+  },
+  "processBrainReply": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function processBrainReply implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "processDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "projectMap": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function projectMap implemented in internal/navigator/navigator.go"
+  },
+  "ptolemyGuide": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function ptolemyGuide implemented in internal/navigator/navigator.go"
+  },
+  "purposeForPath": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function purposeForPath implemented in internal/navigator/kb.go"
+  },
+  "pushIntegrationBranch": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function pushIntegrationBranch implemented in internal/tasks/pack_runtime.go"
+  },
+  "queueActive": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "queueInbox": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "queueProcess": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "queueSplit": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "queueTaskBatch": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function queueTaskBatch implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "readFileIndex": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function readFileIndex implemented in internal/navigator/kb.go"
+  },
+  "readGoSymbols": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function readGoSymbols implemented in internal/navigator/kb.go"
+  },
+  "readSymbolIndex": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function readSymbolIndex implemented in internal/navigator/kb.go"
+  },
+  "removeSymbolsForFile": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function removeSymbolsForFile implemented in internal/navigator/kb.go"
+  },
+  "requireDir": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function requireDir implemented in internal/tasks/pack.go"
+  },
+  "requireFile": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function requireFile implemented in internal/tasks/pack.go"
+  },
+  "resolveMainRepoRoot": {
+    "file": "internal/httpapi/worktree.go",
+    "kind": "func",
+    "summary": "Function resolveMainRepoRoot implemented in internal/httpapi/worktree.go"
+  },
+  "resolveWorkspace": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function resolveWorkspace implemented in internal/tasks/pack_runtime.go"
+  },
+  "resolveWorkspacePath": {
+    "file": "cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function resolveWorkspacePath implemented in cmd/ptolemy-agent/main.go"
+  },
+  "run": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "method",
+    "summary": "Method run implemented in internal/worktree/worktree.go"
+  },
+  "runAgent": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "var",
+    "summary": "var declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "runAgentTask": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function runAgentTask implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "runCLI": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function runCLI implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "runCommand": {
+    "file": "internal/inspect/inspect.go",
+    "kind": "func",
+    "summary": "Function runCommand implemented in internal/inspect/inspect.go"
+  },
+  "runInboxRequest": {
+    "file": "internal/httpapi/tasks.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/tasks.go"
+  },
+  "runInboxResponse": {
+    "file": "internal/httpapi/tasks.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/tasks.go"
+  },
+  "runPlanCommand": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function runPlanCommand implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "runSchedulerCommand": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function runSchedulerCommand implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "runTaskList": {
+    "file": "internal/tasks/scheduler.go",
+    "kind": "func",
+    "summary": "Function runTaskList implemented in internal/tasks/scheduler.go"
+  },
+  "runTaskPackList": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function runTaskPackList implemented in internal/tasks/pack_runtime.go"
+  },
+  "safeSessionID": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function safeSessionID implemented in internal/navigator/navigator.go"
+  },
+  "sanitize": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "func",
+    "summary": "Function sanitize implemented in internal/worktree/worktree.go"
+  },
+  "sanitizeArtifactName": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function sanitizeArtifactName implemented in internal/tasks/pack_runtime.go"
+  },
+  "saveArtifact": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function saveArtifact implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "saveArtifactAt": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function saveArtifactAt implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "scanSession": {
+    "file": "internal/session/store.go",
+    "kind": "func",
+    "summary": "Function scanSession implemented in internal/session/store.go"
+  },
+  "scanner": {
+    "file": "internal/session/store.go",
+    "kind": "interface",
+    "summary": "Interface declared in internal/session/store.go"
+  },
+  "seedWorkflows": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function seedWorkflows implemented in internal/navigator/kb.go"
+  },
+  "selectNextTask": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function selectNextTask implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "shellQuote": {
+    "file": "internal/worktree/worktree.go",
+    "kind": "func",
+    "summary": "Function shellQuote implemented in internal/worktree/worktree.go"
+  },
+  "shouldSkipDir": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function shouldSkipDir implemented in internal/navigator/navigator.go"
+  },
+  "shouldSkipFile": {
+    "file": "internal/navigator/navigator.go",
+    "kind": "func",
+    "summary": "Function shouldSkipFile implemented in internal/navigator/navigator.go"
+  },
+  "shouldSplit": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function shouldSplit implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "slugArtifactPart": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function slugArtifactPart implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "sortedMarkdownTasks": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function sortedMarkdownTasks implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "splitDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "splitLargeTask": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function splitLargeTask implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "splitManifestKeyValue": {
+    "file": "internal/tasks/pack.go",
+    "kind": "func",
+    "summary": "Function splitManifestKeyValue implemented in internal/tasks/pack.go"
+  },
+  "splitScopes": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function splitScopes implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "splitterMessage": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function splitterMessage implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "stepBudget": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function stepBudget implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "summarize": {
+    "file": "internal/executor/executor.go",
+    "kind": "func",
+    "summary": "Function summarize implemented in internal/executor/executor.go"
+  },
+  "summarizeError": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function summarizeError implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "summarizeFunc": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function summarizeFunc implemented in internal/navigator/kb.go"
+  },
+  "summarizeType": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function summarizeType implemented in internal/navigator/kb.go"
+  },
+  "supportedPackExecutionMode": {
+    "file": "internal/tasks/pack.go",
+    "kind": "const",
+    "summary": "const declared in internal/tasks/pack.go"
+  },
+  "syncCompatibilityContext": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function syncCompatibilityContext implemented in internal/navigator/kb.go"
+  },
+  "tagsForPath": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function tagsForPath implemented in internal/navigator/kb.go"
+  },
+  "taskClass": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "type",
+    "summary": "Type declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "taskLogPath": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function taskLogPath implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "taskQueue": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "type",
+    "summary": "Type declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "taskRunnerStateDir": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "const",
+    "summary": "const declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "taskTitle": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function taskTitle implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "tmuxSessionName": {
+    "file": "internal/terminal/tmux_runner.go",
+    "kind": "func",
+    "summary": "Function tmuxSessionName implemented in internal/terminal/tmux_runner.go"
+  },
+  "trimJSONCodeFence": {
+    "file": "internal/action/validator.go",
+    "kind": "func",
+    "summary": "Function trimJSONCodeFence implemented in internal/action/validator.go"
+  },
+  "truncateOutput": {
+    "file": "internal/gitops/gitops.go",
+    "kind": "func",
+    "summary": "Function truncateOutput implemented in internal/gitops/gitops.go"
+  },
+  "uniqueArtifactPath": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "func",
+    "summary": "Function uniqueArtifactPath implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "uniqueSortedBranches": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function uniqueSortedBranches implemented in internal/tasks/pack_runtime.go"
+  },
+  "uniqueTaskPath": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function uniqueTaskPath implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "validateAllowedFile": {
+    "file": "internal/tasks/validator.go",
+    "kind": "func",
+    "summary": "Function validateAllowedFile implemented in internal/tasks/validator.go"
+  },
+  "validatePackReference": {
+    "file": "internal/tasks/validator.go",
+    "kind": "func",
+    "summary": "Function validatePackReference implemented in internal/tasks/validator.go"
+  },
+  "validateTaskBatch": {
+    "file": "internal/action/validator.go",
+    "kind": "func",
+    "summary": "Function validateTaskBatch implemented in internal/action/validator.go"
+  },
+  "withDefault": {
+    "file": "internal/tasks/task.go",
+    "kind": "func",
+    "summary": "Function withDefault implemented in internal/tasks/task.go"
+  },
+  "workerClient": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go",
+    "kind": "interface",
+    "summary": "Interface declared in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-agent/main.go"
+  },
+  "workspaceForRequest": {
+    "file": "internal/httpapi/navigator.go",
+    "kind": "method",
+    "summary": "Method workspaceForRequest implemented in internal/httpapi/navigator.go"
+  },
+  "worktreeRequest": {
+    "file": "internal/httpapi/worktree.go",
+    "kind": "struct",
+    "summary": "Struct declared in internal/httpapi/worktree.go"
+  },
+  "writeFailureNotification": {
+    "file": "docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go",
+    "kind": "func",
+    "summary": "Function writeFailureNotification implemented in docs/tasks/packs/ptolemy-memory-refresh/.state/task-packs/ptolemy-memory-refresh/worktrees/ptolemy-memory-refresh-integration/cmd/ptolemy-task-runner/main.go"
+  },
+  "writeJSON": {
+    "file": "internal/httpapi/json.go",
+    "kind": "func",
+    "summary": "Function writeJSON implemented in internal/httpapi/json.go"
+  },
+  "writeJSONFile": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function writeJSONFile implemented in internal/navigator/kb.go"
+  },
+  "writeKnowledgeBase": {
+    "file": "internal/navigator/kb.go",
+    "kind": "func",
+    "summary": "Function writeKnowledgeBase implemented in internal/navigator/kb.go"
+  },
+  "writePackBranchLog": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function writePackBranchLog implemented in internal/tasks/pack_runtime.go"
+  },
+  "writePackIssueDraft": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function writePackIssueDraft implemented in internal/tasks/pack_runtime.go"
+  },
+  "writePackPRDraft": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function writePackPRDraft implemented in internal/tasks/pack_runtime.go"
+  },
+  "writePackPublishFailureIssueDraft": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function writePackPublishFailureIssueDraft implemented in internal/tasks/pack_runtime.go"
+  },
+  "writePackSummary": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function writePackSummary implemented in internal/tasks/pack_runtime.go"
+  },
+  "writePackTaskLog": {
+    "file": "internal/tasks/pack_runtime.go",
+    "kind": "func",
+    "summary": "Function writePackTaskLog implemented in internal/tasks/pack_runtime.go"
+  },
+  "writeResp": {
+    "file": "internal/mcp/server.go",
+    "kind": "func",
+    "summary": "Function writeResp implemented in internal/mcp/server.go"
+  }
+}

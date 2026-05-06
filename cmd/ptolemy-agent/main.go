@@ -17,6 +17,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/inspect"
 	logpkg "github.com/luannn010/ptolemy/internal/logging"
+	"github.com/luannn010/ptolemy/internal/navigator"
 	storepkg "github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/worker"
 )
@@ -74,6 +75,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	kbFiles, kbErr := navigator.ReadContext(workspace)
+	kbPrompt := buildKnowledgeBasePrompt(kbFiles, kbErr)
+
 	snapshot := inspect.InspectWorkspace(workspace)
 
 	snapshotJSON, err := json.MarshalIndent(snapshot, "", "  ")
@@ -103,9 +107,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	brainClient := brain.NewClient("http://127.0.0.1:8088", "gemma-4-e2b")
+	brainClient := brain.NewClient("http://127.0.0.1:11434", "gwen3.5:4b")
 	runtime := &agentRuntime{
-		workerClient: worker.NewClient("http://127.0.0.1:8080"),
+		workerClient: worker.NewClient("http://127.0.0.1:11434"),
 		actionStore:  actionpkg.NewStore(baseStore.SQLDB()),
 		logStore:     logpkg.NewStore(baseStore.SQLDB()),
 		splitter:     actionpkg.PlaceholderTaskSplitter{},
@@ -175,14 +179,17 @@ Rules:
 			},
 			{
 				Role: "user",
-				Content: fmt.Sprintf(`Workspace snapshot:
+				Content: fmt.Sprintf(`Knowledge base:
+%s
+
+Workspace snapshot:
 %s
 
 Original task:
 %s
 
 Observations so far:
-%s`, string(snapshotJSON), task, strings.Join(observations, "\n\n")),
+%s`, kbPrompt, string(snapshotJSON), task, strings.Join(observations, "\n\n")),
 			},
 		})
 		if err != nil {
@@ -210,6 +217,28 @@ Observations so far:
 
 	fmt.Println("max steps reached")
 	os.Exit(1)
+}
+
+func buildKnowledgeBasePrompt(files []navigator.ContextFile, err error) string {
+	if err != nil {
+		return fmt.Sprintf("KB unavailable: %v", err)
+	}
+	if len(files) == 0 {
+		return "KB unavailable: no KB files found"
+	}
+
+	var builder strings.Builder
+	for _, file := range files {
+		builder.WriteString("## ")
+		builder.WriteString(file.Path)
+		builder.WriteString("\n")
+		builder.WriteString(file.Content)
+		if !strings.HasSuffix(file.Content, "\n") {
+			builder.WriteString("\n")
+		}
+		builder.WriteString("\n")
+	}
+	return builder.String()
 }
 
 func executeAction(
@@ -622,7 +651,7 @@ func queueTaskBatch(ctx context.Context, runtime *agentRuntime, sessionID string
 		}
 	}
 
-		_, _ = runtime.logStore.Create(ctx, logpkg.Log{
+	_, _ = runtime.logStore.Create(ctx, logpkg.Log{
 		SessionID: sessionID,
 		ActionID:  parent.ID,
 		Level:     "info",
@@ -905,18 +934,18 @@ func fileExists(path string) bool {
 func findWorkspaceBasenameMatches(workspace string, base string) []string {
 	var matches []string
 	skipDirs := map[string]bool{
-		".git":              true,
-		".state":            true,
+		".git":               true,
+		".state":             true,
 		".ptolemy-worktrees": true,
-		"bin":               true,
-		"build":             true,
-		"coverage":          true,
-		"dist":              true,
-		"logs":              true,
-		"node_modules":      true,
-		"state":             true,
-		"tmp":               true,
-		"vendor":            true,
+		"bin":                true,
+		"build":              true,
+		"coverage":           true,
+		"dist":               true,
+		"logs":               true,
+		"node_modules":       true,
+		"state":              true,
+		"tmp":                true,
+		"vendor":             true,
 	}
 
 	_ = filepath.WalkDir(workspace, func(current string, d os.DirEntry, err error) error {

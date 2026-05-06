@@ -181,6 +181,19 @@ func TestRunTaskPackWritesArtifactsAndPullRequestDraft(t *testing.T) {
 	if !strings.Contains(remoteHeads, result.IntegrationBranch) {
 		t.Fatalf("expected pushed integration branch, got %q", remoteHeads)
 	}
+
+	fileIndexPath := filepath.Join(result.IntegrationWorktree, ".ptolemy", "kb", "FILE_INDEX.json")
+	if _, err := os.Stat(fileIndexPath); err != nil {
+		t.Fatalf("expected KB file index to be written: %v", err)
+	}
+	changelogPath := filepath.Join(result.IntegrationWorktree, ".ptolemy", "kb", "CHANGELOG.md")
+	changelogData, err := os.ReadFile(changelogPath)
+	if err != nil {
+		t.Fatalf("expected KB changelog to be written: %v", err)
+	}
+	if !strings.Contains(string(changelogData), "sample-pack") || !strings.Contains(string(changelogData), "task-a.txt") {
+		t.Fatalf("expected KB changelog entry, got %s", string(changelogData))
+	}
 }
 
 func TestRunTaskPackWritesFailureIssueDraft(t *testing.T) {
@@ -202,6 +215,9 @@ func TestRunTaskPackWritesFailureIssueDraft(t *testing.T) {
 	}
 	if !strings.Contains(string(issueData), "Task pack \"Sample Pack\" failed") {
 		t.Fatalf("unexpected issue draft: %s", string(issueData))
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".ptolemy", "kb", "CHANGELOG.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected no KB changelog on failed pack, got err=%v", err)
 	}
 }
 

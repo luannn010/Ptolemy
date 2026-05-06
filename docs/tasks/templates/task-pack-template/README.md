@@ -14,6 +14,8 @@ Each pack should have:
 - validation after each meaningful change
 - one final Pull Request
 
+For repo-memory work, prefer `.ptolemy/kb` as the canonical target and treat legacy `.ptolemy/context` files as compatibility artifacts unless the task says otherwise.
+
 ---
 
 ## Suggested Structure

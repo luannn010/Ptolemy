@@ -75,6 +75,9 @@ func NewRouter(
 	r.Post("/navigator/context", navigatorHandler.ReadContext)
 	r.Post("/navigator/session/start", navigatorHandler.StartTaskSession)
 	r.Post("/navigator/session/note", navigatorHandler.AppendSessionNote)
+	r.Post("/kb/build", navigatorHandler.IndexWorkspace)
+	r.Post("/kb/read", navigatorHandler.ReadContext)
+	r.Post("/kb/update", navigatorHandler.UpdateKnowledgeBase)
 
 	gitHandler := NewGitHandler(sessionStore)
 
