@@ -9,11 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/tasks"
 )
 
@@ -53,7 +55,7 @@ type pendingTask struct {
 	MaxSteps       int
 }
 
-type agentRunner func(taskPath string, maxSteps int) ([]byte, error)
+type agentRunner func(workspace string, taskPath string, maxSteps int) ([]byte, error)
 
 var runAgent = runAgentTask
 
@@ -74,6 +76,8 @@ func runCLI(args []string, out io.Writer) error {
 		return runPlanCommand(args[1:], out)
 	case "run":
 		return runSchedulerCommand(args[1:], out)
+	case "bootstrap":
+		return runBootstrapCommand(args[1:], out)
 	default:
 		return run(out)
 	}
@@ -166,6 +170,32 @@ func runSchedulerCommand(args []string, out io.Writer) error {
 	return nil
 }
 
+func runBootstrapCommand(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("bootstrap", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	workspace := fs.String("workspace", ".", "workspace directory")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	result, err := tasks.BootstrapWorkspace(*workspace)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(out, "Workspace: %s\n", result.Workspace)
+	for _, dir := range result.CreatedDirs {
+		fmt.Fprintf(out, "Created dir: %s\n", dir)
+	}
+	for _, file := range result.CreatedFiles {
+		fmt.Fprintf(out, "Created file: %s\n", file)
+	}
+	if len(result.CreatedDirs) == 0 && len(result.CreatedFiles) == 0 {
+		fmt.Fprintln(out, "No bootstrap changes were needed.")
+	}
+	return nil
+}
+
 func run(out io.Writer) error {
 	if err := ensureDirs(); err != nil {
 		return err
@@ -223,7 +253,12 @@ func run(out io.Writer) error {
 	fmt.Fprintf(out, "Max steps: %d\n", task.MaxSteps)
 	fmt.Fprintln(out, "Running agent...")
 
-	cmdOutput, runErr := runAgent(processPath, task.MaxSteps)
+	workspace, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("resolve workspace: %w", err)
+	}
+
+	cmdOutput, runErr := runAgent(workspace, processPath, task.MaxSteps)
 
 	logContent := cmdOutput
 	if runErr != nil {
@@ -598,7 +633,47 @@ func goBinary() string {
 	return "go"
 }
 
-func runAgentTask(taskPath string, maxSteps int) ([]byte, error) {
-	cmd := exec.Command(goBinary(), "run", "./cmd/ptolemy-agent", "--task-file", taskPath, "--max-steps", strconv.Itoa(maxSteps))
+func runAgentTask(workspace string, taskPath string, maxSteps int) ([]byte, error) {
+	binaryPath, err := resolveAgentBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command(binaryPath, "--workspace", workspace, "--task-file", taskPath, "--max-steps", strconv.Itoa(maxSteps))
+	cmd.Dir = workspace
 	return cmd.CombinedOutput()
+}
+
+func resolveAgentBinary() (string, error) {
+	cfg, err := config.Load()
+	if err == nil && strings.TrimSpace(cfg.AgentBinaryPath) != "" {
+		return cfg.AgentBinaryPath, nil
+	}
+
+	if path, err := exec.LookPath(agentBinaryName()); err == nil {
+		return path, nil
+	}
+
+	candidates := []string{
+		filepath.Join(".", "bin", agentBinaryName()),
+	}
+
+	if exePath, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exePath), agentBinaryName()))
+	}
+
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("ptolemy-agent binary not found; set PTOLEMY_AGENT_BIN or place %s on PATH", agentBinaryName())
+}
+
+func agentBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "ptolemy-agent.exe"
+	}
+	return "ptolemy-agent"
 }
