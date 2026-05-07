@@ -28,9 +28,13 @@ type Session struct {
 }
 
 type RunCommandRequest struct {
-	Command string `json:"command"`
-	CWD     string `json:"cwd,omitempty"`
-	Timeout int    `json:"timeout,omitempty"`
+	Command       string `json:"command"`
+	CWD           string `json:"cwd,omitempty"`
+	Timeout       int    `json:"timeout,omitempty"`
+	Title         string `json:"title,omitempty"`
+	Purpose       string `json:"purpose,omitempty"`
+	ReasoningStep string `json:"reasoning_step,omitempty"`
+	Target        string `json:"target,omitempty"`
 }
 
 type CommandResult struct {
