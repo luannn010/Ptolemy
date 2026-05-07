@@ -48,12 +48,30 @@ func main() {
 	taskFile := flag.String("task-file", "", "markdown task file to execute")
 	maxSteps := flag.Int("max-steps", 8, "max agent steps")
 	allowScripts := flag.Bool("allow-scripts", false, "allow script creation/execution for approved bootstrap tasks")
+	workspaceFlag := flag.String("workspace", "", "workspace directory to operate on")
+	workerURLFlag := flag.String("worker-url", "", "ptolemy worker base URL")
+	brainURLFlag := flag.String("brain-url", "", "brain API base URL")
+	brainModelFlag := flag.String("brain-model", "", "brain model name")
 	flag.Parse()
 
 	task := strings.Join(flag.Args(), " ")
 
-	if *taskFile != "" {
-		data, err := os.ReadFile(*taskFile)
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Printf("failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	workspace, err := resolveWorkspace(*workspaceFlag)
+	if err != nil {
+		fmt.Printf("failed to resolve workspace: %v\n", err)
+		os.Exit(1)
+	}
+
+	taskFilePath := resolveTaskFilePath(workspace, *taskFile)
+
+	if taskFilePath != "" {
+		data, err := os.ReadFile(taskFilePath)
 		if err != nil {
 			fmt.Printf("failed to read task file: %v\n", err)
 			os.Exit(1)
@@ -66,14 +84,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	taskName := deriveTaskName(*taskFile, task)
+	taskName := deriveTaskName(taskFilePath, task)
 	defaultTarget := extractSingleAllowedFile(task)
-
-	workspace, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("failed to get workspace: %v\n", err)
-		os.Exit(1)
-	}
 
 	kbFiles, kbErr := navigator.ReadContext(workspace)
 	kbPrompt := buildKnowledgeBasePrompt(kbFiles, kbErr)
@@ -89,12 +101,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	cfg, err := config.Load()
-	if err != nil {
-		fmt.Printf("failed to load config: %v\n", err)
-		os.Exit(1)
-	}
-
 	baseStore, err := storepkg.Open(cfg.DBPath)
 	if err != nil {
 		fmt.Printf("failed to open store: %v\n", err)
@@ -107,9 +113,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	brainClient := brain.NewClient("http://127.0.0.1:11434", "gwen3.5:4b")
+	brainURL := firstNonEmpty(strings.TrimSpace(*brainURLFlag), strings.TrimSpace(cfg.BrainBaseURL))
+	brainModel := firstNonEmpty(strings.TrimSpace(*brainModelFlag), strings.TrimSpace(cfg.BrainModel))
+	workerURL := firstNonEmpty(strings.TrimSpace(*workerURLFlag), strings.TrimSpace(cfg.WorkerBaseURL))
+
+	brainClient := brain.NewClient(brainURL, brainModel)
 	runtime := &agentRuntime{
-		workerClient: worker.NewClient("http://127.0.0.1:11434"),
+		workerClient: worker.NewClient(workerURL),
 		actionStore:  actionpkg.NewStore(baseStore.SQLDB()),
 		logStore:     logpkg.NewStore(baseStore.SQLDB()),
 		splitter:     actionpkg.PlaceholderTaskSplitter{},
@@ -830,6 +840,44 @@ func deriveTaskName(taskFile string, task string) string {
 	}
 
 	return "task"
+}
+
+func resolveWorkspace(workspace string) (string, error) {
+	if strings.TrimSpace(workspace) == "" {
+		return os.Getwd()
+	}
+
+	root, err := filepath.Abs(workspace)
+	if err != nil {
+		return "", err
+	}
+
+	info, err := os.Stat(root)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("workspace is not a directory: %s", workspace)
+	}
+
+	return root, nil
+}
+
+func resolveTaskFilePath(workspace string, taskFile string) string {
+	trimmed := strings.TrimSpace(taskFile)
+	if trimmed == "" || filepath.IsAbs(trimmed) || workspace == "" {
+		return trimmed
+	}
+	return filepath.Join(workspace, trimmed)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func extractSingleAllowedFile(task string) string {

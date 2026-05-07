@@ -59,7 +59,7 @@ func TestWorkflowLargeInboxTaskSplitsAndArchivesParent(t *testing.T) {
 	chdirTemp(t)
 	called := false
 	previous := runAgent
-	runAgent = func(taskPath string, maxSteps int) ([]byte, error) {
+	runAgent = func(workspace string, taskPath string, maxSteps int) ([]byte, error) {
 		called = true
 		return []byte("should not run"), nil
 	}
@@ -126,7 +126,10 @@ func stubRunAgent(t *testing.T, output []byte, err error) func() {
 	t.Helper()
 
 	previous := runAgent
-	runAgent = func(taskPath string, maxSteps int) ([]byte, error) {
+	runAgent = func(workspace string, taskPath string, maxSteps int) ([]byte, error) {
+		if workspace == "" {
+			t.Fatal("expected workspace to be passed to runAgent")
+		}
 		if filepath.Dir(taskPath) != processDir {
 			t.Fatalf("agent task path = %q, want process dir", taskPath)
 		}
