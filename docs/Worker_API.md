@@ -62,6 +62,13 @@ curl -s -X POST http://localhost:8080/execute \
   }' | jq
 ```
 
+Optional descriptive metadata fields are also accepted on `/execute` and `ptolemy.execute`:
+
+- `title`
+- `purpose`
+- `reasoning_step`
+- `target`
+
 ## Example: Read A File
 
 ```bash
