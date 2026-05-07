@@ -13,15 +13,19 @@ type Store struct {
 }
 
 type Action struct {
-	ID        string
-	SessionID string
-	Type      string
-	Input     string
-	Output    string
-	Status    string
-	Metadata  string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID            string
+	SessionID     string
+	Type          string
+	Input         string
+	Output        string
+	Status        string
+	Metadata      string
+	Title         string
+	Purpose       string
+	ReasoningStep string
+	Target        string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 func NewStore(db *sql.DB) *Store {
@@ -34,6 +38,12 @@ func (s *Store) Create(ctx context.Context, a Action) (Action, error) {
 	a.ID = uuid.NewString()
 	a.CreatedAt = now
 	a.UpdatedAt = now
+	a.Metadata = MergeMetadata(a.Metadata, ActionMetadata{
+		Title:         a.Title,
+		Purpose:       a.Purpose,
+		ReasoningStep: a.ReasoningStep,
+		Target:        a.Target,
+	})
 
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO actions 
@@ -51,6 +61,50 @@ func (s *Store) Create(ctx context.Context, a Action) (Action, error) {
 	)
 
 	return a, err
+}
+
+func (s *Store) ListBySession(ctx context.Context, sessionID string) ([]Action, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, type, input, output, status, metadata, created_at, updated_at
+		FROM actions
+		WHERE session_id = ?
+		ORDER BY created_at ASC`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var actions []Action
+	for rows.Next() {
+		var item Action
+		var createdAt string
+		var updatedAt string
+		if err := rows.Scan(
+			&item.ID,
+			&item.SessionID,
+			&item.Type,
+			&item.Input,
+			&item.Output,
+			&item.Status,
+			&item.Metadata,
+			&createdAt,
+			&updatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		item.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		item.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+
+		meta := ParseMetadata(item.Metadata)
+		item.Title = meta.Title
+		item.Purpose = meta.Purpose
+		item.ReasoningStep = meta.ReasoningStep
+		item.Target = meta.Target
+
+		actions = append(actions, item)
+	}
+
+	return actions, rows.Err()
 }
 
 func (s *Store) UpdateResult(ctx context.Context, id, output, status string) error {
