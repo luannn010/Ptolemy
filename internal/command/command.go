@@ -15,7 +15,11 @@ type CommandLog struct {
 }
 
 type RunCommandRequest struct {
-	Command string `json:"command"`
-	CWD     string `json:"cwd"`
-	Timeout int    `json:"timeout"`
+	Command       string `json:"command"`
+	CWD           string `json:"cwd"`
+	Timeout       int    `json:"timeout"`
+	Title         string `json:"title,omitempty"`
+	Purpose       string `json:"purpose,omitempty"`
+	ReasoningStep string `json:"reasoning_step,omitempty"`
+	Target        string `json:"target,omitempty"`
 }
