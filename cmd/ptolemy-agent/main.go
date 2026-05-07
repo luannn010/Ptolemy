@@ -921,15 +921,6 @@ func resolveTaskFilePath(workspace string, taskFile string) string {
 	return filepath.Join(workspace, trimmed)
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 func extractSingleAllowedFile(task string) string {
 	lines := strings.Split(task, "\n")
 	inAllowedFiles := false
