@@ -148,7 +148,11 @@ Format:
   "old": "<exact old text for replace_block>",
   "new": "<exact new text for replace_block>",
   "marker": "<text marker for insert_after>",
-  "reason": "<short explanation>"
+  "reason": "<short explanation>",
+  "title": "<short human-readable label>",
+  "purpose": "<why this action is needed>",
+  "reasoning_step": "<current reasoning phase>",
+  "target": "<file, command, path, endpoint, or service>"
 }
 
 Rules:
@@ -271,9 +275,13 @@ func executeAction(
 		}
 
 		result, err := runtime.workerClient.RunCommand(ctx, sessionID, worker.RunCommandRequest{
-			Command: action.Command,
-			CWD:     workspace,
-			Timeout: 120,
+			Command:       action.Command,
+			CWD:           workspace,
+			Timeout:       120,
+			Title:         action.Title,
+			Purpose:       firstNonEmpty(action.Purpose, action.Reason),
+			ReasoningStep: action.ReasoningStep,
+			Target:        firstNonEmpty(action.Target, action.Command),
 		})
 		if err != nil {
 			return both(fmt.Sprintf("ERROR running command: %v", err))
@@ -301,7 +309,10 @@ func executeAction(
 			previewText(combinedOutput, maxBrainPreviewChars),
 		)
 
-		return ActionResult{Display: display, Brain: brain}
+		return ActionResult{
+			Display: formatActionDisplay(action, result.Command, display),
+			Brain:   brain,
+		}
 
 	case "read_file":
 		if strings.TrimSpace(action.Path) == "" {
@@ -337,7 +348,10 @@ func executeAction(
 			previewText(result.Content, maxBrainPreviewChars),
 		)
 
-		return ActionResult{Display: display, Brain: brain}
+		return ActionResult{
+			Display: formatActionDisplay(action, result.Path, display),
+			Brain:   brain,
+		}
 
 	case "write_file":
 		if strings.TrimSpace(action.Path) == "" {
@@ -378,7 +392,10 @@ func executeAction(
 			artifactPath,
 		)
 
-		return ActionResult{Display: msg, Brain: msg}
+		return ActionResult{
+			Display: formatActionDisplay(action, result.Path, msg),
+			Brain:   msg,
+		}
 
 	case "insert_after":
 		if strings.TrimSpace(action.Path) == "" {
@@ -427,7 +444,7 @@ func executeAction(
 				"INSERT AFTER SKIPPED\npath: %s\nreason: content already exists after marker",
 				action.Path,
 			)
-			return ActionResult{Display: msg, Brain: msg}
+			return ActionResult{Display: formatActionDisplay(action, action.Path, msg), Brain: msg}
 		}
 
 		insertText := action.Content
@@ -454,7 +471,7 @@ func executeAction(
 			artifactPath,
 		)
 
-		return ActionResult{Display: msg, Brain: msg}
+		return ActionResult{Display: formatActionDisplay(action, result.Path, msg), Brain: msg}
 
 	case "replace_block":
 		if strings.TrimSpace(action.Path) == "" {
@@ -513,7 +530,7 @@ func executeAction(
 			artifactPath,
 		)
 
-		return ActionResult{Display: msg, Brain: msg}
+		return ActionResult{Display: formatActionDisplay(action, result.Path, msg), Brain: msg}
 
 	case "create_task_batch":
 		return queueTaskBatch(ctx, runtime, sessionID, action)
@@ -588,12 +605,16 @@ func handleInvalidModelOutput(
 	}
 
 	recordedAction, createErr := runtime.actionStore.Create(ctx, actionpkg.Action{
-		SessionID: sessionID,
-		Type:      "model.output",
-		Input:     reply,
-		Output:    mustMarshalJSON(recoveryPayload),
-		Status:    "invalid_model_output",
-		Metadata:  mustMarshalJSON(metadata),
+		SessionID:     sessionID,
+		Type:          "model.output",
+		Input:         reply,
+		Output:        mustMarshalJSON(recoveryPayload),
+		Status:        "invalid_model_output",
+		Metadata:      mustMarshalJSON(metadata),
+		Title:         "Recover invalid model output",
+		Purpose:       "Capture the invalid response and keep the agent loop recoverable.",
+		ReasoningStep: "Validate model output",
+		Target:        artifactPath,
 	})
 	if createErr == nil {
 		_, _ = runtime.logStore.Create(ctx, logpkg.Log{
@@ -625,11 +646,15 @@ func queueTaskBatch(ctx context.Context, runtime *agentRuntime, sessionID string
 	})
 
 	parent, err := runtime.actionStore.Create(ctx, actionpkg.Action{
-		SessionID: sessionID,
-		Type:      "create_task_batch",
-		Input:     mustMarshalJSON(action),
-		Status:    "queued",
-		Metadata:  parentMeta,
+		SessionID:     sessionID,
+		Type:          "create_task_batch",
+		Input:         mustMarshalJSON(action),
+		Status:        "queued",
+		Metadata:      parentMeta,
+		Title:         action.Title,
+		Purpose:       firstNonEmpty(action.Purpose, action.Reason),
+		ReasoningStep: action.ReasoningStep,
+		Target:        action.Target,
 	})
 	if err != nil {
 		return both(fmt.Sprintf("ERROR queueing task batch: %v", err))
@@ -645,6 +670,10 @@ func queueTaskBatch(ctx context.Context, runtime *agentRuntime, sessionID string
 				"batch_action_id": parent.ID,
 				"batch_index":     i,
 			}),
+			Title:         task.Title,
+			Purpose:       firstNonEmpty(task.Purpose, task.Reason),
+			ReasoningStep: task.ReasoningStep,
+			Target:        task.Target,
 		})
 		if err != nil {
 			return both(fmt.Sprintf("ERROR queueing task batch item: %v", err))
@@ -668,6 +697,27 @@ func both(message string) ActionResult {
 		Display: message,
 		Brain:   message,
 	}
+}
+
+func formatActionDisplay(action *actionpkg.ActionEnvelope, actualTarget string, body string) string {
+	meta := actionpkg.ActionMetadata{
+		Title:         action.Title,
+		Purpose:       firstNonEmpty(action.Purpose, action.Reason),
+		ReasoningStep: action.ReasoningStep,
+		Target:        firstNonEmpty(actualTarget, action.Target, action.Path, action.Command),
+	}
+
+	return actionpkg.FormatDisplay("Used Ptolemy", action.Action, meta) + "\n" + body
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+
+	return ""
 }
 
 func isSafeReplacePath(p string) bool {
