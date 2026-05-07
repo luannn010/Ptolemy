@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	actionpkg "github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/command"
+	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/terminal"
 )
@@ -13,27 +15,37 @@ import (
 type Executor struct {
 	sessionStore *session.Store
 	commandStore *command.Store
+	actionStore  *actionpkg.Store
+	logStore     *logging.Store
 	runner       *terminal.TmuxRunner
 }
 
 func NewExecutor(
 	sessionStore *session.Store,
 	commandStore *command.Store,
+	actionStore *actionpkg.Store,
+	logStore *logging.Store,
 	runner *terminal.TmuxRunner,
 ) *Executor {
 	return &Executor{
 		sessionStore: sessionStore,
 		commandStore: commandStore,
+		actionStore:  actionStore,
+		logStore:     logStore,
 		runner:       runner,
 	}
 }
 
 type ExecuteRequest struct {
-	SessionID string `json:"session_id"`
-	Command   string `json:"command"`
-	CWD       string `json:"cwd"`
-	Reason    string `json:"reason"`
-	Timeout   int    `json:"timeout"`
+	SessionID     string `json:"session_id"`
+	Command       string `json:"command"`
+	CWD           string `json:"cwd"`
+	Reason        string `json:"reason"`
+	Timeout       int    `json:"timeout"`
+	Title         string `json:"title,omitempty"`
+	Purpose       string `json:"purpose,omitempty"`
+	ReasoningStep string `json:"reasoning_step,omitempty"`
+	Target        string `json:"target,omitempty"`
 }
 
 type ExecuteResponse struct {
@@ -60,6 +72,21 @@ func (e *Executor) Run(ctx context.Context, req ExecuteRequest) (ExecuteResponse
 		req.CWD = sess.Workspace
 	}
 
+	act, err := e.actionStore.Create(ctx, actionpkg.Action{
+		SessionID:     req.SessionID,
+		Type:          "command.exec",
+		Input:         req.Command,
+		Status:        "pending",
+		Metadata:      "{}",
+		Title:         req.Title,
+		Purpose:       req.Purpose,
+		ReasoningStep: req.ReasoningStep,
+		Target:        firstNonEmpty(req.Target, req.Command),
+	})
+	if err != nil {
+		return ExecuteResponse{}, fmt.Errorf("create action: %w", err)
+	}
+
 	result := e.runner.Run(ctx, req.SessionID, req.Command, req.CWD, req.Timeout)
 
 	const maxOutputSize = 10000
@@ -69,6 +96,35 @@ func (e *Executor) Run(ctx context.Context, req ExecuteRequest) (ExecuteResponse
 
 	if len(result.ErrorOutput) > maxOutputSize {
 		result.ErrorOutput = result.ErrorOutput[:maxOutputSize] + "\n...[truncated]"
+	}
+
+	status := "success"
+	if result.ExitCode != 0 {
+		status = "failed"
+	}
+
+	combinedOutput := result.Output
+	if result.ErrorOutput != "" {
+		combinedOutput += "\n" + result.ErrorOutput
+	}
+
+	if err := e.actionStore.UpdateResult(ctx, act.ID, combinedOutput, status); err != nil {
+		return ExecuteResponse{}, fmt.Errorf("update action result: %w", err)
+	}
+
+	if _, err := e.logStore.Create(ctx, logging.Log{
+		SessionID: req.SessionID,
+		ActionID:  act.ID,
+		Level:     "info",
+		Message:   "command executed",
+		Metadata: actionpkg.MergeMetadata("{}", actionpkg.ActionMetadata{
+			Title:         req.Title,
+			Purpose:       req.Purpose,
+			ReasoningStep: req.ReasoningStep,
+			Target:        firstNonEmpty(req.Target, req.Command),
+		}),
+	}); err != nil {
+		return ExecuteResponse{}, fmt.Errorf("create execution log: %w", err)
 	}
 
 	_, _ = e.commandStore.Create(ctx, command.CommandLog{
@@ -100,4 +156,13 @@ func summarize(output string) string {
 	}
 
 	return output
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
