@@ -19,16 +19,20 @@ var (
 )
 
 type ActionEnvelope struct {
-	Action  string      `json:"action,omitempty"`
-	Type    string      `json:"type,omitempty"`
-	Command string      `json:"command,omitempty"`
-	Path    string      `json:"path,omitempty"`
-	Content string      `json:"content,omitempty"`
-	Old     string      `json:"old,omitempty"`
-	New     string      `json:"new,omitempty"`
-	Marker  string      `json:"marker,omitempty"`
-	Reason  string      `json:"reason,omitempty"`
-	Tasks   []BatchTask `json:"tasks,omitempty"`
+	Action        string      `json:"action,omitempty"`
+	Type          string      `json:"type,omitempty"`
+	Command       string      `json:"command,omitempty"`
+	Path          string      `json:"path,omitempty"`
+	Content       string      `json:"content,omitempty"`
+	Old           string      `json:"old,omitempty"`
+	New           string      `json:"new,omitempty"`
+	Marker        string      `json:"marker,omitempty"`
+	Reason        string      `json:"reason,omitempty"`
+	Title         string      `json:"title,omitempty"`
+	Purpose       string      `json:"purpose,omitempty"`
+	ReasoningStep string      `json:"reasoning_step,omitempty"`
+	Target        string      `json:"target,omitempty"`
+	Tasks         []BatchTask `json:"tasks,omitempty"`
 }
 
 type TaskBatch struct {
@@ -36,15 +40,19 @@ type TaskBatch struct {
 }
 
 type BatchTask struct {
-	Type    string `json:"type,omitempty"`
-	Action  string `json:"action,omitempty"`
-	Command string `json:"command,omitempty"`
-	Path    string `json:"path,omitempty"`
-	Content string `json:"content,omitempty"`
-	Old     string `json:"old,omitempty"`
-	New     string `json:"new,omitempty"`
-	Marker  string `json:"marker,omitempty"`
-	Reason  string `json:"reason,omitempty"`
+	Type          string `json:"type,omitempty"`
+	Action        string `json:"action,omitempty"`
+	Command       string `json:"command,omitempty"`
+	Path          string `json:"path,omitempty"`
+	Content       string `json:"content,omitempty"`
+	Old           string `json:"old,omitempty"`
+	New           string `json:"new,omitempty"`
+	Marker        string `json:"marker,omitempty"`
+	Reason        string `json:"reason,omitempty"`
+	Title         string `json:"title,omitempty"`
+	Purpose       string `json:"purpose,omitempty"`
+	ReasoningStep string `json:"reasoning_step,omitempty"`
+	Target        string `json:"target,omitempty"`
 }
 
 func ValidateSingleJSONAction(raw string) (*ActionEnvelope, error) {

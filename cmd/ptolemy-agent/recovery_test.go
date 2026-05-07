@@ -100,6 +100,33 @@ func TestQueueTaskBatchQueuesChildrenWithoutExecution(t *testing.T) {
 	}
 }
 
+func TestExecuteActionDisplayIncludesDescriptiveMetadata(t *testing.T) {
+	chdirTemp(t)
+	runtime, _ := newTestRuntime(t)
+
+	result := executeAction(context.Background(), runtime, "session-3", ".", "", "my-task", 1, &actionpkg.ActionEnvelope{
+		Action:        "read_file",
+		Path:          "README.md",
+		Title:         "Inspect task parser schema",
+		Purpose:       "Confirm required task pack fields before generating the pack.",
+		ReasoningStep: "Check parser expectations",
+		Target:        "internal/tasks/parser.go",
+	}, false)
+
+	if !strings.Contains(result.Display, "Used Ptolemy — Inspect task parser schema") {
+		t.Fatalf("expected descriptive title, got %q", result.Display)
+	}
+	if !strings.Contains(result.Display, "Purpose: Confirm required task pack fields before generating the pack.") {
+		t.Fatalf("expected purpose line, got %q", result.Display)
+	}
+	if !strings.Contains(result.Display, "Reasoning step: Check parser expectations") {
+		t.Fatalf("expected reasoning step line, got %q", result.Display)
+	}
+	if !strings.Contains(result.Display, "Action: file.read") {
+		t.Fatalf("expected normalized action line, got %q", result.Display)
+	}
+}
+
 func newTestRuntime(t *testing.T) (*agentRuntime, *sql.DB) {
 	t.Helper()
 

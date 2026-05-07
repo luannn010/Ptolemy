@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/luannn010/ptolemy/internal/action"
@@ -150,11 +151,15 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	act, err := h.actionStore.Create(r.Context(), action.Action{
-		SessionID: sessionID,
-		Type:      "command.exec",
-		Input:     req.Command,
-		Status:    "pending",
-		Metadata:  "{}",
+		SessionID:     sessionID,
+		Type:          "command.exec",
+		Input:         req.Command,
+		Status:        "pending",
+		Metadata:      "{}",
+		Title:         req.Title,
+		Purpose:       req.Purpose,
+		ReasoningStep: req.ReasoningStep,
+		Target:        firstNonEmpty(req.Target, req.Command),
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -195,7 +200,12 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 		ActionID:  act.ID,
 		Level:     "info",
 		Message:   "command executed",
-		Metadata:  "{}",
+		Metadata: action.MergeMetadata("{}", action.ActionMetadata{
+			Title:         req.Title,
+			Purpose:       req.Purpose,
+			ReasoningStep: req.ReasoningStep,
+			Target:        firstNonEmpty(req.Target, req.Command),
+		}),
 	})
 
 	log.Info().
@@ -223,6 +233,15 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, logItem)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func (h *CommandHandler) listCommands(w http.ResponseWriter, r *http.Request) {
