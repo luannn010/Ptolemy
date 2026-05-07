@@ -20,6 +20,7 @@ The project is intentionally local-first: Codex or another planner decides what 
 - Builds deterministic execution plans from task metadata.
 - Validates task files before sequential execution.
 - Supports CLI plan and run commands for inbox task workflows.
+- Supports bootstrapping workflow and task scaffolding into another workspace.
 
 ## Architecture
 
@@ -170,6 +171,7 @@ Pack commands:
 ```bash
 go run ./cmd/ptolemy-task-runner plan --pack <pack-dir>
 go run ./cmd/ptolemy-task-runner run --pack <pack-dir> --workspace .
+go run ./cmd/ptolemy-task-runner bootstrap --workspace /path/to/target-repo
 ```
 
 See [Task System Overview](./docs/tasks/README.md), [Task-File Driven Workflow](./docs/workflows/agent/task-file-driven.md), and example packs in [`docs/tasks/packs`](./docs/tasks/packs).
@@ -241,6 +243,16 @@ Project conventions:
 - Keep reusable agent knowledge in Markdown, not hidden in prompts.
 - Do not commit `.state/`, `state/*.db`, `bin/`, or temporary `tmp-*.txt` files.
 - Never push without explicit approval.
+
+## Using Another Workspace
+
+You can point Ptolemy at a different repository without moving the Ptolemy source tree into that workspace.
+
+- Start `workerd` with a reachable `WORKER_BASE_URL`.
+- Run `ptolemy-agent --workspace /path/to/repo` so file reads, writes, and commands bind to that repository.
+- Configure `BRAIN_BASE_URL` and `BRAIN_MODEL` when your local model endpoint differs from the defaults.
+- Put `ptolemy-agent` on `PATH` or set `PTOLEMY_AGENT_BIN` so `ptolemy-task-runner` can invoke the agent binary directly.
+- Use `go run ./cmd/ptolemy-task-runner bootstrap --workspace /path/to/repo` to seed `WORKFLOWS.md` and `docs/tasks/templates` into a fresh non-Ptolemy repository.
 
 ## Current Status
 
