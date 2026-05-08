@@ -20,7 +20,31 @@ func TestExecutorToolsRegistered(t *testing.T) {
 
 	for _, field := range []string{"title", "purpose", "reasoning_step", "target"} {
 		if _, ok := properties[field]; !ok {
-			t.Fatalf("expected executor tool schema to expose %s", field)
+			t.Fatalf("expected executor tool property %q to be present", field)
 		}
+	}
+
+	required, ok := tools[0].InputSchema["required"].([]string)
+	if !ok {
+		t.Fatalf("expected required list as []string, got %#v", tools[0].InputSchema["required"])
+	}
+
+	expectedRequired := map[string]bool{
+		"session_id": true,
+		"command":    true,
+	}
+	if len(required) != len(expectedRequired) {
+		t.Fatalf("expected only legacy required fields %v, got %v", expectedRequired, required)
+	}
+
+	for _, field := range required {
+		if !expectedRequired[field] {
+			t.Fatalf("unexpected required field %q", field)
+		}
+		delete(expectedRequired, field)
+	}
+
+	if len(expectedRequired) != 0 {
+		t.Fatalf("missing required fields: %v", expectedRequired)
 	}
 }
