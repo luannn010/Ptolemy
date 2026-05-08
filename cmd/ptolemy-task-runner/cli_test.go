@@ -79,6 +79,42 @@ func TestRunPlanCommandRejectsInboxAndPackTogether(t *testing.T) {
 	}
 }
 
+func TestRunBootstrapCommandCreatesWorkspaceScaffold(t *testing.T) {
+	workspace := t.TempDir()
+
+	var out bytes.Buffer
+	if err := runCLI([]string{"bootstrap", "--workspace", workspace}, &out); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "Created file: WORKFLOWS.md") {
+		t.Fatalf("unexpected output: %s", output)
+	}
+
+	for _, rel := range []string{
+		"WORKFLOWS.md",
+		"docs/tasks/templates/task-file-template.md",
+		"docs/tasks/templates/split-task-template.md",
+	} {
+		if _, err := os.Stat(filepath.Join(workspace, filepath.FromSlash(rel))); err != nil {
+			t.Fatalf("expected %s to exist: %v", rel, err)
+		}
+	}
+}
+
+func TestResolveAgentBinaryFromEnv(t *testing.T) {
+	t.Setenv("PTOLEMY_AGENT_BIN", "/tmp/custom-ptolemy-agent")
+
+	path, err := resolveAgentBinary()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "/tmp/custom-ptolemy-agent" {
+		t.Fatalf("resolveAgentBinary() = %q, want override path", path)
+	}
+}
+
 func writeCLITaskFile(t *testing.T, dir string, name string, id string, status string, branch string, group string, deps []string, validation []string) string {
 	t.Helper()
 
