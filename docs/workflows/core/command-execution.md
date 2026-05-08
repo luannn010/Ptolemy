@@ -32,6 +32,7 @@ Client / Agent
   -> POST /execute
   -> Validate session_id and command
   -> Execute command
+  -> Store command/action/log records
   -> Return output, summary, success flag
 ```
 
@@ -40,7 +41,7 @@ Example:
 ```bash
 curl -s -X POST http://localhost:8080/execute \
   -H 'Content-Type: application/json' \
-  -d '{"session_id":"<id>","command":"echo hello","timeout":30}'
+  -d '{"session_id":"<id>","command":"echo hello","timeout":30,"title":"Smoke test","purpose":"Confirm executor behavior","reasoning_step":"Run validation","target":"echo hello"}'
 ```
 
 Status: working.
