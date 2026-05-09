@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/luannn010/ptolemy/internal/action"
+	"github.com/luannn010/ptolemy/internal/agentloop"
 	"github.com/luannn010/ptolemy/internal/approval"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/executor"
@@ -25,9 +26,12 @@ func NewRouter(
 	sessionStore *session.Store,
 	commandStore *command.Store,
 	actionStore *action.Store,
+	agentRunStore *agentloop.Store,
+	agentRunService *agentloop.Service,
 	logStore *logging.Store,
 	approvalStore *approval.Store,
 	runner *terminal.TmuxRunner,
+	packStudioHandler *PackStudioHandler,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -60,6 +64,9 @@ func NewRouter(
 		runner,
 	)
 	r.Mount("/sessions/{id}/commands", commandHandler.Routes())
+
+	agentRunsHandler := NewAgentRunsHandler(agentRunStore, actionStore, agentRunService)
+	r.Mount("/agent-runs", agentRunsHandler.Routes())
 
 	fileHandler := NewFileHandler(sessionStore)
 
@@ -97,6 +104,10 @@ func NewRouter(
 
 	tasksHandler := NewTasksHandler()
 	r.Post("/tasks/run-inbox", tasksHandler.RunInbox)
+
+	if packStudioHandler != nil {
+		r.Mount("/ui", packStudioHandler.Routes())
+	}
 
 	return r
 }

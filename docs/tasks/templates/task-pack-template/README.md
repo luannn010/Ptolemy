@@ -1,27 +1,27 @@
 # Task Pack Template
 
-Use this folder when a change needs multiple related tasks, shared context, and controlled branch/PR workflow.
+Use this folder when one implementation should be broken into several deterministic tasks that Ptolemy can create, run, and monitor from the embedded Pack Studio UI.
 
-## Purpose
+## Runtime Shape
 
-A task pack helps Ptolemy, Codex, or another agent execute work safely by splitting a larger change into small deterministic tasks.
+`PACK_MANIFEST.yaml` must match the schema supported by `internal/tasks/pack.go`.
+The important fields are:
 
-Each pack should have:
+- `pack_id`
+- `name`
+- `entrypoint`
+- `folders`
+- `execution_mode`
+- `requires`
+- `validation`
+- `rules`
 
-- one clear goal
-- one pack branch
-- one or more task branches
-- validation after each meaningful change
-- one final Pull Request
-
-For repo-memory work, prefer `.ptolemy/kb` as the canonical target and treat legacy `.ptolemy/context` files as compatibility artifacts unless the task says otherwise.
-
----
+The checked-in template now matches the runtime manifest used by Pack Studio.
 
 ## Suggested Structure
 
 ```text
-<pack-name>/
+<pack-id>/
 ├── PACK_MANIFEST.yaml
 ├── README.md
 ├── TASK_PLAN.md
@@ -29,62 +29,48 @@ For repo-memory work, prefer `.ptolemy/kb` as the canonical target and treat leg
 │   ├── 01-discover-context.md
 │   ├── 02-implement-core.md
 │   ├── 03-add-validation.md
-│   ├── 04-refactor-cleanup.md
-│   ├── 05-update-docs.md
-│   ├── 06-add-follow-up-tests.md
 │   └── 99-finalize-pack.md
 ├── snippets/
 ├── task-scripts/
 └── scripts/
 ```
 
----
+## Task Authoring Rules
 
-## Branching Workflow
+Each task file should have YAML frontmatter with at least:
 
-Create one branch for the whole pack:
+- `task_id`
+- `priority`
+- `parent_task`
+- `owner`
+- `status`
+- `branch`
+- `allowed_files`
+- `created_by`
 
-```bash
-git checkout -b feature/<ddmmyy>-<pack-name>
-```
+Pack Studio also writes:
 
-Create one branch per task from the pack branch:
+- `execution_group`
+- `depends_on`
+- `validation`
+- `scripts`
+- `snippets`
 
-```bash
-git checkout -b feature/<ddmmyy>-<pack-name>/task-01
-```
+Each task should include a `## Checklist` section with Markdown checkboxes so the run monitor can render explicit progress. If a legacy task does not include a checklist, the UI falls back to status-derived checklist items.
 
-Merge task branches back into the pack branch:
+## Execution Model
 
-```bash
-git checkout feature/<ddmmyy>-<pack-name>
-git merge --no-ff feature/<ddmmyy>-<pack-name>/task-01
-```
+Pack Studio runs packs sequentially through `agent-runs`.
 
-When the pack is complete, raise one Pull Request from the pack branch into `main`.
+- One program run is active at a time in v1.
+- Packs inside a program run execute sequentially.
+- Tasks inside a pack execute sequentially.
+- The live terminal is streamed from the tmux-backed worker session.
 
----
+## Monitoring
 
-## If a Task Is Too Big
+After a pack or program is created, use the embedded UI under `/ui`:
 
-Split the task into smaller branches:
-
-```text
-feature/<ddmmyy>-<pack-name>/task-02a
-feature/<ddmmyy>-<pack-name>/task-02b
-feature/<ddmmyy>-<pack-name>/task-02c
-```
-
-Each split branch should be validated before merging into the pack branch.
-
----
-
-## Completion Rule
-
-The pack is complete only when:
-
-- all required tasks are done
-- task branches are merged into the pack branch
-- validation passes
-- documentation is updated
-- the PR is ready
+- `Studio` creates packs and programs.
+- `Overview` shows catalog and run history.
+- `Runs` shows the tree, checklist progress, recent actions, and live terminal output.

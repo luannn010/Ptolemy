@@ -17,6 +17,7 @@ import (
 
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/tasks"
+	"github.com/luannn010/ptolemy/internal/worker"
 )
 
 const (
@@ -634,6 +635,22 @@ func goBinary() string {
 }
 
 func runAgentTask(workspace string, taskPath string, maxSteps int) ([]byte, error) {
+	if cfg, err := config.Load(); err == nil && strings.TrimSpace(cfg.WorkerBaseURL) != "" {
+		client := worker.NewClient(cfg.WorkerBaseURL)
+		run, runErr := client.CreateAgentRun(context.Background(), worker.AgentRunRequest{
+			TaskID:       strings.TrimSuffix(filepath.Base(taskPath), filepath.Ext(taskPath)),
+			TaskFile:     taskPath,
+			Workspace:    workspace,
+			MaxSteps:     maxSteps,
+			CurrentPhase: "task_runner",
+			FinalizationMode: "none",
+			AutoStart:    true,
+		})
+		if runErr == nil {
+			return []byte(fmt.Sprintf("agent_run_id: %s\nstatus: %s\ncurrent_step: %d\n", run.ID, run.Status, run.CurrentStep)), nil
+		}
+	}
+
 	binaryPath, err := resolveAgentBinary()
 	if err != nil {
 		return nil, err
