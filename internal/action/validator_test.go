@@ -19,6 +19,16 @@ func TestValidateSingleJSONAction(t *testing.T) {
 			want: "read_file",
 		},
 		{
+			name:    "read_file missing path",
+			raw:     `{"action":"read_file"}`,
+			wantErr: ErrMissingPath,
+		},
+		{
+			name:    "run_command missing command",
+			raw:     `{"action":"run_command"}`,
+			wantErr: ErrMissingCommand,
+		},
+		{
 			name:    "multiple objects",
 			raw:     "{\"action\":\"read_file\"}\n{\"action\":\"run_command\"}",
 			wantErr: ErrMultipleObjects,
@@ -132,5 +142,12 @@ func TestValidateLeadingJSONActionReturnsFirstObject(t *testing.T) {
 	}
 	if got.Path != "README.md" {
 		t.Fatalf("ValidateLeadingJSONAction() path = %q, want README.md", got.Path)
+	}
+}
+
+func TestValidateLeadingJSONActionRejectsMissingRequiredFields(t *testing.T) {
+	_, err := ValidateLeadingJSONAction(`{"action":"read_file"}`)
+	if !errors.Is(err, ErrMissingPath) {
+		t.Fatalf("ValidateLeadingJSONAction() error = %v, want %v", err, ErrMissingPath)
 	}
 }

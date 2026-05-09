@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/luannn010/ptolemy/internal/action"
+	"github.com/luannn010/ptolemy/internal/agentloop"
 	"github.com/luannn010/ptolemy/internal/approval"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/logging"
@@ -38,11 +39,12 @@ func newTestRouter(t *testing.T) http.Handler {
 	sessionStore := session.NewStore(baseStore)
 	commandStore := command.NewStore(baseStore)
 	actionStore := action.NewStore(baseStore.SQLDB())
+	agentRunStore := agentloop.NewStore(baseStore.SQLDB())
 	logStore := logging.NewStore(baseStore.SQLDB())
 	approvalStore := approval.NewStore(baseStore.SQLDB())
 	runner := terminal.NewTmuxRunner()
 
-	return NewRouter(sessionStore, commandStore, actionStore, logStore, approvalStore, runner)
+	return NewRouter(sessionStore, commandStore, actionStore, agentRunStore, nil, logStore, approvalStore, runner, nil)
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -274,6 +276,70 @@ func TestNavigatorEndpointsAndFileReadTracking(t *testing.T) {
 	}
 	if !strings.Contains(string(filesRead), "hello.txt") {
 		t.Fatalf("expected files-read to contain hello.txt, got %s", string(filesRead))
+	}
+}
+
+func TestAgentRunsEndpoints(t *testing.T) {
+	router := newTestRouter(t)
+
+	createBody := strings.NewReader(`{
+		"task_id": "controller-loop",
+		"task_file": "docs/tasks/inbox/controller-loop.md",
+		"workspace": "/tmp/ptolemy",
+		"branch": "ptolemy/controller-loop",
+		"max_steps": 8
+	}`)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/agent-runs", createBody)
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+
+	router.ServeHTTP(createRec, createReq)
+
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected create status 201, got %d body=%s", createRec.Code, createRec.Body.String())
+	}
+
+	runID := extractJSONField(t, createRec.Body.String(), "id")
+
+	getReq := httptest.NewRequest(http.MethodGet, "/agent-runs/"+runID, nil)
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, getReq)
+
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected get status 200, got %d body=%s", getRec.Code, getRec.Body.String())
+	}
+
+	resumeReq := httptest.NewRequest(http.MethodPost, "/agent-runs/"+runID+"/resume", nil)
+	resumeRec := httptest.NewRecorder()
+	router.ServeHTTP(resumeRec, resumeReq)
+
+	if resumeRec.Code != http.StatusOK || !strings.Contains(resumeRec.Body.String(), `"status":"running"`) {
+		t.Fatalf("expected resumed run, got %d body=%s", resumeRec.Code, resumeRec.Body.String())
+	}
+
+	cancelReq := httptest.NewRequest(http.MethodPost, "/agent-runs/"+runID+"/cancel", nil)
+	cancelRec := httptest.NewRecorder()
+	router.ServeHTTP(cancelRec, cancelReq)
+
+	if cancelRec.Code != http.StatusOK || !strings.Contains(cancelRec.Body.String(), `"status":"cancelled"`) {
+		t.Fatalf("expected cancelled run, got %d body=%s", cancelRec.Code, cancelRec.Body.String())
+	}
+
+	actionsReq := httptest.NewRequest(http.MethodGet, "/agent-runs/"+runID+"/actions", nil)
+	actionsRec := httptest.NewRecorder()
+	router.ServeHTTP(actionsRec, actionsReq)
+
+	if actionsRec.Code != http.StatusOK {
+		t.Fatalf("expected actions status 200, got %d body=%s", actionsRec.Code, actionsRec.Body.String())
+	}
+
+	observationsReq := httptest.NewRequest(http.MethodGet, "/agent-runs/"+runID+"/observations", nil)
+	observationsRec := httptest.NewRecorder()
+	router.ServeHTTP(observationsRec, observationsReq)
+
+	if observationsRec.Code != http.StatusOK {
+		t.Fatalf("expected observations status 200, got %d body=%s", observationsRec.Code, observationsRec.Body.String())
 	}
 }
 

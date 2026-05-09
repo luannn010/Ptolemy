@@ -44,6 +44,26 @@ func (r *TmuxRunner) EnsureSession(ctx context.Context, sessionID string, cwd st
 	return nil
 }
 
+func (r *TmuxRunner) BootstrapSession(ctx context.Context, sessionID string, cwd string) error {
+	name := tmuxSessionName(sessionID)
+
+	check := exec.CommandContext(ctx, "tmux", "has-session", "-t", name)
+	if err := check.Run(); err == nil {
+		return nil
+	}
+
+	if err := r.EnsureSession(ctx, sessionID, cwd); err != nil {
+		return err
+	}
+
+	message := "printf '\\n[ptolemy] terminal session ready for live capture\\n'"
+	cmd := exec.CommandContext(ctx, "tmux", "send-keys", "-t", name, message, "C-m")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("prime tmux session: %w: %s", err, string(out))
+	}
+	return nil
+}
+
 func (r *TmuxRunner) Run(ctx context.Context, sessionID string, command string, cwd string, timeoutSeconds int) Result {
 	if timeoutSeconds <= 0 {
 		timeoutSeconds = 30
@@ -154,6 +174,16 @@ func (r *TmuxRunner) capture(ctx context.Context, name string) string {
 	cmd := exec.CommandContext(ctx, "tmux", "capture-pane", "-p", "-S", "-", "-t", name)
 	out, _ := cmd.Output()
 	return string(out)
+}
+
+func (r *TmuxRunner) CaptureSession(ctx context.Context, sessionID string) (string, error) {
+	name := tmuxSessionName(sessionID)
+	cmd := exec.CommandContext(ctx, "tmux", "capture-pane", "-p", "-S", "-", "-t", name)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
 }
 
 func extractMarkedExitCode(output string, exitMarker string) int {

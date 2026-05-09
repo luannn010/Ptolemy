@@ -16,6 +16,7 @@ The project is intentionally local-first: Codex or another planner decides what 
 - Stores execution memory in SQLite.
 - Stores agent-readable project knowledge in a KB-first `.ptolemy/kb` workspace.
 - Exposes the worker through an MCP adapter (`ptolemy-mcp`).
+- Runs a controller-driven agent reasoning loop through `workerd` agent runs.
 - Includes prototypes for a local LLM executor (`ptolemy-agent`) and task queue runner (`ptolemy-task-runner`).
 - Builds deterministic execution plans from task metadata.
 - Validates task files before sequential execution.
@@ -38,6 +39,7 @@ workerd HTTP API
         +-- file operations -> workspace filesystem
         +-- git operations -> repository/worktrees
         +-- navigator KB/context -> .ptolemy + docs memory
+        +-- agent runs -> model JSON validation + tool dispatch + observations
 ```
 
 Ptolemy uses two kinds of memory:
@@ -99,6 +101,41 @@ ptolemy.kb_update          canonical MCP tool
 
 A successful task-pack run updates the KB once after integration merge and before push or PR creation. That update refreshes changed file entries, refreshes Go symbol entries for changed Go files, removes deleted entries, and appends one KB changelog entry for the pack.
 
+## Controller-Driven Reasoning Loop
+
+Ptolemy now supports a controller-owned agent loop in `workerd`. The model proposes exactly one JSON action at a time, and the worker decides whether that action is valid, safe, and executable.
+
+The intended loop is:
+
+1. Receive a task request or task file.
+2. Create or resume an `agent-run`.
+3. Load task scope, KB context, and available tools.
+4. Ask the model for exactly one JSON action.
+5. Validate the JSON action in `workerd`.
+6. Execute the selected tool through the worker runtime.
+7. Record the result as an observation.
+8. Repeat until the model signals completion or guardrails stop the run.
+9. Validate task commands, then finalize with staged Git changes, KB refresh, and reporting.
+
+The model is proposal-only. It does not execute shell, file, Git, or publish operations directly.
+
+Current controller pieces:
+
+- Persistent `agent_runs` and `agent_observations` state in SQLite
+- HTTP routes under `/agent-runs`
+- Strict single-object JSON action validation
+- Worker-owned tool dispatch for file, command, approval, and explain actions
+- Task-scoped path checks using `allowed_files`
+- Finalization hooks for validation, staged commit flow, push, PR creation, and KB update
+
+Primary implementation paths:
+
+- `internal/agentloop/`
+- `internal/httpapi/agent_runs.go`
+- `internal/worker/client.go`
+- `cmd/workerd`
+- `cmd/ptolemy-task-runner`
+
 ## Repository Layout
 
 ```text
@@ -135,6 +172,7 @@ Core docs are split into focused entry points:
 - [CLI Guide](./docs/CLI.md)
 - [Worker API](./docs/Worker_API.md)
 - [Development Workflow](./docs/Development.md)
+- [Project Memory](./docs/memory/projects/ptolemy)
 
 ## Task System
 
@@ -268,13 +306,14 @@ Completed or mostly complete:
 - SQLite execution memory tables and migrations.
 - Markdown knowledge memory structure.
 - Basic local-brain agent loop and task runner prototype.
+- Controller-driven agent loop in `workerd` with persisted run state and observations.
 - Split workflow documentation, task metadata rules, and safe commit/PR guidance.
 
 Still in progress:
 
 - Full approval flow for dangerous actions.
 - More complete policy hardening.
-- Failure recovery in the agent loop.
+- More end-to-end happy-path smoke coverage for publish and PR finalization.
 - Short command-output summaries.
 - Full Codex bridge service.
 - End-to-end task execution, validation, and queue finalization.
