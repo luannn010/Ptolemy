@@ -186,6 +186,11 @@ func (r *TmuxRunner) CaptureSession(ctx context.Context, sessionID string) (stri
 	return string(out), nil
 }
 
+func (r *TmuxRunner) HasSession(ctx context.Context, sessionID string) bool {
+	name := tmuxSessionName(sessionID)
+	return exec.CommandContext(ctx, "tmux", "has-session", "-t", name).Run() == nil
+}
+
 func extractMarkedExitCode(output string, exitMarker string) int {
 	lines := strings.Split(output, "\n")
 
