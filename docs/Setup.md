@@ -26,7 +26,7 @@ LOG_LEVEL=debug
 STATE_DIR=./state
 DB_PATH=./state/ptolemy.db
 WORKER_BASE_URL=http://127.0.0.1:8080
-BRAIN_BASE_URL=http://127.0.0.1:8088
+BRAIN_BASE_URL=http://luanpc.tailedbee7.ts.net:8088
 BRAIN_MODEL=gemma-4-e2b
 PTOLEMY_AGENT_BIN=
 ```

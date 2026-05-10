@@ -35,6 +35,10 @@ type ChatResponse struct {
 	} `json:"choices"`
 }
 
+type HealthResponse struct {
+	Status string `json:"status"`
+}
+
 func NewClient(baseURL, model string) *Client {
 	return &Client{
 		baseURL: baseURL,
@@ -89,4 +93,33 @@ func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 	}
 
 	return parsed.Choices[0].Message.Content, nil
+}
+
+func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.baseURL+"/health",
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("brain health request failed with status %s", resp.Status)
+	}
+
+	var parsed HealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, err
+	}
+
+	return &parsed, nil
 }
