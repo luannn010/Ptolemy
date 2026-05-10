@@ -9,11 +9,14 @@ import (
 	"time"
 
 	"github.com/luannn010/ptolemy/internal/action"
+	"github.com/luannn010/ptolemy/internal/agentloop"
 	"github.com/luannn010/ptolemy/internal/approval"
+	"github.com/luannn010/ptolemy/internal/brain"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/httpapi"
 	"github.com/luannn010/ptolemy/internal/logging"
+	"github.com/luannn010/ptolemy/internal/packstudio"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
@@ -43,18 +46,58 @@ func main() {
 	sessionStore := session.NewStore(baseStore)
 	commandStore := command.NewStore(baseStore)
 	actionStore := action.NewStore(baseStore.SQLDB())
+	agentRunStore := agentloop.NewStore(baseStore.SQLDB())
 	logStore := logging.NewStore(baseStore.SQLDB())
 	approvalStore := approval.NewStore(baseStore.SQLDB())
+	packStudioStore := packstudio.NewStore(baseStore.SQLDB())
 
 	runner := terminal.NewTmuxRunner()
+	toolRegistry := agentloop.NewToolRegistry()
+	toolExecutor := agentloop.NewToolExecutor(sessionStore, approvalStore, runner, ".state/agent-runs")
+	toolExecutor.RegisterAll(toolRegistry)
+	finalizer := agentloop.NewFinalizer(".state/agent-runs")
+	agentService := agentloop.NewService(
+		agentRunStore,
+		actionStore,
+		logStore,
+		sessionStore,
+		brain.NewClient(cfg.BrainBaseURL, cfg.BrainModel),
+		toolRegistry,
+		agentloop.DefaultLimits(),
+		finalizer,
+	)
+	agentService.SetSessionBootstrap(func(ctx context.Context, sessionID string, workspace string) error {
+		return runner.BootstrapSession(ctx, sessionID, workspace)
+	})
+
+	repoRoot, err := os.Getwd()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to detect repo root")
+	}
+
+	packStudioService := packstudio.NewService(
+		repoRoot,
+		packStudioStore,
+		agentRunStore,
+		agentService,
+		actionStore,
+		commandStore,
+		runner,
+	)
+	if err := packStudioService.Recover(context.Background()); err != nil {
+		log.Fatal().Err(err).Msg("failed to recover pack studio runs")
+	}
 
 	router := httpapi.NewRouter(
 		sessionStore,
 		commandStore,
 		actionStore,
+		agentRunStore,
+		agentService,
 		logStore,
 		approvalStore,
 		runner,
+		httpapi.NewPackStudioHandler(packStudioService),
 	)
 
 	server := &http.Server{

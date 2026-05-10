@@ -16,6 +16,11 @@ var (
 	ErrMissingActionType = errors.New("missing action or type")
 	ErrEmptyTaskBatch    = errors.New("create_task_batch requires at least one task")
 	ErrNestedTaskBatch   = errors.New("nested create_task_batch tasks are not allowed")
+	ErrMissingPath       = errors.New("path is required")
+	ErrMissingCommand    = errors.New("command is required")
+	ErrMissingMarker     = errors.New("marker is required")
+	ErrMissingContent    = errors.New("content is required")
+	ErrMissingOldBlock   = errors.New("old block is required")
 )
 
 type ActionEnvelope struct {
@@ -97,6 +102,9 @@ func ValidateSingleJSONAction(raw string) (*ActionEnvelope, error) {
 			return nil, err
 		}
 	}
+	if err := validateRequiredFields(&envelope); err != nil {
+		return nil, err
+	}
 
 	return &envelope, nil
 }
@@ -138,6 +146,9 @@ func ValidateLeadingJSONAction(raw string) (*ActionEnvelope, error) {
 		if err := validateTaskBatch(&envelope); err != nil {
 			return nil, err
 		}
+	}
+	if err := validateRequiredFields(&envelope); err != nil {
+		return nil, err
 	}
 
 	return &envelope, nil
@@ -186,6 +197,45 @@ func validateTaskBatch(envelope *ActionEnvelope) error {
 		}
 		envelope.Tasks[i].Type = normalized
 		envelope.Tasks[i].Action = ""
+	}
+
+	return nil
+}
+
+func validateRequiredFields(envelope *ActionEnvelope) error {
+	switch envelope.Action {
+	case "read_file":
+		if strings.TrimSpace(envelope.Path) == "" {
+			return ErrMissingPath
+		}
+	case "write_file":
+		if strings.TrimSpace(envelope.Path) == "" {
+			return ErrMissingPath
+		}
+		if strings.TrimSpace(envelope.Content) == "" {
+			return ErrMissingContent
+		}
+	case "replace_block":
+		if strings.TrimSpace(envelope.Path) == "" {
+			return ErrMissingPath
+		}
+		if strings.TrimSpace(envelope.Old) == "" {
+			return ErrMissingOldBlock
+		}
+	case "insert_after":
+		if strings.TrimSpace(envelope.Path) == "" {
+			return ErrMissingPath
+		}
+		if strings.TrimSpace(envelope.Marker) == "" {
+			return ErrMissingMarker
+		}
+		if strings.TrimSpace(envelope.Content) == "" {
+			return ErrMissingContent
+		}
+	case "run_command":
+		if strings.TrimSpace(envelope.Command) == "" {
+			return ErrMissingCommand
+		}
 	}
 
 	return nil

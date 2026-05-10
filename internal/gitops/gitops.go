@@ -119,6 +119,59 @@ func (g *GitOps) CommitConventional(ctx context.Context, message string) Result 
 	return g.run(ctx, fmt.Sprintf("git add . && git commit -m %s", shellQuote(message)))
 }
 
+func (g *GitOps) StageFiles(ctx context.Context, files []string) Result {
+	if len(files) == 0 {
+		return Result{
+			Command:  "git add --",
+			RepoPath: g.RepoPath,
+			ExitCode: 1,
+			Output:   "no files provided",
+			Success:  false,
+		}
+	}
+
+	quoted := make([]string, 0, len(files))
+	for _, file := range files {
+		if strings.TrimSpace(file) == "" {
+			continue
+		}
+		quoted = append(quoted, shellQuote(file))
+	}
+	if len(quoted) == 0 {
+		return Result{
+			Command:  "git add --",
+			RepoPath: g.RepoPath,
+			ExitCode: 1,
+			Output:   "no files provided",
+			Success:  false,
+		}
+	}
+
+	return g.run(ctx, fmt.Sprintf("git add -- %s", strings.Join(quoted, " ")))
+}
+
+func (g *GitOps) CommitStagedConventional(ctx context.Context, message string) Result {
+	if !isConventionalCommit(message) {
+		return Result{
+			Command:  "git commit",
+			RepoPath: g.RepoPath,
+			ExitCode: 1,
+			Output:   "invalid conventional commit message",
+			Success:  false,
+		}
+	}
+
+	return g.run(ctx, fmt.Sprintf("git commit -m %s", shellQuote(message)))
+}
+
+func (g *GitOps) CurrentCommitSHA(ctx context.Context) Result {
+	return g.run(ctx, "git rev-parse HEAD")
+}
+
+func (g *GitOps) ChangedFiles(ctx context.Context) Result {
+	return g.run(ctx, "git status --short --untracked-files=all -- . ':(exclude)state/*.db' ':(exclude)bin/*' | awk '{print $2}'")
+}
+
 func (g *GitOps) Push(ctx context.Context, remote string, branch string) Result {
 	if remote == "" {
 		remote = "origin"
