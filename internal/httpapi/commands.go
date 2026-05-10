@@ -237,8 +237,9 @@ func (h *CommandHandler) runCommand(w http.ResponseWriter, r *http.Request) {
 
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
-		if value != "" {
-			return value
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
 		}
 	}
 	return ""

@@ -41,6 +41,10 @@ type ChatResponse struct {
 	} `json:"choices"`
 }
 
+type HealthResponse struct {
+	Status string `json:"status"`
+}
+
 func NewClient(baseURL, model string) *Client {
 	timeout := loadBrainTimeout()
 	return &Client{

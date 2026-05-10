@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,10 +13,16 @@ import (
 	"github.com/google/uuid"
 )
 
-type TmuxRunner struct{}
+var ErrTmuxUnavailable = errors.New("tmux is not installed or not found in PATH")
+
+var lookPath = exec.LookPath
+
+type TmuxRunner struct {
+	fallback *Runner
+}
 
 func NewTmuxRunner() *TmuxRunner {
-	return &TmuxRunner{}
+	return &TmuxRunner{fallback: NewRunner()}
 }
 
 func tmuxSessionName(sessionID string) string {
@@ -24,6 +31,10 @@ func tmuxSessionName(sessionID string) string {
 }
 
 func (r *TmuxRunner) EnsureSession(ctx context.Context, sessionID string, cwd string) error {
+	if !tmuxAvailable() {
+		return ErrTmuxUnavailable
+	}
+
 	name := tmuxSessionName(sessionID)
 
 	check := exec.CommandContext(ctx, "tmux", "has-session", "-t", name)
@@ -45,6 +56,10 @@ func (r *TmuxRunner) EnsureSession(ctx context.Context, sessionID string, cwd st
 }
 
 func (r *TmuxRunner) BootstrapSession(ctx context.Context, sessionID string, cwd string) error {
+	if !tmuxAvailable() {
+		return nil
+	}
+
 	name := tmuxSessionName(sessionID)
 
 	check := exec.CommandContext(ctx, "tmux", "has-session", "-t", name)
@@ -73,6 +88,9 @@ func (r *TmuxRunner) Run(ctx context.Context, sessionID string, command string, 
 	name := tmuxSessionName(sessionID)
 
 	if err := r.EnsureSession(ctx, sessionID, cwd); err != nil {
+		if errors.Is(err, ErrTmuxUnavailable) {
+			return r.fallback.Run(ctx, command, cwd, timeoutSeconds)
+		}
 		return Result{
 			ExitCode:    1,
 			ErrorOutput: err.Error(),
@@ -177,6 +195,10 @@ func (r *TmuxRunner) capture(ctx context.Context, name string) string {
 }
 
 func (r *TmuxRunner) CaptureSession(ctx context.Context, sessionID string) (string, error) {
+	if !tmuxAvailable() {
+		return "", ErrTmuxUnavailable
+	}
+
 	name := tmuxSessionName(sessionID)
 	cmd := exec.CommandContext(ctx, "tmux", "capture-pane", "-p", "-S", "-", "-t", name)
 	out, err := cmd.Output()
@@ -187,6 +209,10 @@ func (r *TmuxRunner) CaptureSession(ctx context.Context, sessionID string) (stri
 }
 
 func (r *TmuxRunner) HasSession(ctx context.Context, sessionID string) bool {
+	if !tmuxAvailable() {
+		return false
+	}
+
 	name := tmuxSessionName(sessionID)
 	return exec.CommandContext(ctx, "tmux", "has-session", "-t", name).Run() == nil
 }
@@ -236,6 +262,15 @@ func extractMarkedOutput(output string, startMarker string, exitMarker string) s
 }
 
 func KillSession(sessionID string) {
+	if !tmuxAvailable() {
+		return
+	}
+
 	name := tmuxSessionName(sessionID)
 	_ = exec.Command("tmux", "kill-session", "-t", name).Run()
+}
+
+func tmuxAvailable() bool {
+	_, err := lookPath("tmux")
+	return err == nil
 }

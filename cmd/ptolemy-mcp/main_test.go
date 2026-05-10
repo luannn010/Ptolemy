@@ -41,3 +41,10 @@ func TestMCPServerBootAndListTools(t *testing.T) {
 		t.Fatalf("expected git tool in MCP, got %s", output.String())
 	}
 }
+
+func TestFirstNonEmptyTrimsWhitespace(t *testing.T) {
+	got := firstNonEmpty("  ", "\t http://127.0.0.1:18080 \n", "fallback")
+	if got != "http://127.0.0.1:18080" {
+		t.Fatalf("expected trimmed worker URL, got %q", got)
+	}
+}
