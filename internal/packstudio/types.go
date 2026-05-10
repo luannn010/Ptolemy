@@ -1,6 +1,10 @@
 package packstudio
 
-import "time"
+import (
+	"time"
+
+	"github.com/luannn010/ptolemy/internal/agentloop"
+)
 
 const (
 	StatusPending        = "pending"
@@ -106,24 +110,24 @@ type CreateProgramInput struct {
 }
 
 type ProgramRun struct {
-	ID                string    `json:"id"`
-	ProgramID         string    `json:"program_id"`
-	ProgramName       string    `json:"program_name"`
-	Mode              string    `json:"mode"`
-	Status            string    `json:"status"`
-	Workspace         string    `json:"workspace"`
-	CurrentPackID     string    `json:"current_pack_id"`
-	CurrentTaskID     string    `json:"current_task_id"`
-	PercentComplete   float64   `json:"percent_complete"`
-	TotalPacks        int       `json:"total_packs"`
-	CompletedPacks    int       `json:"completed_packs"`
-	TotalTasks        int       `json:"total_tasks"`
-	CompletedTasks    int       `json:"completed_tasks"`
-	LastError         string    `json:"last_error"`
-	CreatedAt         time.Time `json:"created_at"`
-	StartedAt         time.Time `json:"started_at"`
-	FinishedAt        time.Time `json:"finished_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID              string    `json:"id"`
+	ProgramID       string    `json:"program_id"`
+	ProgramName     string    `json:"program_name"`
+	Mode            string    `json:"mode"`
+	Status          string    `json:"status"`
+	Workspace       string    `json:"workspace"`
+	CurrentPackID   string    `json:"current_pack_id"`
+	CurrentTaskID   string    `json:"current_task_id"`
+	PercentComplete float64   `json:"percent_complete"`
+	TotalPacks      int       `json:"total_packs"`
+	CompletedPacks  int       `json:"completed_packs"`
+	TotalTasks      int       `json:"total_tasks"`
+	CompletedTasks  int       `json:"completed_tasks"`
+	LastError       string    `json:"last_error"`
+	CreatedAt       time.Time `json:"created_at"`
+	StartedAt       time.Time `json:"started_at"`
+	FinishedAt      time.Time `json:"finished_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type PackRun struct {
@@ -197,8 +201,28 @@ type PackRunDetail struct {
 }
 
 type ProgramRunDetail struct {
-	ProgramRun ProgramRun      `json:"program_run"`
+	ProgramRun ProgramRun         `json:"program_run"`
 	Program    *ProgramDefinition `json:"program,omitempty"`
-	Packs      []PackRunDetail `json:"packs"`
-	Events     []RunEvent      `json:"events"`
+	Packs      []PackRunDetail    `json:"packs"`
+	Events     []RunEvent         `json:"events"`
+}
+
+type TerminalState struct {
+	Status              string    `json:"status"`
+	Message             string    `json:"message"`
+	SessionID           string    `json:"session_id"`
+	TaskID              string    `json:"task_id"`
+	TaskTitle           string    `json:"task_title"`
+	Phase               string    `json:"phase"`
+	Source              string    `json:"source"`
+	HasSession          bool      `json:"has_session"`
+	CaptureAvailable    bool      `json:"capture_available"`
+	SessionBootstrapped bool      `json:"session_bootstrapped"`
+	Snapshot            string    `json:"snapshot"`
+	LastUpdated         time.Time `json:"last_updated"`
+}
+
+type RunOperatorState struct {
+	AgentRun *agentloop.RunInspection `json:"agent_run,omitempty"`
+	Terminal TerminalState            `json:"terminal"`
 }
