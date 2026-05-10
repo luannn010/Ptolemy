@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 )
 
 func TestClientChat(t *testing.T) {
@@ -42,25 +44,30 @@ func TestClientChat(t *testing.T) {
 	}
 }
 
-func TestClientHealth(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/health" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+func TestClientChatReturnsClearTimeoutError(t *testing.T) {
+	t.Setenv("PTOLEMY_BRAIN_TIMEOUT_SECONDS", "1")
 
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(1500 * time.Millisecond)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"late"}}]}`))
 	}))
 	defer server.Close()
 
 	client := NewClient(server.URL, "gemma-4-e2b")
 
-	health, err := client.Health(context.Background())
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	_, err := client.Chat(context.Background(), []Message{
+		{Role: "user", Content: "Say ready."},
+	})
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if got := err.Error(); got != "brain request timed out after 1s; reduce prompt size, increase timeout, or use a faster model" {
+		t.Fatalf("unexpected timeout error: %s", got)
 	}
 
-	if health.Status != "ok" {
-		t.Fatalf("expected status ok, got %s", health.Status)
+	if timeout := client.Timeout(); timeout != "1s" {
+		t.Fatalf("Timeout() = %q, want 1s", timeout)
 	}
+	_ = os.Unsetenv("PTOLEMY_BRAIN_TIMEOUT_SECONDS")
 }

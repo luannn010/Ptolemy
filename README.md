@@ -202,7 +202,28 @@ What a pack gives you:
 - Reusable references in `snippets/` and `task-scripts/`
 - Optional helper assets in `scripts/`
 
-In v1, Ptolemy executes a pack directly from its folder, validates referenced assets, and runs the pack `inbox/` tasks in dependency order. It does not automatically execute pack shell hooks in `scripts/`.
+In the normal Pack Studio flow, you author the pack and start a run. Ptolemy then validates referenced assets, runs the pack `inbox/` tasks in dependency order, and automatically splits large tasks into child-task processes when needed.
+
+The intended operator flow is:
+
+1. Create a task pack.
+2. Add narrow inbox tasks where possible.
+3. Start the pack or program run from Pack Studio or the CLI.
+4. Let Ptolemy split large tasks into child tasks automatically.
+5. Monitor progress from the Pack Studio `Runs` page.
+
+Large-task execution is now manifest-driven:
+
+```text
+large inbox task
+-> deterministic child-task split
+-> .ptolemy/tasks/process/<pack-id>/manifest.json
+-> .ptolemy/tasks/process/<pack-id>/todo.md
+-> per-child result summaries under state/
+-> fresh model context per child task
+```
+
+This means you do not need to manually pre-split every large task just to keep the model stable. The safer default is still to write focused tasks, but the runtime can now decompose a large task and carry forward compact state summaries instead of one growing chat history.
 
 Pack commands:
 
@@ -213,6 +234,7 @@ go run ./cmd/ptolemy-task-runner bootstrap --workspace /path/to/target-repo
 ```
 
 See [Task System Overview](./docs/tasks/README.md), [Task-File Driven Workflow](./docs/workflows/agent/task-file-driven.md), and example packs in [`docs/tasks/packs`](./docs/tasks/packs).
+For the new large-task runtime, also see [Task Pack Execution Workflow](./docs/workflows/agent/task-pack-execution.md).
 
 ## [Workflow System](./WORKFLOWS.md)
 

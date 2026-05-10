@@ -10,7 +10,6 @@ import (
 	"github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/brain"
 	"github.com/luannn010/ptolemy/internal/logging"
-	"github.com/luannn010/ptolemy/internal/navigator"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/tasks"
 )
@@ -78,136 +77,7 @@ func (s *Service) StartOrResume(ctx context.Context, runID string) (Run, error) 
 		return Run{}, err
 	}
 
-	run.Status = StatusRunning
-	run.CurrentPhase = "reasoning_loop"
-	run.MaxSteps = s.limits.WithMaxSteps(run.MaxSteps).MaxSteps
-	run, err = s.runStore.UpdateRun(ctx, run)
-	if err != nil {
-		return Run{}, err
-	}
-
-	for step := run.CurrentStep + 1; step <= run.MaxSteps; step++ {
-		run.CurrentStep = step
-		observations, err := s.runStore.ListObservations(ctx, run.ID)
-		if err != nil {
-			return Run{}, err
-		}
-
-		workspace := runWorkspace(run, task)
-		reply, err := s.brain.Chat(ctx, BuildMessages(task, s.readKnowledgeBase(workspace), observations))
-		if err != nil {
-			run.Status = StatusFailed
-			run.LastError = err.Error()
-			return s.runStore.UpdateRun(ctx, run)
-		}
-
-		envelope, err := action.ValidateSingleJSONAction(reply)
-		if err != nil {
-			run.InvalidJSONCount++
-			run.LastError = err.Error()
-			_, _ = s.runStore.CreateObservation(ctx, Observation{
-				RunID:      run.ID,
-				Step:       step,
-				Source:     "brain.invalid_json",
-				Summary:    summarizeInvalidJSON(err),
-				RawPayload: reply,
-			})
-			if run.InvalidJSONCount >= s.limits.MaxInvalidJSON {
-				run.Status = StatusFailed
-				run.CurrentPhase = "invalid_model_output"
-				return s.runStore.UpdateRun(ctx, run)
-			}
-			if _, updateErr := s.runStore.UpdateRun(ctx, run); updateErr != nil {
-				return Run{}, updateErr
-			}
-			continue
-		}
-
-		taskScope := ActionTask{
-			ID:           task.ID,
-			Branch:       task.Branch,
-			AllowedFiles: task.AllowedFiles,
-			Validation:   task.Validation,
-			Workspace:    workspace,
-		}
-
-		recordedAction, err := s.actionStore.Create(ctx, action.Action{
-			AgentRunID:    run.ID,
-			SessionID:     run.SessionID,
-			Type:          envelope.Action,
-			Input:         marshalJSON(envelope),
-			Status:        "pending",
-			Metadata:      "{}",
-			Title:         envelope.Title,
-			Purpose:       envelope.Purpose,
-			ReasoningStep: envelope.ReasoningStep,
-			Target:        firstNonEmpty(envelope.Target, envelope.Path, envelope.Command),
-		})
-		if err != nil {
-			run.Status = StatusFailed
-			run.LastError = err.Error()
-			return s.runStore.UpdateRun(ctx, run)
-		}
-
-		result, execErr := s.registry.Execute(ctx, run, taskScope, envelope)
-		if execErr != nil {
-			_ = s.actionStore.UpdateResult(ctx, recordedAction.ID, execErr.Error(), "failed")
-			run.Status = StatusFailed
-			run.LastError = execErr.Error()
-			return s.runStore.UpdateRun(ctx, run)
-		}
-
-		if !result.Progressed {
-			run.NoProgressCount++
-		} else {
-			run.NoProgressCount = 0
-		}
-
-		_ = s.actionStore.UpdateResult(ctx, recordedAction.ID, result.Output, result.Status)
-		_, _ = s.runStore.CreateObservation(ctx, Observation{
-			RunID:        run.ID,
-			ActionID:     recordedAction.ID,
-			Step:         step,
-			Source:       envelope.Action,
-			Summary:      result.Summary,
-			ArtifactPath: result.ArtifactPath,
-			RawPayload:   result.Output,
-		})
-
-		if result.ShouldFinalize {
-			run.CurrentPhase = "finalizing"
-			if s.finalizer != nil && run.FinalizationMode != "none" {
-				reportPath, finalErr := s.finalizer.Finalize(ctx, run, task)
-				run.FinalReportPath = reportPath
-				if finalErr != nil {
-					run.Status = StatusFailed
-					run.LastError = finalErr.Error()
-					return s.runStore.UpdateRun(ctx, run)
-				}
-			}
-			run.Status = StatusCompleted
-			return s.runStore.UpdateRun(ctx, run)
-		}
-
-		if run.NoProgressCount >= s.limits.MaxNoProgressSteps {
-			run.Status = StatusFailed
-			run.LastError = "no progress limit reached"
-			return s.runStore.UpdateRun(ctx, run)
-		}
-
-		if _, updateErr := s.runStore.UpdateRun(ctx, run); updateErr != nil {
-			return Run{}, updateErr
-		}
-
-		if !result.ShouldContinue {
-			run.Status = StatusPaused
-			return s.runStore.UpdateRun(ctx, run)
-		}
-	}
-
-	run.Status = StatusFailed
-	run.LastError = "max steps reached"
-	return s.runStore.UpdateRun(ctx, run)
+	return s.executeTaskRun(ctx, run, task)
 }
 
 func (s *Service) ensureSession(ctx context.Context, run Run, task tasks.Task) (Run, error) {
@@ -270,14 +140,6 @@ func (s *Service) loadTask(run Run) (tasks.Task, error) {
 	return task, nil
 }
 
-func (s *Service) readKnowledgeBase(workspace string) []navigator.ContextFile {
-	files, err := navigator.ReadContext(workspace)
-	if err != nil {
-		return nil
-	}
-	return files
-}
-
 func resolveTaskFilePath(run Run) string {
 	taskFile := strings.TrimSpace(run.TaskFile)
 	if taskFile == "" || filepath.IsAbs(taskFile) {
@@ -318,4 +180,14 @@ func summarizeInvalidJSON(err error) string {
 	default:
 		return msg
 	}
+}
+
+func (s *Service) brainTimeoutString() string {
+	type timeoutReporter interface {
+		Timeout() string
+	}
+	if reporter, ok := s.brain.(timeoutReporter); ok {
+		return reporter.Timeout()
+	}
+	return "unknown"
 }
