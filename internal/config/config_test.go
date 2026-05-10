@@ -82,15 +82,34 @@ func TestLoadConfigDefaults(t *testing.T) {
 		t.Fatalf("expected default LogLevel debug, got %s", cfg.LogLevel)
 	}
 
-	if cfg.WorkerBaseURL != "http://127.0.0.1:8080" {
-		t.Fatalf("expected default WorkerBaseURL http://127.0.0.1:8080, got %s", cfg.WorkerBaseURL)
+	if cfg.WorkerBaseURL != DefaultWorkerBaseURL {
+		t.Fatalf("expected default WorkerBaseURL %s, got %s", DefaultWorkerBaseURL, cfg.WorkerBaseURL)
 	}
 
-	if cfg.BrainBaseURL != "http://127.0.0.1:8088" {
-		t.Fatalf("expected default BrainBaseURL http://127.0.0.1:8088, got %s", cfg.BrainBaseURL)
+	if cfg.BrainBaseURL != DefaultBrainBaseURL {
+		t.Fatalf("expected default BrainBaseURL %s, got %s", DefaultBrainBaseURL, cfg.BrainBaseURL)
 	}
 
-	if cfg.BrainModel != "gemma-4-e2b" {
-		t.Fatalf("expected default BrainModel gemma-4-e2b, got %s", cfg.BrainModel)
+	if cfg.BrainModel != DefaultBrainModel {
+		t.Fatalf("expected default BrainModel %s, got %s", DefaultBrainModel, cfg.BrainModel)
+	}
+}
+
+func TestLoadConfigTrimsBlankEnvValues(t *testing.T) {
+	t.Setenv("STATE_DIR", t.TempDir())
+	t.Setenv("WORKER_BASE_URL", "   ")
+	t.Setenv("BRAIN_BASE_URL", "\t\n")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if cfg.WorkerBaseURL != DefaultWorkerBaseURL {
+		t.Fatalf("expected default WorkerBaseURL for blank env, got %s", cfg.WorkerBaseURL)
+	}
+
+	if cfg.BrainBaseURL != DefaultBrainBaseURL {
+		t.Fatalf("expected default BrainBaseURL for blank env, got %s", cfg.BrainBaseURL)
 	}
 }

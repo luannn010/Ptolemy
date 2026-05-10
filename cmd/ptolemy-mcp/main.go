@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
+	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/mcp"
 	"github.com/luannn010/ptolemy/internal/mcp/executortools"
 	"github.com/luannn010/ptolemy/internal/mcp/filetools"
@@ -13,11 +16,13 @@ import (
 )
 
 func main() {
-	workerURL := os.Getenv("PTOLEMY_WORKER_URL")
-	if workerURL == "" {
-		workerURL = "http://localhost:8080"
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
+		os.Exit(1)
 	}
 
+	workerURL := firstNonEmpty(os.Getenv("PTOLEMY_WORKER_URL"), cfg.WorkerBaseURL)
 	client := mcp.NewWorkerClient(workerURL)
 
 	server := mcp.NewServer(
@@ -38,4 +43,14 @@ func main() {
 	server.RegisterHandler(worktreetools.Handle)
 
 	server.Run(os.Stdin, os.Stdout)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
