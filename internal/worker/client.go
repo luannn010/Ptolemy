@@ -68,6 +68,37 @@ type WriteFileResponse struct {
 	Path string `json:"path"`
 }
 
+type AgentRunRequest struct {
+	SessionID       string `json:"session_id,omitempty"`
+	TaskID          string `json:"task_id,omitempty"`
+	TaskFile        string `json:"task_file,omitempty"`
+	Workspace       string `json:"workspace,omitempty"`
+	Branch          string `json:"branch,omitempty"`
+	WorktreePath    string `json:"worktree_path,omitempty"`
+	FinalizationMode string `json:"finalization_mode,omitempty"`
+	MaxSteps        int    `json:"max_steps,omitempty"`
+	CurrentPhase    string `json:"current_phase,omitempty"`
+	FinalReportPath string `json:"final_report_path,omitempty"`
+	AutoStart       bool   `json:"auto_start,omitempty"`
+}
+
+type AgentRun struct {
+	ID              string `json:"id"`
+	SessionID       string `json:"session_id"`
+	TaskID          string `json:"task_id"`
+	TaskFile        string `json:"task_file"`
+	Workspace       string `json:"workspace"`
+	Branch          string `json:"branch"`
+	WorktreePath    string `json:"worktree_path"`
+	FinalizationMode string `json:"finalization_mode"`
+	Status          string `json:"status"`
+	CurrentStep     int    `json:"current_step"`
+	MaxSteps        int    `json:"max_steps"`
+	CurrentPhase    string `json:"current_phase"`
+	LastError       string `json:"last_error"`
+	FinalReportPath string `json:"final_report_path"`
+}
+
 func NewClient(baseURL string) *Client {
 	return &Client{
 		baseURL: baseURL,
@@ -197,6 +228,64 @@ func (c *Client) WriteFile(ctx context.Context, reqBody WriteFileRequest) (*Writ
 	}
 
 	var result WriteFileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (c *Client) CreateAgentRun(ctx context.Context, reqBody AgentRunRequest) (*AgentRun, error) {
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/agent-runs", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		var errBody map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&errBody)
+		return nil, fmt.Errorf("create agent run failed with status %s: %v", resp.Status, errBody)
+	}
+
+	var result AgentRun
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (c *Client) ResumeAgentRun(ctx context.Context, runID string) (*AgentRun, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/agent-runs/%s/resume", c.baseURL, runID), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		var errBody map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&errBody)
+		return nil, fmt.Errorf("resume agent run failed with status %s: %v", resp.Status, errBody)
+	}
+
+	var result AgentRun
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}

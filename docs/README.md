@@ -9,6 +9,13 @@ Use this page as the documentation hub for Ptolemy.
 - [Worker API](./Worker_API.md)
 - [Development Workflow](./Development.md)
 - [Architecture](./Architecture.md)
+- [Project Memory](./memory/projects/ptolemy)
+
+## KB And Agent Loop
+
+- Start KB-first with `.ptolemy/PTOLEMY.md`, then `.ptolemy/kb/PROJECT_MAP.md`, then the KB indexes before broad repo reads.
+- Use [Worker API](./Worker_API.md) for the HTTP surfaces, including the controller-owned `/agent-runs` loop.
+- Use [Workflow Index](../WORKFLOWS.md) when the task needs the repo's execution model rather than just endpoint reference.
 
 ## Task System
 

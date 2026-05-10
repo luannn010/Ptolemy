@@ -36,8 +36,10 @@ Expected shape:
 | Executor | `POST /execute` |
 | Files | `POST /file/read`, `/file/write`, `/file/list`, `/file/search`, `/file/apply` |
 | Navigator | `POST /navigator/index`, `/navigator/context`, `/navigator/session/start`, `/navigator/session/note` |
+| KB | `POST /kb/build`, `/kb/read`, `/kb/update` |
 | Git | `POST /git/status`, `/git/diff`, `/git/log`, `/git/checkout`, `/git/branch`, `/git/commit`, `/git/push` |
 | Worktrees | `POST /worktree/create`, `/worktree/list`, `/worktree/remove` |
+| Agent Runs | `POST /agent-runs`, `GET /agent-runs/{id}`, `GET /agent-runs/{id}/actions`, `GET /agent-runs/{id}/observations`, `POST /agent-runs/{id}/resume`, `POST /agent-runs/{id}/cancel` |
 | Tasks | `POST /tasks/run-inbox` |
 
 ## Example: Create A Session
@@ -77,6 +79,53 @@ curl -s -X POST http://localhost:8080/file/read \
   -d '{"session_id":"'"$SESSION_ID"'","path":"README.md"}' | jq
 ```
 
+## Example: Create An Agent Run
+
+This creates a controller-owned run record without auto-starting the loop:
+
+```bash
+curl -s -X POST http://localhost:8080/agent-runs \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id":"smoke-agentloop",
+    "workspace":"'"$PWD"'",
+    "branch":"ptolemy/smoke-agentloop",
+    "max_steps":4,
+    "current_phase":"manual-smoke",
+    "auto_start":false
+  }' | jq
+```
+
+## Example: Start The Controller Loop
+
+When `auto_start` is `true`, `workerd` loads task context, asks the model for one JSON action at a time, validates that action, executes it, records observations, and loops until completion or guardrails stop the run.
+
+```bash
+curl -s -X POST http://localhost:8080/agent-runs \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "task_id":"my-task",
+    "task_file":"docs/tasks/inbox/Normal-my-task.md",
+    "workspace":"'"$PWD"'",
+    "branch":"ptolemy/normal-my-task",
+    "max_steps":8,
+    "current_phase":"task_runner",
+    "auto_start":true
+  }' | jq
+```
+
+## Reasoning Loop Contract
+
+The agent loop is controller-driven:
+
+1. The model proposes exactly one top-level JSON action.
+2. `workerd` validates the action and rejects invalid or multi-object output.
+3. `workerd` executes the chosen tool.
+4. The tool result is persisted as an observation.
+5. The loop continues until completion, pause, cancellation, or guardrail failure.
+
+The model does not directly execute shell, file, Git, or publish operations.
+
 ## MCP Adapter
 
 Build the adapter:
@@ -103,5 +152,6 @@ Exposed MCP groups include:
 - `ptolemy.execute`
 - `ptolemy.read_file`, `ptolemy.write_file`, `ptolemy.list_directory`, `ptolemy.search_codebase`, `ptolemy.apply_patch`
 - `ptolemy.index_workspace`, `ptolemy.read_context`, `ptolemy.start_task_session`, `ptolemy.append_session_note`
+- `ptolemy.kb_build`, `ptolemy.kb_read`, `ptolemy.kb_update`
 - `ptolemy.git_status`, `ptolemy.git_diff`, `ptolemy.git_log`, `ptolemy.git_checkout`, `ptolemy.git_create_branch`, `ptolemy.git_commit`, `ptolemy.git_push`
 - `ptolemy.create_worktree`, `ptolemy.list_worktrees`, `ptolemy.remove_worktree`
