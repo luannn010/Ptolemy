@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -19,6 +20,12 @@ type Config struct {
 	AgentBinaryPath string
 }
 
+const (
+	DefaultWorkerBaseURL = "http://127.0.0.1:8080"
+	DefaultBrainBaseURL  = "http://127.0.0.1:8088"
+	DefaultBrainModel    = "gemma-4-e2b"
+)
+
 func Load() (Config, error) {
 	_ = godotenv.Load()
 
@@ -28,9 +35,9 @@ func Load() (Config, error) {
 		LogLevel:        getEnv("LOG_LEVEL", "debug"),
 		StateDir:        getEnv("STATE_DIR", "./state"),
 		DBPath:          getEnv("DB_PATH", "./state/ptolemy.db"),
-		WorkerBaseURL:   getEnv("WORKER_BASE_URL", "http://127.0.0.1:8080"),
-		BrainBaseURL:    getEnv("BRAIN_BASE_URL", "http://127.0.0.1:8088"),
-		BrainModel:      getEnv("BRAIN_MODEL", "gemma-4-e2b"),
+		WorkerBaseURL:   getEnv("WORKER_BASE_URL", DefaultWorkerBaseURL),
+		BrainBaseURL:    getEnv("BRAIN_BASE_URL", DefaultBrainBaseURL),
+		BrainModel:      getEnv("BRAIN_MODEL", DefaultBrainModel),
 		AgentBinaryPath: getEnv("PTOLEMY_AGENT_BIN", ""),
 	}
 
@@ -46,7 +53,7 @@ func Load() (Config, error) {
 }
 
 func getEnv(key, fallback string) string {
-	value := os.Getenv(key)
+	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
 		return fallback
 	}
