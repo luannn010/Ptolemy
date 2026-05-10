@@ -273,6 +273,81 @@ func (s *Service) CurrentTaskDetail(ctx context.Context, programRunID string) (*
 	return nil, []action.Action{}, []agentloop.Observation{}, []command.CommandLog{}, nil
 }
 
+func (s *Service) BuildRunOperatorState(ctx context.Context, programRun ProgramRun, task *RunTaskDetail, actions []action.Action) RunOperatorState {
+	terminal := s.BuildTerminalState(ctx, programRun, task)
+	terminal.Snapshot = ""
+	state := RunOperatorState{
+		Terminal: terminal,
+	}
+
+	if task == nil || task.AgentRunID == "" || s.agentService == nil {
+		return state
+	}
+
+	inspection, err := s.agentService.InspectRun(ctx, task.AgentRunID)
+	if err == nil {
+		if inspection.WaitingOn == "" {
+			inspection.WaitingOn = waitingOnFromRunAndActions(programRun, task, actions)
+		}
+		state.AgentRun = &inspection
+	}
+	return state
+}
+
+func (s *Service) BuildTerminalState(ctx context.Context, programRun ProgramRun, task *RunTaskDetail) TerminalState {
+	state := TerminalState{
+		Status:      "no_session",
+		Message:     "Waiting for an agent session to start.",
+		Source:      "none",
+		LastUpdated: time.Now().UTC(),
+	}
+
+	if task == nil {
+		if programRun.Status == StatusFailed {
+			state.Status = "failed"
+			state.Message = firstNonEmpty(programRun.LastError, "This run failed before a live terminal session was captured.")
+		} else if programRun.Status == StatusCompleted {
+			state.Status = "completed"
+			state.Message = "This run completed before a terminal session was attached."
+		}
+		return state
+	}
+
+	state.TaskID = task.TaskID
+	state.TaskTitle = task.Title
+	state.SessionID = task.SessionID
+	state.Phase = task.Status
+	state.Source = terminalSource(programRun, task)
+
+	if strings.TrimSpace(task.SessionID) == "" {
+		state.Status = terminalLifecycleStatus(programRun, task, false)
+		state.Message = terminalLifecycleMessage(state.Status, programRun, task)
+		return state
+	}
+
+	hasSession := s.runner != nil && s.runner.HasSession(ctx, task.SessionID)
+	state.HasSession = hasSession
+	if !hasSession {
+		state.Status = terminalLifecycleStatus(programRun, task, false)
+		state.Message = terminalLifecycleMessage(state.Status, programRun, task)
+		return state
+	}
+
+	snapshot, err := s.runner.CaptureSession(ctx, task.SessionID)
+	if err != nil {
+		state.Status = terminalLifecycleStatus(programRun, task, false)
+		state.Message = terminalLifecycleMessage(state.Status, programRun, task)
+		return state
+	}
+
+	state.CaptureAvailable = true
+	state.Snapshot = snapshot
+	state.SessionBootstrapped = strings.Contains(snapshot, "[ptolemy] terminal session ready")
+	state.Status = terminalLifecycleStatus(programRun, task, true)
+	state.Message = terminalLifecycleMessage(state.Status, programRun, task)
+	return state
+}
+
 func (s *Service) loadTaskRuntime(ctx context.Context, task *RunTaskDetail) ([]action.Action, []agentloop.Observation, []command.CommandLog, error) {
 	actions := []action.Action{}
 	observations := []agentloop.Observation{}
@@ -296,6 +371,97 @@ func (s *Service) loadTaskRuntime(ctx context.Context, task *RunTaskDetail) ([]a
 		}
 	}
 	return actions, observations, logs, nil
+}
+
+func waitingOnFromRunAndActions(programRun ProgramRun, task *RunTaskDetail, actions []action.Action) string {
+	switch programRun.Status {
+	case StatusFailed:
+		return "failure"
+	case StatusCompleted, StatusCancelled:
+		return "finalize"
+	}
+
+	if task == nil {
+		return "brain_response"
+	}
+
+	for i := len(actions) - 1; i >= 0; i-- {
+		if actions[i].Status != "pending" {
+			continue
+		}
+		if actions[i].Type == "run_command" && containsCommand(task.Validation, actions[i].Target) {
+			return "validation"
+		}
+		return "tool_execution"
+	}
+
+	if task.Status == StatusWaitingOnAgent || task.Status == StatusRunning {
+		return "brain_response"
+	}
+	if task.Status == StatusFailed {
+		return "failure"
+	}
+	return "finalize"
+}
+
+func containsCommand(commands []string, target string) bool {
+	trimmed := strings.TrimSpace(target)
+	for _, command := range commands {
+		if strings.TrimSpace(command) == trimmed {
+			return true
+		}
+	}
+	return false
+}
+
+func terminalSource(programRun ProgramRun, task *RunTaskDetail) string {
+	if task == nil {
+		return "none"
+	}
+	if task.TaskID == programRun.CurrentTaskID && (task.Status == StatusRunning || task.Status == StatusWaitingOnAgent) {
+		return "current"
+	}
+	return "latest"
+}
+
+func terminalLifecycleStatus(programRun ProgramRun, task *RunTaskDetail, captureAvailable bool) string {
+	switch {
+	case task == nil:
+		return "no_session"
+	case programRun.Status == StatusFailed || task.Status == StatusFailed:
+		return "failed"
+	case programRun.Status == StatusCompleted || task.Status == StatusCompleted:
+		if captureAvailable {
+			return "completed"
+		}
+		return "no_session"
+	case programRun.Status == StatusCancelled:
+		return "completed"
+	case task.SessionID == "":
+		return "no_session"
+	case !captureAvailable:
+		return "bootstrapping"
+	default:
+		return "running"
+	}
+}
+
+func terminalLifecycleMessage(status string, programRun ProgramRun, task *RunTaskDetail) string {
+	switch status {
+	case "failed":
+		return firstNonEmpty(task.LastError, programRun.LastError, "The run failed. Review the terminal and recent events for the last successful output.")
+	case "completed":
+		return "Command execution completed. This pane is showing the most recent terminal snapshot for the run."
+	case "running":
+		return "Live terminal capture is active for the current agent session."
+	case "bootstrapping":
+		return "The tmux session exists, but live pane output is not available yet. The session may still be bootstrapping."
+	default:
+		if task != nil && strings.TrimSpace(task.SessionID) != "" {
+			return "The agent session has been created, but no tmux output has been captured yet."
+		}
+		return "No tmux session is attached to this run yet."
+	}
 }
 
 func (s *Service) resolveProgram(input StartProgramRunInput) (ProgramDefinition, []PackDetail, error) {
