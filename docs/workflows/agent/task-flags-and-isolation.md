@@ -72,6 +72,39 @@ Required fields:
 - Split child tasks may inherit or narrow `allowed_files`, but never broaden them without updating metadata.
 - Split child branches must use the child task ID.
 - Mark split children with `status: split` until they are selected for execution.
+- Keep each child task to one narrow phase such as `inspect`, `plan`, `edit`, `test`, `validate`, `docs`, or `finalize`.
+- Keep each child task body within a model-friendly size when possible:
+  under roughly 1200-2000 chars is comfortable and above 4000 chars is risky.
+- Child tasks should use compact manifest/state files as memory rather than relying on full prior chat history.
+
+## Process manifests
+
+When a large task is executed as a process pack, Ptolemy writes:
+
+- `.ptolemy/tasks/process/<pack-id>/manifest.json`
+- `.ptolemy/tasks/process/<pack-id>/todo.md`
+- `.ptolemy/tasks/process/<pack-id>/state/<child-id>-result.md`
+
+The manifest records:
+
+- `pack_id`
+- `parent_task_file`
+- `branch`
+- `status`
+- `current_child_task_id`
+- `child_tasks`
+- `dependencies`
+- `allowed_files`
+- `validation_commands`
+- per-child `result_summary_path`, `files_changed`, `commands_run`, and `failure_reason`
+
+Each child task starts with a fresh context assembled from:
+
+1. the fixed system prompt
+2. the current child task only
+3. the relevant manifest slice
+4. compact previous child summaries
+5. budgeted `.ptolemy` context snippets
 
 Example child task:
 

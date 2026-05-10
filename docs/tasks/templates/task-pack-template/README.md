@@ -64,8 +64,37 @@ Pack Studio runs packs sequentially through `agent-runs`.
 
 - One program run is active at a time in v1.
 - Packs inside a program run execute sequentially.
+- Large parent tasks are split into narrow child tasks before execution.
+- Each child task runs as a fresh brain call with compact manifest state instead of full prior chat history.
 - Tasks inside a pack execute sequentially.
 - The live terminal is streamed from the tmux-backed worker session.
+
+## Large Task Guidance
+
+Keep each child task small enough for the 24K local model context window.
+
+- Comfortable child task body: about 1200-2000 chars.
+- Risky child task body: above 4000 chars.
+- Prefer one narrow goal, one phase, one small `allowed_files` scope, and at most 3-5 explicit steps.
+- Split inspect/research, plan, implementation, tests, validation, and final summary into separate child tasks when possible.
+
+## Process State
+
+During execution, Ptolemy writes process state under:
+
+```text
+.ptolemy/tasks/process/<pack-id>/
+├── manifest.json
+├── todo.md
+└── state/
+    ├── 001-...-result.md
+    ├── 002-...-result.md
+    └── ...
+```
+
+`manifest.json` tracks child-task status, dependencies, changed files, commands run, and failure reasons.
+`todo.md` is the human-readable checklist view.
+Each child result summary is compact and becomes the memory carried into the next child task.
 
 ## Monitoring
 
