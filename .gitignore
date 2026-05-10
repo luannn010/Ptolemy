@@ -31,5 +31,7 @@ Thumbs.db
 /docs/tasks/packs/ptolemy-memory-refresh/**
 !/docs/tasks/packs/ptolemy-memory-refresh/README.md
 !/docs/tasks/packs/ptolemy-memory-refresh/TASK_PLAN.md
+!/docs/tasks/packs/ptolemy-execute-metadata/
+!/docs/tasks/packs/ptolemy-execute-metadata/**
 /docs/plans/*
 /deploy/*

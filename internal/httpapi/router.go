@@ -48,7 +48,7 @@ func NewRouter(
 		})
 	})
 
-	exec := executor.NewExecutor(sessionStore, commandStore, runner)
+	exec := executor.NewExecutor(sessionStore, commandStore, actionStore, logStore, runner)
 	executeHandler := NewExecuteHandler(exec)
 	r.Post("/execute", executeHandler.Handle)
 
