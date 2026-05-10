@@ -5,8 +5,11 @@ const navLinks = Array.from(document.querySelectorAll("[data-nav]"));
 let eventsSource = null;
 let terminalSource = null;
 let runRefreshTimer = null;
+let terminalPollTimer = null;
 let terminalBuffer = "";
 let autoScrollTerminal = true;
+let terminalLastEventAt = 0;
+let activeRunId = "";
 
 const routes = {
   "/ui": renderOverview,
@@ -135,6 +138,7 @@ function currentRunId() {
 }
 
 function cleanupLiveSources() {
+  activeRunId = "";
   if (eventsSource) {
     eventsSource.close();
     eventsSource = null;
@@ -147,6 +151,12 @@ function cleanupLiveSources() {
     clearInterval(runRefreshTimer);
     runRefreshTimer = null;
   }
+  if (terminalPollTimer) {
+    clearInterval(terminalPollTimer);
+    terminalPollTimer = null;
+  }
+  terminalLastEventAt = 0;
+  terminalBuffer = "";
 }
 
 function highlightNav() {
@@ -1066,19 +1076,194 @@ function renderCommandList(commandLogs) {
   `).join("");
 }
 
-async function renderRun(runId) {
-  cleanupLiveSources();
-  highlightNav();
-  const payload = await getJSON(`/ui/api/program-runs/${encodeURIComponent(runId)}`);
+function waitingLabel(value) {
+  return String(value || "unknown").replaceAll("_", " ");
+}
+
+function renderPathList(items, emptyMessage, className = "compact-list") {
+  const rows = safeArray(items);
+  if (!rows.length) {
+    return `<p class="muted">${escapeHTML(emptyMessage)}</p>`;
+  }
+  return `
+    <ul class="${className}">
+      ${rows.map(item => `<li><span class="mono">${escapeHTML(item)}</span></li>`).join("")}
+    </ul>
+  `;
+}
+
+function renderManifestProgress(items, currentTaskId) {
+  const rows = safeArray(items);
+  if (!rows.length) {
+    return `<p class="muted">No child-task manifest is active for this run.</p>`;
+  }
+  return `
+    <div class="manifest-list">
+      ${rows.map(item => `
+        <article class="manifest-row ${item.id === currentTaskId ? "is-current" : ""}">
+          <div class="list-row-head">
+            <div>
+              ${statusBadge(item.status || "pending")}
+              <h3>${escapeHTML(firstNonEmpty(item.title, item.id))}</h3>
+              <p class="muted">${escapeHTML(firstNonEmpty(item.phase, "phase pending"))}</p>
+            </div>
+            <div class="mini-meta">
+              <span class="pill mono">${escapeHTML(item.id)}</span>
+              <span class="pill">${escapeHTML(item.estimated_body_tokens || 0)} tok</span>
+            </div>
+          </div>
+          ${item.warning ? `<p class="warning-text">${escapeHTML(item.warning)}</p>` : ""}
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderPromptContext(operatorState, currentTask) {
+  const agentRun = operatorState?.agent_run || null;
+  const prompt = agentRun?.prompt || null;
+  const waitingOn = firstNonEmpty(agentRun?.waiting_on, "brain_response");
+  const currentTitle = firstNonEmpty(prompt?.current_task_title, currentTask?.title, "Waiting for active child task");
+  const currentId = firstNonEmpty(prompt?.current_task_id, currentTask?.task_id, "pending");
+  const currentPhase = firstNonEmpty(prompt?.current_task_phase, agentRun?.run?.current_phase, currentTask?.status, "pending");
+
+  return `
+    ${prompt?.error ? renderMessage(prompt.error, "danger") : renderMessage("Compact prompt assembly details are live here. Use the debug disclosure only when you need deeper prompt inspection.", "neutral")}
+    <article class="timeline-card">
+      <div class="timeline-label">
+        <strong>${escapeHTML(currentTitle)}</strong>
+        ${statusBadge(waitingOn, waitingOn)}
+      </div>
+      <div class="mini-meta">
+        <span class="pill mono">${escapeHTML(currentId)}</span>
+        <span class="pill">${escapeHTML(currentPhase)}</span>
+        ${agentRun?.latest_action_type ? `<span class="pill">${escapeHTML(agentRun.latest_action_type)}</span>` : ""}
+      </div>
+      <div class="key-value-grid">
+        <div class="key-value"><span>Waiting On</span>${escapeHTML(waitingLabel(waitingOn))}</div>
+        <div class="key-value"><span>Brain Timeout</span>${escapeHTML(firstNonEmpty(prompt?.brain_timeout, "unknown"))}</div>
+        <div class="key-value"><span>Prompt Tokens</span>${escapeHTML(prompt?.estimated_prompt_tokens ?? "0")}</div>
+        <div class="key-value"><span>Max Context</span>${escapeHTML(prompt?.max_context_tokens ?? "0")}</div>
+      </div>
+    </article>
+
+    <article class="timeline-card">
+      <div class="timeline-label">
+        <strong>Context Files</strong>
+      </div>
+      <div class="operator-grid">
+        <div class="surface-inset">
+          <p class="metric-label">Included</p>
+          ${renderPathList(prompt?.included_context_files, "No context files were included in the assembled prompt.")}
+        </div>
+        <div class="surface-inset">
+          <p class="metric-label">Trimmed</p>
+          ${renderPathList(prompt?.trimmed_context_files, "No context files were trimmed for this prompt.")}
+        </div>
+      </div>
+    </article>
+
+    <article class="timeline-card">
+      <div class="timeline-label">
+        <strong>Previous Child Summaries</strong>
+      </div>
+      ${renderPathList(prompt?.previous_child_summaries, "No previous child summaries are included for this step.")}
+    </article>
+
+    <article class="timeline-card">
+      <div class="timeline-label">
+        <strong>Manifest Slice</strong>
+      </div>
+      ${renderManifestProgress(prompt?.manifest_progress, prompt?.current_task_id)}
+    </article>
+
+    ${prompt?.raw_prompt_preview ? `
+      <details class="debug-panel">
+        <summary>Debug prompt preview${prompt.raw_prompt_preview_truncated ? " (truncated)" : ""}</summary>
+        <pre class="prompt-preview">${escapeHTML(prompt.raw_prompt_preview)}</pre>
+      </details>
+    ` : ""}
+  `;
+}
+
+function renderRunMetrics(run, currentPack, currentTask, failureMessage) {
+  return `
+    ${metricCard("Program", run.program_name, run.mode === "program" ? "Multi-pack orchestration" : "Single-pack execution")}
+    ${metricCard("Progress", percentText(run.percent_complete), `${run.completed_tasks}/${run.total_tasks} tasks complete`)}
+    ${metricCard("Current Pack", firstNonEmpty(currentPack?.pack_name, run.current_pack_id, "Waiting"), firstNonEmpty(currentTask?.title, formatDate(run.updated_at)), true)}
+    ${metricCard("Status", statusLabel(run.status), failureMessage ? "Failure details captured below" : "No blocking error recorded")}
+  `;
+}
+
+function renderRunProgress(payload) {
   const detail = payload.detail;
+  const run = detail.program_run;
   const currentTask = payload.current_task;
   const actions = safeArray(payload.actions);
   const observations = safeArray(payload.observations);
-  const commandLogs = safeArray(payload.command_logs);
+  const failureMessage = firstNonEmpty(run.last_error, currentTask?.last_error);
+
+  return `
+    ${failureMessage ? renderMessage(failureMessage, "danger") : run.status === "completed" ? renderMessage("This run completed cleanly. Review the final events and command history below.", "success") : renderMessage("Live operator updates are flowing below while the task pack advances.", "neutral")}
+    <article class="timeline-card">
+      <div class="timeline-label">
+        <strong>Run Summary</strong>
+        ${statusBadge(run.status)}
+      </div>
+      <div class="progress"><span style="width:${Number(run.percent_complete || 0)}%"></span></div>
+      <div class="key-value-grid">
+        <div class="key-value"><span>Workspace</span>${escapeHTML(run.workspace)}</div>
+        <div class="key-value"><span>Updated</span>${escapeHTML(formatDate(run.updated_at))}</div>
+        <div class="key-value"><span>Started</span>${escapeHTML(formatDate(run.started_at))}</div>
+        <div class="key-value"><span>Finished</span>${escapeHTML(formatDate(run.finished_at))}</div>
+      </div>
+    </article>
+
+    <article class="timeline-card">
+      <div class="timeline-label">
+        <strong>${escapeHTML(currentTask ? currentTask.title : "Current Task")}</strong>
+        ${statusBadge(currentTask?.status || run.status)}
+      </div>
+      ${currentTask ? `
+        <div class="mini-meta">
+          <span class="pill mono">${escapeHTML(currentTask.task_id)}</span>
+          <span class="pill">${escapeHTML(firstNonEmpty(currentTask.branch, "No branch"))}</span>
+          <span class="pill mono">${escapeHTML(firstNonEmpty(currentTask.session_id, "Session pending"))}</span>
+        </div>
+        ${renderChecklist(currentTask.checklist)}
+      ` : `<p class="muted">No current task is materialized yet.</p>`}
+    </article>
+
+    <article class="timeline-card">
+      <div class="timeline-label">
+        <strong>Recent Events</strong>
+      </div>
+      <div id="event-list" class="event-list">${renderEventList(safeArray(detail.events).slice(-10))}</div>
+    </article>
+
+    <article class="timeline-card">
+      <div class="timeline-label">
+        <strong>Recent Agent Actions</strong>
+      </div>
+      <div class="action-list">${renderActionList(actions)}</div>
+    </article>
+
+    <article class="timeline-card">
+      <div class="timeline-label">
+        <strong>Observations</strong>
+      </div>
+      <div class="action-list">${renderObservationList(observations)}</div>
+    </article>
+  `;
+}
+
+function applyRunPayload(payload) {
+  const detail = payload.detail;
+  const currentTask = payload.current_task;
+  const operatorState = payload.operator_state || {};
   const run = detail.program_run;
   const currentPack = safeArray(detail.packs).find(pack => pack.pack_id === run.current_pack_id) || safeArray(detail.packs)[0] || null;
   const failureMessage = firstNonEmpty(run.last_error, currentTask?.last_error);
-  setRunsNavTarget(`/ui/runs/${encodeURIComponent(runId)}`);
 
   const runStatusText = run.status === "failed"
     ? "Run stopped with a recorded failure"
@@ -1087,173 +1272,229 @@ async function renderRun(runId) {
       : "Run is actively streaming";
   setShellStatus(run.status === "failed" ? "issue" : "ready", runStatusText);
 
+  const metrics = document.getElementById("run-metrics");
+  if (metrics) {
+    metrics.innerHTML = renderRunMetrics(run, currentPack, currentTask, failureMessage);
+  }
+
+  const tree = document.getElementById("run-tree");
+  if (tree) {
+    tree.innerHTML = renderRunTree(detail);
+  }
+
+  const progress = document.getElementById("run-progress");
+  if (progress) {
+    progress.innerHTML = renderRunProgress(payload);
+  }
+
+  const promptPanel = document.getElementById("prompt-context");
+  if (promptPanel) {
+    promptPanel.innerHTML = renderPromptContext(operatorState, currentTask);
+  }
+
+  const commandHistory = document.getElementById("command-history");
+  if (commandHistory) {
+    commandHistory.innerHTML = renderCommandList(safeArray(payload.command_logs));
+  }
+
+  const cancelButton = document.getElementById("cancel-run");
+  if (cancelButton) {
+    const disabled = ["failed", "completed", "cancelled"].includes(run.status);
+    cancelButton.disabled = disabled;
+    cancelButton.className = `button ${disabled ? "button-ghost" : "button-danger"}`;
+  }
+
+  updateTerminalMeta(operatorState.terminal || {});
+}
+
+async function renderRun(runId) {
+  cleanupLiveSources();
+  highlightNav();
+  activeRunId = runId;
+  terminalBuffer = "";
+  setRunsNavTarget(`/ui/runs/${encodeURIComponent(runId)}`);
+
   view.innerHTML = `
-    <section class="cards">
-      ${metricCard("Program", run.program_name, run.mode === "program" ? "Multi-pack orchestration" : "Single-pack execution")}
-      ${metricCard("Progress", percentText(run.percent_complete), `${run.completed_tasks}/${run.total_tasks} tasks complete`)}
-      ${metricCard("Current Pack", firstNonEmpty(currentPack?.pack_name, run.current_pack_id, "Waiting"), firstNonEmpty(currentTask?.title, formatDate(run.updated_at)), true)}
-      ${metricCard("Status", statusLabel(run.status), failureMessage ? "Failure details captured below" : "No blocking error recorded")}
-    </section>
+    <section id="run-metrics" class="cards"></section>
 
-    <section class="split">
-      <div class="pane">
-        <div class="pane-header">
-          <div>
-            <h2>Program Tree</h2>
-            <p>Follow progress from pack to task to agent session.</p>
+    <section class="run-grid">
+      <div class="run-column">
+        <div class="pane">
+          <div class="pane-header">
+            <div>
+              <h2>Program Tree</h2>
+              <p>Follow progress from pack to task to agent session.</p>
+            </div>
           </div>
+          <div id="run-tree" class="pane-body tree"></div>
         </div>
-        <div class="pane-body tree">
-          ${renderRunTree(detail)}
+
+        <div class="pane">
+          <div class="pane-header">
+            <div>
+              <h2>Progress</h2>
+              <p>Checklist state, event flow, and current task detail.</p>
+            </div>
+            <div class="toolbar-actions">
+              <button class="button button-secondary" type="button" id="refresh-run">Refresh</button>
+              <button class="button button-ghost" type="button" id="cancel-run">Cancel run</button>
+            </div>
+          </div>
+          <div id="run-progress" class="pane-body timeline"></div>
         </div>
       </div>
 
-      <div class="pane">
-        <div class="pane-header">
-          <div>
-            <h2>Progress</h2>
-            <p>Checklist state, current task detail, and the event timeline.</p>
+      <div class="run-column run-ops-column">
+        <div class="pane">
+          <div class="pane-header">
+            <div>
+              <h2>Prompt / Context</h2>
+              <p>Operator-safe view of the current child-task prompt assembly.</p>
+            </div>
           </div>
-          <div class="toolbar-actions">
-            <button class="button button-secondary" type="button" id="refresh-run">Refresh</button>
-            <button class="button ${run.status === "failed" || run.status === "completed" || run.status === "cancelled" ? "button-ghost" : "button-danger"}" type="button" id="cancel-run" ${run.status === "failed" || run.status === "completed" || run.status === "cancelled" ? "disabled" : ""}>Cancel run</button>
-          </div>
+          <div id="prompt-context" class="pane-body timeline prompt-pane"></div>
         </div>
-        <div class="pane-body timeline">
-          ${failureMessage ? renderMessage(failureMessage, "danger") : run.status === "completed" ? renderMessage("This run completed cleanly. Review the final events and command history below.", "success") : renderMessage("Live updates will appear here as the task pack advances.", "neutral")}
-          <article class="timeline-card">
-            <div class="timeline-label">
-              <strong>Run Summary</strong>
-              ${statusBadge(run.status)}
-            </div>
-            <div class="progress"><span style="width:${Number(run.percent_complete || 0)}%"></span></div>
-            <div class="key-value-grid">
-              <div class="key-value"><span>Workspace</span>${escapeHTML(run.workspace)}</div>
-              <div class="key-value"><span>Updated</span>${escapeHTML(formatDate(run.updated_at))}</div>
-              <div class="key-value"><span>Started</span>${escapeHTML(formatDate(run.started_at))}</div>
-              <div class="key-value"><span>Finished</span>${escapeHTML(formatDate(run.finished_at))}</div>
-            </div>
-          </article>
 
-          <article class="timeline-card">
-            <div class="timeline-label">
-              <strong>${escapeHTML(currentTask ? currentTask.title : "Current Task")}</strong>
-              ${statusBadge(currentTask?.status || run.status)}
+        <div class="pane pane-terminal">
+          <div class="pane-header">
+            <div>
+              <h2>Live Terminal</h2>
+              <p>Streaming tmux capture with a full-viewer fallback snapshot.</p>
             </div>
-            ${currentTask ? `
-              <div class="mini-meta">
-                <span class="pill mono">${escapeHTML(currentTask.task_id)}</span>
-                <span class="pill">${escapeHTML(firstNonEmpty(currentTask.branch, "No branch"))}</span>
-                <span class="pill mono">${escapeHTML(firstNonEmpty(currentTask.session_id, "Session pending"))}</span>
-              </div>
-              ${renderChecklist(currentTask.checklist)}
-            ` : `<p class="muted">No current task is materialized yet.</p>`}
-          </article>
-
-          <article class="timeline-card">
-            <div class="timeline-label">
-              <strong>Recent Events</strong>
-            </div>
-            <div id="event-list" class="event-list">${renderEventList(safeArray(detail.events).slice(-10))}</div>
-          </article>
-
-          <article class="timeline-card">
-            <div class="timeline-label">
-              <strong>Recent Agent Actions</strong>
-            </div>
-            <div class="action-list">${renderActionList(actions)}</div>
-          </article>
-
-          <article class="timeline-card">
-            <div class="timeline-label">
-              <strong>Observations</strong>
-            </div>
-            <div class="action-list">${renderObservationList(observations)}</div>
-          </article>
-        </div>
-      </div>
-
-      <div class="pane">
-        <div class="pane-header">
-          <div>
-            <h2>Live Terminal</h2>
-            <p>Read-only tmux capture for the current session and its command history.</p>
-          </div>
-        </div>
-        <div class="pane-body terminal-wrap">
-          <div class="terminal-shell">
-            <div id="terminal-meta" class="terminal-meta">
-              <span>${escapeHTML(currentTask?.task_id || "Waiting for task session")}</span>
+            <div class="toolbar-actions">
+              <button class="button button-secondary" type="button" id="refresh-terminal">Refresh terminal</button>
               <label class="pill"><input id="auto-scroll-terminal" type="checkbox" ${autoScrollTerminal ? "checked" : ""}> Auto-scroll</label>
             </div>
-            <pre id="terminal" class="terminal">${escapeHTML(terminalBuffer)}</pre>
-            <article class="timeline-card">
-              <div class="timeline-label">
-                <strong>Command History</strong>
+          </div>
+          <div class="pane-body terminal-wrap">
+            <div class="terminal-shell">
+              <div id="terminal-meta" class="terminal-meta"></div>
+              <div class="terminal-toolbar">
+                <div id="terminal-freshness" class="terminal-freshness">Waiting for first terminal update.</div>
               </div>
-              <div class="command-list">${renderCommandList(commandLogs)}</div>
-            </article>
+              <pre id="terminal" class="terminal"></pre>
+              <article class="timeline-card">
+                <div class="timeline-label">
+                  <strong>Command History</strong>
+                </div>
+                <div id="command-history" class="command-list"></div>
+              </article>
+            </div>
           </div>
         </div>
       </div>
     </section>
   `;
 
-  document.getElementById("refresh-run").addEventListener("click", () => renderRun(runId));
+  document.getElementById("refresh-run").addEventListener("click", () => refreshRunData(runId));
   document.getElementById("cancel-run").addEventListener("click", async () => {
     try {
       await getJSON(`/ui/api/program-runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" });
-      await renderRun(runId);
+      await refreshRunData(runId);
+      await pollTerminalSnapshot(runId, true);
     } catch (error) {
       alert(error.message);
     }
   });
+  document.getElementById("refresh-terminal").addEventListener("click", () => pollTerminalSnapshot(runId, true));
   document.getElementById("auto-scroll-terminal").addEventListener("change", event => {
     autoScrollTerminal = event.currentTarget.checked;
   });
 
-  if (terminalBuffer) {
-    const terminal = document.getElementById("terminal");
-    terminal.textContent = terminalBuffer;
+  await refreshRunData(runId);
+  subscribeTerminal(runId);
+  startRunPolling(runId);
+  await pollTerminalSnapshot(runId, true);
+}
+
+async function refreshRunData(runId) {
+  if (activeRunId !== runId) {
+    return;
+  }
+  const payload = await getJSON(`/ui/api/program-runs/${encodeURIComponent(runId)}`);
+  if (activeRunId !== runId) {
+    return;
+  }
+  applyRunPayload(payload);
+}
+
+function startRunPolling(runId) {
+  runRefreshTimer = window.setInterval(() => {
+    if (activeRunId !== runId) {
+      return;
+    }
+    refreshRunData(runId).catch(() => {});
+  }, 4000);
+
+  terminalPollTimer = window.setInterval(() => {
+    if (activeRunId !== runId) {
+      return;
+    }
+    const stale = Date.now() - terminalLastEventAt > 2200;
+    if (stale) {
+      pollTerminalSnapshot(runId, false).catch(() => {});
+    }
+  }, 1600);
+}
+
+function updateTerminalMeta(state) {
+  const meta = document.getElementById("terminal-meta");
+  const freshness = document.getElementById("terminal-freshness");
+  if (!meta || !freshness) {
+    return;
   }
 
-  subscribeEvents(runId);
-  subscribeTerminal(runId);
+  meta.innerHTML = `
+    <div>
+      <strong>${escapeHTML(firstNonEmpty(state.task_title, state.task_id, "Waiting for task session"))}</strong>
+      <p class="terminal-caption">${escapeHTML(firstNonEmpty(state.message, "Waiting for terminal state"))}</p>
+    </div>
+    <div class="inline-actions">
+      <span class="pill mono">${escapeHTML(firstNonEmpty(state.session_id, "No session"))}</span>
+      <span class="pill">${escapeHTML(firstNonEmpty(state.phase, "pending"))}</span>
+      <span class="pill">${escapeHTML(firstNonEmpty(state.status, "unknown"))}</span>
+    </div>
+  `;
 
-  if (["planning", "running", "waiting_on_agent"].includes(run.status)) {
-    runRefreshTimer = window.setInterval(() => {
-      if (window.location.pathname.endsWith(`/ui/runs/${runId}`) || window.location.pathname.endsWith(`/ui/runs/${encodeURIComponent(runId)}`)) {
-        renderRun(runId);
-      }
-    }, 6000);
+  freshness.textContent = state.last_updated
+    ? `Last updated ${formatDate(state.last_updated)} • source ${firstNonEmpty(state.source, "none")}`
+    : "Waiting for first terminal update.";
+}
+
+function applyTerminalState(state, snapshotMode = "replace") {
+  updateTerminalMeta(state);
+
+  const terminal = document.getElementById("terminal");
+  if (!terminal) {
+    return;
+  }
+
+  const nextSnapshot = state.capture_available ? (state.snapshot || "") : `${firstNonEmpty(state.message, "Waiting for terminal output.")}\n`;
+  if (snapshotMode === "append" && terminalBuffer && nextSnapshot.startsWith(terminalBuffer)) {
+    terminalBuffer = nextSnapshot;
+  } else {
+    terminalBuffer = nextSnapshot;
+  }
+  terminal.textContent = terminalBuffer;
+  if (autoScrollTerminal) {
+    terminal.scrollTop = terminal.scrollHeight;
   }
 }
 
-function subscribeEvents(runId) {
-  const target = document.getElementById("event-list");
-  if (!target) {
+async function pollTerminalSnapshot(runId, forceRefresh) {
+  if (activeRunId !== runId) {
     return;
   }
-  eventsSource = new EventSource(`/ui/api/program-runs/${encodeURIComponent(runId)}/events/stream`);
-  eventsSource.addEventListener("event", event => {
-    const payload = JSON.parse(event.data);
-    const row = document.createElement("article");
-    row.className = "list-row";
-    row.innerHTML = `
-      <div class="list-row-head">
-        <div>
-          ${statusBadge(payload.event_type && payload.event_type.includes("failed") ? "failed" : payload.event_type && payload.event_type.includes("finished") ? "completed" : "running")}
-          <h3>${escapeHTML(payload.event_type || "event")}</h3>
-          <p class="muted">${escapeHTML(formatDate(payload.created_at || new Date().toISOString()))}</p>
-        </div>
-      </div>
-      <p>${escapeHTML(payload.message || "")}</p>
-    `;
-    target.appendChild(row);
-    while (target.children.length > 12) {
-      target.removeChild(target.firstChild);
-    }
-  });
+  if (!forceRefresh && terminalSource && Date.now() - terminalLastEventAt < 1200) {
+    return;
+  }
+
+  const state = await getJSON(`/ui/api/program-runs/${encodeURIComponent(runId)}/terminal`);
+  if (activeRunId !== runId) {
+    return;
+  }
+  terminalLastEventAt = Date.now();
+  applyTerminalState(state, "replace");
 }
 
 function subscribeTerminal(runId) {
@@ -1265,25 +1506,46 @@ function subscribeTerminal(runId) {
   terminalSource = new EventSource(`/ui/api/program-runs/${encodeURIComponent(runId)}/terminal/stream`);
   terminalSource.addEventListener("meta", event => {
     const payload = JSON.parse(event.data);
-    meta.innerHTML = `
-      <span>${escapeHTML(firstNonEmpty(payload.task_id, "Waiting for task session"))}</span>
-      <div class="inline-actions">
-        <span class="pill mono">${escapeHTML(firstNonEmpty(payload.session_id, "No session"))}</span>
-        <span class="pill">${escapeHTML(firstNonEmpty(payload.phase, "pending"))}</span>
-      </div>
-    `;
+    terminalLastEventAt = Date.now();
+    updateTerminalMeta({
+      session_id: payload.session_id,
+      task_id: payload.task_id,
+      task_title: payload.task_title,
+      phase: payload.phase,
+      status: payload.status,
+      message: payload.message,
+      source: payload.source,
+      last_updated: new Date().toISOString(),
+    });
   });
   terminalSource.addEventListener("terminal", event => {
     const payload = JSON.parse(event.data);
+    terminalLastEventAt = Date.now();
     if (payload.mode === "append") {
       terminalBuffer += payload.content || "";
+      terminal.textContent = terminalBuffer;
+      updateTerminalMeta({
+        session_id: payload.session_id,
+        task_id: payload.task_id,
+        status: payload.status,
+        last_updated: new Date().toISOString(),
+      });
     } else {
-      terminalBuffer = payload.content || "";
+      applyTerminalState({
+        session_id: payload.session_id,
+        task_id: payload.task_id,
+        status: payload.status,
+        capture_available: true,
+        snapshot: payload.content || "",
+        last_updated: new Date().toISOString(),
+      }, "replace");
     }
-    terminal.textContent = terminalBuffer;
     if (autoScrollTerminal) {
       terminal.scrollTop = terminal.scrollHeight;
     }
+  });
+  terminalSource.addEventListener("error", () => {
+    pollTerminalSnapshot(runId, true).catch(() => {});
   });
 }
 

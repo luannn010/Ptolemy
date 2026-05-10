@@ -56,6 +56,7 @@ func (h *PackStudioHandler) Routes() chi.Router {
 	r.Get("/api/program-runs/{id}", h.getProgramRun)
 	r.Get("/api/program-runs/{id}/tree", h.getProgramRun)
 	r.Get("/api/program-runs/{id}/events", h.getRunEvents)
+	r.Get("/api/program-runs/{id}/terminal", h.getTerminalSnapshot)
 	r.Post("/api/program-runs/{id}/cancel", h.cancelProgramRun)
 	r.Get("/api/program-runs/{id}/events/stream", h.streamRunEvents)
 	r.Get("/api/program-runs/{id}/terminal/stream", h.streamTerminal)
@@ -214,12 +215,14 @@ func (h *PackStudioHandler) getProgramRun(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": loadErr.Error()})
 		return
 	}
+	operatorState := h.service.BuildRunOperatorState(r.Context(), detail.ProgramRun, task, actions)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"detail":       detail,
-		"current_task": task,
-		"actions":      actions,
-		"observations": observations,
-		"command_logs": commandLogs,
+		"detail":         detail,
+		"current_task":   task,
+		"actions":        actions,
+		"observations":   observations,
+		"command_logs":   commandLogs,
+		"operator_state": operatorState,
 	})
 }
 
@@ -238,6 +241,27 @@ func (h *PackStudioHandler) cancelProgramRun(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *PackStudioHandler) getTerminalSnapshot(w http.ResponseWriter, r *http.Request) {
+	runID := chi.URLParam(r, "id")
+	detail, err := h.service.BuildProgramRunDetail(r.Context(), runID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, packstudio.ErrProgramRunNotFound) {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	task, _, _, _, loadErr := h.service.CurrentTaskDetail(r.Context(), runID)
+	if loadErr != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": loadErr.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, h.service.BuildTerminalState(r.Context(), detail.ProgramRun, task))
 }
 
 func (h *PackStudioHandler) streamRunEvents(w http.ResponseWriter, r *http.Request) {
@@ -288,6 +312,7 @@ func (h *PackStudioHandler) streamTerminal(w http.ResponseWriter, r *http.Reques
 
 	lastSessionID := ""
 	lastSnapshot := ""
+	lastStatus := ""
 	ticker := time.NewTicker(700 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -295,41 +320,38 @@ func (h *PackStudioHandler) streamTerminal(w http.ResponseWriter, r *http.Reques
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
+			detail, err := h.service.BuildProgramRunDetail(r.Context(), programRunID)
+			if err != nil {
+				writeSSEEvent(w, "error", map[string]string{"error": err.Error()})
+				flusher.Flush()
+				return
+			}
 			task, _, _, _, err := h.service.CurrentTaskDetail(r.Context(), programRunID)
 			if err != nil {
 				writeSSEEvent(w, "error", map[string]string{"error": err.Error()})
 				flusher.Flush()
 				return
 			}
-			if task == nil || strings.TrimSpace(task.SessionID) == "" {
-				writeSSEEvent(w, "heartbeat", map[string]string{"status": "waiting"})
-				flusher.Flush()
-				continue
-			}
-			if task.SessionID != lastSessionID {
-				lastSessionID = task.SessionID
+			terminalState := h.service.BuildTerminalState(context.Background(), detail.ProgramRun, task)
+			if terminalState.SessionID != lastSessionID || terminalState.Status != lastStatus {
+				lastSessionID = terminalState.SessionID
+				lastStatus = terminalState.Status
 				lastSnapshot = ""
 				writeSSEEvent(w, "meta", map[string]string{
-					"session_id": task.SessionID,
-					"task_id":    task.TaskID,
-					"phase":      task.Status,
+					"session_id":           terminalState.SessionID,
+					"task_id":              terminalState.TaskID,
+					"task_title":           terminalState.TaskTitle,
+					"phase":                terminalState.Phase,
+					"status":               terminalState.Status,
+					"message":              terminalState.Message,
+					"source":               terminalState.Source,
+					"capture_available":    boolString(terminalState.CaptureAvailable),
+					"session_bootstrapped": boolString(terminalState.SessionBootstrapped),
 				})
 			}
-			snapshot, err := h.service.Runner().CaptureSession(context.Background(), task.SessionID)
-			if err != nil {
-				writeSSEEvent(w, "meta", map[string]string{
-					"session_id": task.SessionID,
-					"task_id":    task.TaskID,
-					"phase":      "waiting-for-pane",
-				})
-				writeSSEEvent(w, "terminal", map[string]string{
-					"mode":       "replace",
-					"content":    "Waiting for live terminal output.\nThe agent session exists, but no tmux pane is available to capture yet.\nThis usually means the run has not executed a shell command yet, or the session bootstrap failed.\n",
-					"session_id": task.SessionID,
-					"task_id":    task.TaskID,
-				})
-				flusher.Flush()
-				continue
+			snapshot := terminalState.Snapshot
+			if !terminalState.CaptureAvailable {
+				snapshot = terminalState.Message + "\n"
 			}
 			if snapshot == lastSnapshot {
 				writeSSEEvent(w, "heartbeat", map[string]string{"status": "unchanged"})
@@ -347,8 +369,9 @@ func (h *PackStudioHandler) streamTerminal(w http.ResponseWriter, r *http.Reques
 			writeSSEEvent(w, "terminal", map[string]string{
 				"mode":       mode,
 				"content":    content,
-				"session_id": task.SessionID,
-				"task_id":    task.TaskID,
+				"session_id": terminalState.SessionID,
+				"task_id":    terminalState.TaskID,
+				"status":     terminalState.Status,
 			})
 			flusher.Flush()
 		}
@@ -410,6 +433,13 @@ func errorString(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func boolString(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
 }
 
 func firstNonEmptyString(values ...string) string {
