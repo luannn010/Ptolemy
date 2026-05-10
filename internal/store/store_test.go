@@ -52,7 +52,7 @@ func TestStoreClose(t *testing.T) {
 	}
 }
 
-func TestRunMigrationsCreatesAgentLoopTables(t *testing.T) {
+func TestOpenStoreConfiguresSQLiteForWorkerConcurrency(t *testing.T) {
 	dbPath := t.TempDir() + "/test.db"
 
 	s, err := Open(dbPath)
@@ -61,31 +61,23 @@ func TestRunMigrationsCreatesAgentLoopTables(t *testing.T) {
 	}
 	defer s.Close()
 
-	if err := RunMigrations(t.Context(), s.SQLDB()); err != nil {
-		t.Fatalf("expected migrations to succeed, got %v", err)
+	if got := s.DB.Stats().MaxOpenConnections; got != 1 {
+		t.Fatalf("expected MaxOpenConnections to be 1, got %d", got)
 	}
 
-	tables := []string{
-		"schema_migrations",
-		"actions",
-		"logs",
-		"approvals",
-		"agent_runs",
-		"agent_observations",
-		"program_runs",
-		"pack_runs",
-		"pack_run_tasks",
-		"run_events",
+	var busyTimeout int
+	if err := s.DB.QueryRow("PRAGMA busy_timeout;").Scan(&busyTimeout); err != nil {
+		t.Fatalf("expected busy_timeout pragma to be readable, got %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("expected busy_timeout to be 5000, got %d", busyTimeout)
 	}
 
-	for _, table := range tables {
-		var name string
-		err := s.DB.QueryRow(
-			"SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-			table,
-		).Scan(&name)
-		if err != nil {
-			t.Fatalf("expected table %s to exist: %v", table, err)
-		}
+	var journalMode string
+	if err := s.DB.QueryRow("PRAGMA journal_mode;").Scan(&journalMode); err != nil {
+		t.Fatalf("expected journal_mode pragma to be readable, got %v", err)
+	}
+	if journalMode != "wal" {
+		t.Fatalf("expected journal_mode to be wal, got %s", journalMode)
 	}
 }

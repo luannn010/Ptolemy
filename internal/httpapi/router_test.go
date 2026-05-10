@@ -120,6 +120,50 @@ func TestListSessionsEndpoint(t *testing.T) {
 	}
 }
 
+func TestExecuteEndpointAcceptsDescriptiveMetadata(t *testing.T) {
+	router := newTestRouter(t)
+
+	createBody := strings.NewReader(`{
+		"name": "execute-session",
+		"workspace": "/tmp"
+	}`)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/sessions", createBody)
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+
+	router.ServeHTTP(createRec, createReq)
+
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected create status 201, got %d body=%s", createRec.Code, createRec.Body.String())
+	}
+
+	sessionID := extractJSONField(t, createRec.Body.String(), "id")
+
+	executeBody := strings.NewReader(`{
+		"session_id": "` + sessionID + `",
+		"command": "echo execute-metadata-ok",
+		"timeout": 5,
+		"title": "Run execute metadata test",
+		"purpose": "Confirm /execute accepts descriptive metadata.",
+		"reasoning_step": "Validate executor endpoint",
+		"target": "echo execute-metadata-ok"
+	}`)
+
+	executeReq := httptest.NewRequest(http.MethodPost, "/execute", executeBody)
+	executeReq.Header.Set("Content-Type", "application/json")
+	executeRec := httptest.NewRecorder()
+
+	router.ServeHTTP(executeRec, executeReq)
+
+	if executeRec.Code != http.StatusOK {
+		t.Fatalf("expected execute status 200, got %d body=%s", executeRec.Code, executeRec.Body.String())
+	}
+	if !strings.Contains(executeRec.Body.String(), "execute-metadata-ok") {
+		t.Fatalf("expected execute response output, got %s", executeRec.Body.String())
+	}
+}
+
 func TestFileWriteAndReadEndpoints(t *testing.T) {
 	router := newTestRouter(t)
 	workspace := t.TempDir()
