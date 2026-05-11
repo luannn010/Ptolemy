@@ -7,10 +7,10 @@ func TestNewTool(t *testing.T) {
 		"type": "object",
 	}
 
-	tool := NewTool("ptolemy.test", "test tool", schema)
+	tool := NewTool("ptolemy_test", "test tool", schema)
 
-	if tool.Name != "ptolemy.test" {
-		t.Fatalf("expected tool name ptolemy.test, got %s", tool.Name)
+	if tool.Name != "ptolemy_test" {
+		t.Fatalf("expected tool name ptolemy_test, got %s", tool.Name)
 	}
 
 	if tool.Description != "test tool" {
