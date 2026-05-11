@@ -6,11 +6,11 @@ func TestFileToolsRegistered(t *testing.T) {
 	tools := Tools()
 
 	expected := map[string]bool{
-		"ptolemy.read_file":       false,
-		"ptolemy.write_file":      false,
-		"ptolemy.list_directory":  false,
-		"ptolemy.search_codebase": false,
-		"ptolemy.apply_patch":     false,
+		"ptolemy_read_file":       false,
+		"ptolemy_write_file":      false,
+		"ptolemy_list_directory":  false,
+		"ptolemy_search_codebase": false,
+		"ptolemy_apply_patch":     false,
 	}
 
 	for _, tool := range tools {

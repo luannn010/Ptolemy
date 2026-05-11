@@ -64,7 +64,7 @@ curl -s -X POST http://localhost:8080/execute \
   }' | jq
 ```
 
-Optional descriptive metadata fields are also accepted on `/execute` and `ptolemy.execute`:
+Optional descriptive metadata fields are also accepted on `/execute` and `ptolemy_execute`:
 
 - `title`
 - `purpose`
@@ -148,10 +148,10 @@ PTOLEMY_WORKER_URL=http://localhost:8080 ./bin/ptolemy-mcp
 
 Exposed MCP groups include:
 
-- `ptolemy.create_session`, `ptolemy.list_sessions`, `ptolemy.get_session`, `ptolemy.close_session`
-- `ptolemy.execute`
-- `ptolemy.read_file`, `ptolemy.write_file`, `ptolemy.list_directory`, `ptolemy.search_codebase`, `ptolemy.apply_patch`
-- `ptolemy.index_workspace`, `ptolemy.read_context`, `ptolemy.start_task_session`, `ptolemy.append_session_note`
-- `ptolemy.kb_build`, `ptolemy.kb_read`, `ptolemy.kb_update`
-- `ptolemy.git_status`, `ptolemy.git_diff`, `ptolemy.git_log`, `ptolemy.git_checkout`, `ptolemy.git_create_branch`, `ptolemy.git_commit`, `ptolemy.git_push`
-- `ptolemy.create_worktree`, `ptolemy.list_worktrees`, `ptolemy.remove_worktree`
+- `ptolemy_create_session`, `ptolemy_list_sessions`, `ptolemy_get_session`, `ptolemy_close_session`
+- `ptolemy_execute`
+- `ptolemy_read_file`, `ptolemy_write_file`, `ptolemy_list_directory`, `ptolemy_search_codebase`, `ptolemy_apply_patch`
+- `ptolemy_index_workspace`, `ptolemy_read_context`, `ptolemy_start_task_session`, `ptolemy_append_session_note`
+- `ptolemy_kb_build`, `ptolemy_kb_read`, `ptolemy_kb_update`
+- `ptolemy_git_status`, `ptolemy_git_diff`, `ptolemy_git_log`, `ptolemy_git_checkout`, `ptolemy_git_create_branch`, `ptolemy_git_commit`, `ptolemy_git_push`
+- `ptolemy_create_worktree`, `ptolemy_list_worktrees`, `ptolemy_remove_worktree`

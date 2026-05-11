@@ -195,15 +195,15 @@ Check your client's own docs for the exact config file location and field names,
 
 Examples include:
 
-- `ptolemy.create_session`
-- `ptolemy.execute`
-- `ptolemy.read_file`
-- `ptolemy.search_codebase`
-- `ptolemy.index_workspace`
-- `ptolemy.kb_build`
-- `ptolemy.git_status`
-- `ptolemy.git_commit`
-- `ptolemy.create_worktree`
+- `ptolemy_create_session`
+- `ptolemy_execute`
+- `ptolemy_read_file`
+- `ptolemy_search_codebase`
+- `ptolemy_index_workspace`
+- `ptolemy_kb_build`
+- `ptolemy_git_status`
+- `ptolemy_git_commit`
+- `ptolemy_create_worktree`
 
 ## Troubleshooting
 

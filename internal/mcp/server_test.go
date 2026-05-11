@@ -28,7 +28,7 @@ func TestServerToolsList(t *testing.T) {
 	client := NewWorkerClient("http://localhost:8080")
 
 	tools := []Tool{
-		NewTool("ptolemy.test", "test tool", map[string]any{
+		NewTool("ptolemy_test", "test tool", map[string]any{
 			"type": "object",
 		}),
 	}
@@ -40,7 +40,7 @@ func TestServerToolsList(t *testing.T) {
 
 	server.Run(input, &output)
 
-	if !strings.Contains(output.String(), `"ptolemy.test"`) {
+	if !strings.Contains(output.String(), `"ptolemy_test"`) {
 		t.Fatalf("expected tool in list, got %s", output.String())
 	}
 }
@@ -51,14 +51,14 @@ func TestServerToolCall(t *testing.T) {
 	server := NewServer(client)
 
 	server.RegisterHandler(func(name string, args map[string]any, client *WorkerClient) (map[string]any, bool, error) {
-		if name != "ptolemy.test" {
+		if name != "ptolemy_test" {
 			return nil, false, nil
 		}
 
 		return TextResult([]byte(`{"ok":true}`)), true, nil
 	})
 
-	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"ptolemy.test","arguments":{}}}` + "\n")
+	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"ptolemy_test","arguments":{}}}` + "\n")
 	var output bytes.Buffer
 
 	server.Run(input, &output)
@@ -72,7 +72,7 @@ func TestServerUnknownTool(t *testing.T) {
 	client := NewWorkerClient("http://localhost:8080")
 	server := NewServer(client)
 
-	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"ptolemy.unknown","arguments":{}}}` + "\n")
+	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"ptolemy_unknown","arguments":{}}}` + "\n")
 	var output bytes.Buffer
 
 	server.Run(input, &output)

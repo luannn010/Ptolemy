@@ -6,10 +6,10 @@ func TestSessionToolsRegistered(t *testing.T) {
 	tools := Tools()
 
 	expected := map[string]bool{
-		"ptolemy.create_session": false,
-		"ptolemy.list_sessions":  false,
-		"ptolemy.get_session":    false,
-		"ptolemy.close_session":  false,
+		"ptolemy_create_session": false,
+		"ptolemy_list_sessions":  false,
+		"ptolemy_get_session":    false,
+		"ptolemy_close_session":  false,
 	}
 
 	for _, tool := range tools {
