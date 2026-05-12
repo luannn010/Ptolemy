@@ -34,7 +34,7 @@ Expected shape:
 | Sessions | `POST /sessions`, `GET /sessions`, `GET /sessions/{id}`, `POST /sessions/{id}/close` |
 | Commands | `POST /sessions/{id}/commands` |
 | Executor | `POST /execute` |
-| Files | `POST /file/read`, `/file/write`, `/file/list`, `/file/search`, `/file/apply` |
+| Files | `POST /file/read`, `/file/write`, `/file/list`, `/file/search`, `/file/apply`, `/file/replace_block`, `/file/insert_after` |
 | Navigator | `POST /navigator/index`, `/navigator/context`, `/navigator/session/start`, `/navigator/session/note` |
 | KB | `POST /kb/build`, `/kb/read`, `/kb/update` |
 | Git | `POST /git/status`, `/git/diff`, `/git/log`, `/git/checkout`, `/git/branch`, `/git/commit`, `/git/push` |
@@ -78,6 +78,38 @@ curl -s -X POST http://localhost:8080/file/read \
   -H 'Content-Type: application/json' \
   -d '{"session_id":"'"$SESSION_ID"'","path":"README.md"}' | jq
 ```
+
+## Example: Targeted File Edits
+
+Use targeted edits when an agent should avoid rewriting a whole file.
+
+Replace the first exact text block match:
+
+```bash
+curl -s -X POST http://localhost:8080/file/replace_block \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "session_id":"'"$SESSION_ID"'",
+    "path":"README.md",
+    "old":"old exact text",
+    "new":"new exact text"
+  }' | jq
+```
+
+Insert content after the first exact marker match:
+
+```bash
+curl -s -X POST http://localhost:8080/file/insert_after \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "session_id":"'"$SESSION_ID"'",
+    "path":"README.md",
+    "marker":"<!-- PTOLEMY: INSERT HERE -->",
+    "content":"inserted text"
+  }' | jq
+```
+
+`insert_after` prepends a newline to `content` when one is not already present.
 
 ## Example: Create An Agent Run
 
@@ -150,7 +182,7 @@ Exposed MCP groups include:
 
 - `ptolemy_create_session`, `ptolemy_list_sessions`, `ptolemy_get_session`, `ptolemy_close_session`
 - `ptolemy_execute`
-- `ptolemy_read_file`, `ptolemy_write_file`, `ptolemy_list_directory`, `ptolemy_search_codebase`, `ptolemy_apply_patch`
+- `ptolemy_read_file`, `ptolemy_write_file`, `ptolemy_list_directory`, `ptolemy_search_codebase`, `ptolemy_apply_patch`, `ptolemy_replace_block`, `ptolemy_insert_after`
 - `ptolemy_index_workspace`, `ptolemy_read_context`, `ptolemy_start_task_session`, `ptolemy_append_session_note`
 - `ptolemy_kb_build`, `ptolemy_kb_read`, `ptolemy_kb_update`
 - `ptolemy_git_status`, `ptolemy_git_diff`, `ptolemy_git_log`, `ptolemy_git_checkout`, `ptolemy_git_create_branch`, `ptolemy_git_commit`, `ptolemy_git_push`
