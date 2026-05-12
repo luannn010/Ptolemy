@@ -47,31 +47,55 @@ func Tools() []mcp.Tool {
 			},
 			"required": []string{"session_id", "path", "content"},
 		}),
+		mcp.NewTool("ptolemy.replace_block", "Replace the first exact text block match in a session workspace file.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+				"path":       map[string]any{"type": "string"},
+				"old":        map[string]any{"type": "string"},
+				"new":        map[string]any{"type": "string"},
+			},
+			"required": []string{"session_id", "path", "old", "new"},
+		}),
+		mcp.NewTool("ptolemy.insert_after", "Insert content after the first exact marker match in a session workspace file.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+				"path":       map[string]any{"type": "string"},
+				"marker":     map[string]any{"type": "string"},
+				"content":    map[string]any{"type": "string"},
+			},
+			"required": []string{"session_id", "path", "marker", "content"},
+		}),
 	}
 }
 
 func Handle(name string, args map[string]any, client *mcp.WorkerClient) (map[string]any, bool, error) {
-	switch name {
-	case "ptolemy.read_file":
-		body, err := client.Post("/file/read", args)
-		return mcp.TextResult(body), true, err
-
-	case "ptolemy.write_file":
-		body, err := client.Post("/file/write", args)
-		return mcp.TextResult(body), true, err
-
-	case "ptolemy.list_directory":
-		body, err := client.Post("/file/list", args)
-		return mcp.TextResult(body), true, err
-
-	case "ptolemy.search_codebase":
-		body, err := client.Post("/file/search", args)
-		return mcp.TextResult(body), true, err
-
-	case "ptolemy.apply_patch":
-		body, err := client.Post("/file/apply", args)
+	if path, ok := workerPath(name); ok {
+		body, err := client.Post(path, args)
 		return mcp.TextResult(body), true, err
 	}
 
 	return nil, false, nil
+}
+
+func workerPath(name string) (string, bool) {
+	switch name {
+	case "ptolemy.read_file":
+		return "/file/read", true
+	case "ptolemy.write_file":
+		return "/file/write", true
+	case "ptolemy.list_directory":
+		return "/file/list", true
+	case "ptolemy.search_codebase":
+		return "/file/search", true
+	case "ptolemy.apply_patch":
+		return "/file/apply", true
+	case "ptolemy.replace_block":
+		return "/file/replace_block", true
+	case "ptolemy.insert_after":
+		return "/file/insert_after", true
+	default:
+		return "", false
+	}
 }

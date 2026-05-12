@@ -217,6 +217,137 @@ func TestFileWriteAndReadEndpoints(t *testing.T) {
 	}
 }
 
+func TestFileReplaceBlockEndpoint(t *testing.T) {
+	router := newTestRouter(t)
+	workspace := t.TempDir()
+
+	createBody := strings.NewReader(`{
+		"name": "replace-block-session",
+		"workspace": "` + workspace + `"
+	}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/sessions", createBody)
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+	sessionID := extractJSONField(t, createRec.Body.String(), "id")
+
+	if err := os.WriteFile(filepath.Join(workspace, "target.txt"), []byte("old\nkeep\nold\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	replaceBody := strings.NewReader(`{
+		"session_id": "` + sessionID + `",
+		"path": "target.txt",
+		"old": "old",
+		"new": "new"
+	}`)
+	replaceReq := httptest.NewRequest(http.MethodPost, "/file/replace_block", replaceBody)
+	replaceReq.Header.Set("Content-Type", "application/json")
+	replaceRec := httptest.NewRecorder()
+	router.ServeHTTP(replaceRec, replaceReq)
+
+	if replaceRec.Code != http.StatusOK {
+		t.Fatalf("expected replace status 200, got %d body=%s", replaceRec.Code, replaceRec.Body.String())
+	}
+
+	data, err := os.ReadFile(filepath.Join(workspace, "target.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "new\nkeep\nold\n" {
+		t.Fatalf("unexpected content: %q", string(data))
+	}
+}
+
+func TestFileInsertAfterEndpoint(t *testing.T) {
+	router := newTestRouter(t)
+	workspace := t.TempDir()
+
+	createBody := strings.NewReader(`{
+		"name": "insert-after-session",
+		"workspace": "` + workspace + `"
+	}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/sessions", createBody)
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+	sessionID := extractJSONField(t, createRec.Body.String(), "id")
+
+	if err := os.WriteFile(filepath.Join(workspace, "target.txt"), []byte("before\n// marker\nafter\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	insertBody := strings.NewReader(`{
+		"session_id": "` + sessionID + `",
+		"path": "target.txt",
+		"marker": "// marker",
+		"content": "inserted"
+	}`)
+	insertReq := httptest.NewRequest(http.MethodPost, "/file/insert_after", insertBody)
+	insertReq.Header.Set("Content-Type", "application/json")
+	insertRec := httptest.NewRecorder()
+	router.ServeHTTP(insertRec, insertReq)
+
+	if insertRec.Code != http.StatusOK {
+		t.Fatalf("expected insert status 200, got %d body=%s", insertRec.Code, insertRec.Body.String())
+	}
+
+	data, err := os.ReadFile(filepath.Join(workspace, "target.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "before\n// marker\ninserted\nafter\n" {
+		t.Fatalf("unexpected content: %q", string(data))
+	}
+}
+
+func TestFileTargetedEditMissingMatchReturnsBadRequest(t *testing.T) {
+	router := newTestRouter(t)
+	workspace := t.TempDir()
+
+	createBody := strings.NewReader(`{
+		"name": "targeted-edit-failure-session",
+		"workspace": "` + workspace + `"
+	}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/sessions", createBody)
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+	sessionID := extractJSONField(t, createRec.Body.String(), "id")
+
+	if err := os.WriteFile(filepath.Join(workspace, "target.txt"), []byte("current\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	replaceBody := strings.NewReader(`{
+		"session_id": "` + sessionID + `",
+		"path": "target.txt",
+		"old": "missing",
+		"new": "new"
+	}`)
+	replaceReq := httptest.NewRequest(http.MethodPost, "/file/replace_block", replaceBody)
+	replaceReq.Header.Set("Content-Type", "application/json")
+	replaceRec := httptest.NewRecorder()
+	router.ServeHTTP(replaceRec, replaceReq)
+	if replaceRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected missing old text status 400, got %d body=%s", replaceRec.Code, replaceRec.Body.String())
+	}
+
+	insertBody := strings.NewReader(`{
+		"session_id": "` + sessionID + `",
+		"path": "target.txt",
+		"marker": "missing",
+		"content": "inserted"
+	}`)
+	insertReq := httptest.NewRequest(http.MethodPost, "/file/insert_after", insertBody)
+	insertReq.Header.Set("Content-Type", "application/json")
+	insertRec := httptest.NewRecorder()
+	router.ServeHTTP(insertRec, insertReq)
+	if insertRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected missing marker status 400, got %d body=%s", insertRec.Code, insertRec.Body.String())
+	}
+}
+
 func TestNavigatorEndpointsAndFileReadTracking(t *testing.T) {
 	router := newTestRouter(t)
 	workspace := t.TempDir()

@@ -3,6 +3,7 @@ package agentloop
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -89,15 +90,18 @@ func (e *ToolExecutor) replaceBlock(ctx context.Context, run Run, task ActionTas
 	if strings.TrimSpace(envelope.Old) == "" {
 		return ExecutionResult{}, ErrEmptyOldBlock
 	}
-	content, err := ops.ReadFile(cleanPath)
-	if err != nil {
+	if err := ops.ReplaceBlock(cleanPath, envelope.Old, envelope.New); err != nil {
+		if errors.Is(err, fileops.ErrOldBlockNotFound) {
+			content, readErr := ops.ReadFile(cleanPath)
+			if readErr != nil {
+				return ExecutionResult{}, readErr
+			}
+			return ExecutionResult{Status: "failed", Output: content, Summary: fmt.Sprintf("replace block old text not found in %s", cleanPath), ShouldContinue: true}, nil
+		}
 		return ExecutionResult{}, err
 	}
-	if !strings.Contains(content, envelope.Old) {
-		return ExecutionResult{Status: "failed", Output: content, Summary: fmt.Sprintf("replace block old text not found in %s", cleanPath), ShouldContinue: true}, nil
-	}
-	updated := strings.Replace(content, envelope.Old, envelope.New, 1)
-	if err := ops.WriteFile(cleanPath, updated); err != nil {
+	updated, err := ops.ReadFile(cleanPath)
+	if err != nil {
 		return ExecutionResult{}, err
 	}
 	artifactPath := e.saveArtifact(run.ID, run.CurrentStep, "replace-block", updated)
@@ -115,21 +119,18 @@ func (e *ToolExecutor) insertAfter(ctx context.Context, run Run, task ActionTask
 	if strings.TrimSpace(envelope.Content) == "" {
 		return ExecutionResult{}, ErrEmptyContent
 	}
-	content, err := ops.ReadFile(cleanPath)
-	if err != nil {
+	if err := ops.InsertAfter(cleanPath, envelope.Marker, envelope.Content); err != nil {
+		if errors.Is(err, fileops.ErrMarkerNotFound) {
+			content, readErr := ops.ReadFile(cleanPath)
+			if readErr != nil {
+				return ExecutionResult{}, readErr
+			}
+			return ExecutionResult{Status: "failed", Output: content, Summary: fmt.Sprintf("insert marker not found in %s", cleanPath), ShouldContinue: true}, nil
+		}
 		return ExecutionResult{}, err
 	}
-	index := strings.Index(content, envelope.Marker)
-	if index == -1 {
-		return ExecutionResult{Status: "failed", Output: content, Summary: fmt.Sprintf("insert marker not found in %s", cleanPath), ShouldContinue: true}, nil
-	}
-	insertAt := index + len(envelope.Marker)
-	insertText := envelope.Content
-	if !strings.HasPrefix(insertText, "\n") {
-		insertText = "\n" + insertText
-	}
-	updated := content[:insertAt] + insertText + content[insertAt:]
-	if err := ops.WriteFile(cleanPath, updated); err != nil {
+	updated, err := ops.ReadFile(cleanPath)
+	if err != nil {
 		return ExecutionResult{}, err
 	}
 	artifactPath := e.saveArtifact(run.ID, run.CurrentStep, "insert-after", updated)
