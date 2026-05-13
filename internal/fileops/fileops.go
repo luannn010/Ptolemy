@@ -8,6 +8,16 @@ import (
 	"strings"
 )
 
+var (
+	lookPath             = exec.LookPath
+	ripgrepFallbackPaths = []string{"/opt/homebrew/bin/rg", "/usr/local/bin/rg"}
+)
+
+var (
+	ErrOldBlockNotFound = fmt.Errorf("old block not found")
+	ErrMarkerNotFound   = fmt.Errorf("marker not found")
+)
+
 type FileOps struct {
 	BaseDir string
 }
@@ -102,7 +112,12 @@ func (f *FileOps) Search(query string) (string, error) {
 		return "", fmt.Errorf("query is required")
 	}
 
-	cmd := exec.Command("rg", "--line-number", "--hidden", "--glob", "!.git", query, f.BaseDir)
+	rg, err := resolveRipgrep()
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command(rg, "--line-number", "--hidden", "--glob", "!.git", query, f.BaseDir)
 	out, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -118,4 +133,64 @@ func (f *FileOps) Search(query string) (string, error) {
 
 func (f *FileOps) ApplyPatch(path string, newContent string) error {
 	return f.WriteFile(path, newContent)
+}
+
+func (f *FileOps) ReplaceBlock(path string, old string, new string) error {
+	if old == "" {
+		return fmt.Errorf("old block is required")
+	}
+
+	content, err := f.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	if !strings.Contains(content, old) {
+		return ErrOldBlockNotFound
+	}
+
+	updated := strings.Replace(content, old, new, 1)
+	return f.WriteFile(path, updated)
+}
+
+func (f *FileOps) InsertAfter(path string, marker string, content string) error {
+	if marker == "" {
+		return fmt.Errorf("marker is required")
+	}
+	if content == "" {
+		return fmt.Errorf("content is required")
+	}
+
+	current, err := f.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	index := strings.Index(current, marker)
+	if index == -1 {
+		return ErrMarkerNotFound
+	}
+
+	insertText := content
+	if !strings.HasPrefix(insertText, "\n") {
+		insertText = "\n" + insertText
+	}
+
+	insertAt := index + len(marker)
+	updated := current[:insertAt] + insertText + current[insertAt:]
+	return f.WriteFile(path, updated)
+}
+
+func resolveRipgrep() (string, error) {
+	if path, err := lookPath("rg"); err == nil {
+		return path, nil
+	}
+
+	for _, path := range ripgrepFallbackPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("ripgrep executable rg is unavailable to the worker; install rg or add it to PATH")
 }
