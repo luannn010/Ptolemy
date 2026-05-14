@@ -4,14 +4,14 @@ import "github.com/luannn010/ptolemy/internal/mcp"
 
 func Tools() []mcp.Tool {
 	return []mcp.Tool{
-		mcp.NewTool("ptolemy_index_workspace", "Create or refresh .ptolemy navigator context and file-tree index.", map[string]any{
+		mcp.NewTool("ptolemy_index_workspace", "Create or refresh .ptolemy KB and file-tree index.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"session_id": map[string]any{"type": "string"},
 				"workspace":  map[string]any{"type": "string"},
 			},
 		}),
-		mcp.NewTool("ptolemy_read_context", "Read .ptolemy/PTOLEMY.md and .ptolemy/context markdown files.", map[string]any{
+		mcp.NewTool("ptolemy_read_context", "Read .ptolemy/PTOLEMY.md and .ptolemy/kb markdown files.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"session_id": map[string]any{"type": "string"},
@@ -63,6 +63,13 @@ func Tools() []mcp.Tool {
 				"commit_sha":          map[string]any{"type": "string"},
 			},
 		}),
+		mcp.NewTool("ptolemy_kb_reset", "Safely archive stale KB files and rebuild canonical .ptolemy/kb structure.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+				"workspace":  map[string]any{"type": "string"},
+			},
+		}),
 	}
 }
 
@@ -91,6 +98,9 @@ func Handle(name string, args map[string]any, client *mcp.WorkerClient) (map[str
 		return mcp.TextResult(body), true, err
 	case "ptolemy_kb_update":
 		body, err := client.Post("/kb/update", args)
+		return mcp.TextResult(body), true, err
+	case "ptolemy_kb_reset":
+		body, err := client.Post("/kb/reset", args)
 		return mcp.TextResult(body), true, err
 	}
 

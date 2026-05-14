@@ -5,7 +5,7 @@ Use Ptolemy as a codebase navigator, not a whole-codebase reader.
 ```text
 Agent
   -> POST /navigator/index
-  -> Read .ptolemy/PTOLEMY.md and .ptolemy/context/*.md
+  -> Read .ptolemy/PTOLEMY.md and .ptolemy/kb/*.md
   -> Search by keyword/symbol
   -> Read only relevant files
   -> Record task notes and files read
@@ -22,7 +22,7 @@ curl -s -X POST http://localhost:8080/navigator/index \
 Read context:
 
 ```bash
-curl -s -X POST http://localhost:8080/navigator/context \
+curl -s -X POST http://localhost:8080/kb/read \
   -H 'Content-Type: application/json' \
   -d '{"workspace":"/path/to/workspace"}'
 ```
