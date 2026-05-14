@@ -181,7 +181,6 @@ func listKnowledgeBaseMarkdown(root string) ([]string, error) {
 	var paths []string
 	for _, dir := range []string{
 		filepath.Join(root, ".ptolemy", "kb"),
-		filepath.Join(root, ".ptolemy", "context"),
 	} {
 		entries, err := os.ReadDir(dir)
 		if err != nil {

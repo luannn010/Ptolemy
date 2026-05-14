@@ -85,6 +85,7 @@ func NewRouter(
 	r.Post("/kb/build", navigatorHandler.IndexWorkspace)
 	r.Post("/kb/read", navigatorHandler.ReadContext)
 	r.Post("/kb/update", navigatorHandler.UpdateKnowledgeBase)
+	r.Post("/kb/reset", navigatorHandler.ResetKnowledgeBase)
 
 	gitHandler := NewGitHandler(sessionStore)
 
