@@ -52,7 +52,7 @@ Optional tasks can be inserted in the middle, but the plan should stay sequentia
 ## Documentation Rule
 
 When a completed task changes documented behavior, commands, setup, workflow, API behavior, or user-facing expectations, add or run a documentation task before the pack is considered complete.
-- `.ptolemy/context/conventions.md`
+- `.ptolemy/kb/WORKFLOWS.md`
 
 ---
 

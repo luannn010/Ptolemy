@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBuildFileTreeIgnoresHeavyDirectories(t *testing.T) {
@@ -32,7 +33,7 @@ func TestBuildFileTreeIgnoresHeavyDirectories(t *testing.T) {
 	}
 }
 
-func TestIndexWorkspaceBootstrapsContextAndFileTree(t *testing.T) {
+func TestIndexWorkspaceBootstrapsKBAndFileTree(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "go.mod", "module test\n")
 	if err := os.Mkdir(filepath.Join(root, "internal"), 0o755); err != nil {
@@ -50,11 +51,10 @@ func TestIndexWorkspaceBootstrapsContextAndFileTree(t *testing.T) {
 
 	for _, rel := range []string{
 		".ptolemy/PTOLEMY.md",
-		".ptolemy/context/project-map.md",
-		".ptolemy/context/commands.md",
-		".ptolemy/context/architecture.md",
-		".ptolemy/context/env.md",
-		".ptolemy/context/conventions.md",
+		".ptolemy/kb/PROJECT_MAP.md",
+		".ptolemy/kb/WORKFLOWS.md",
+		".ptolemy/kb/DECISIONS.md",
+		".ptolemy/kb/CHANGELOG.md",
 		".ptolemy/index/file-tree.json",
 	} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
@@ -73,6 +73,25 @@ func TestIndexWorkspaceBootstrapsContextAndFileTree(t *testing.T) {
 	}
 	if !treeHasPath(tree, "go.mod") {
 		t.Fatalf("expected go.mod in file tree: %+v", tree.Files)
+	}
+}
+
+func TestResetKnowledgeBaseArchivesAndRebuilds(t *testing.T) {
+	root := t.TempDir()
+	if _, err := IndexWorkspace(root); err != nil {
+		t.Fatalf("index workspace: %v", err)
+	}
+	writeTestFile(t, root, ".ptolemy/kb/OLD.md", "old")
+	_, err := ResetKnowledgeBase(root)
+	if err != nil {
+		t.Fatalf("reset kb: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".ptolemy", "kb", "PROJECT_MAP.md")); err != nil {
+		t.Fatalf("expected rebuilt PROJECT_MAP.md: %v", err)
+	}
+	logFile := filepath.Join(root, ".ptolemy", "kb", "changelog", "CHANGELOG-"+time.Now().UTC().Format("020106")+".md")
+	if _, err := os.Stat(logFile); err != nil {
+		t.Fatalf("expected changelog file: %v", err)
 	}
 }
 

@@ -13,6 +13,7 @@ func TestNavigatorToolsRegistered(t *testing.T) {
 		"ptolemy_kb_build":            false,
 		"ptolemy_kb_read":             false,
 		"ptolemy_kb_update":           false,
+		"ptolemy_kb_reset":            false,
 	}
 
 	for _, tool := range tools {
