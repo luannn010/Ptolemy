@@ -23,6 +23,9 @@ type fileRequest struct {
 	Path          string `json:"path"`
 	Content       string `json:"content"`
 	Query         string `json:"query"`
+	Old           string `json:"old"`
+	New           string `json:"new"`
+	Marker        string `json:"marker"`
 }
 
 // func (h *FileHandler) opsForSession(r *http.Request, sessionID string) (*fileops.FileOps, bool) {
@@ -156,6 +159,52 @@ func (h *FileHandler) Apply(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"path":    req.Path,
 		"applied": true,
+	})
+}
+
+func (h *FileHandler) ReplaceBlock(w http.ResponseWriter, r *http.Request) {
+	var req fileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	ops, ok := h.getOps(w, r, req.SessionID)
+	if !ok {
+		return
+	}
+
+	if err := ops.ReplaceBlock(req.Path, req.Old, req.New); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"path":     req.Path,
+		"replaced": true,
+	})
+}
+
+func (h *FileHandler) InsertAfter(w http.ResponseWriter, r *http.Request) {
+	var req fileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	ops, ok := h.getOps(w, r, req.SessionID)
+	if !ok {
+		return
+	}
+
+	if err := ops.InsertAfter(req.Path, req.Marker, req.Content); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"path":     req.Path,
+		"inserted": true,
 	})
 }
 
