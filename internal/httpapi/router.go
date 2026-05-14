@@ -75,6 +75,8 @@ func NewRouter(
 	r.Post("/file/list", fileHandler.List)
 	r.Post("/file/search", fileHandler.Search)
 	r.Post("/file/apply", fileHandler.Apply)
+	r.Post("/file/replace_block", fileHandler.ReplaceBlock)
+	r.Post("/file/insert_after", fileHandler.InsertAfter)
 
 	navigatorHandler := NewNavigatorHandler(sessionStore)
 
