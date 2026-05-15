@@ -301,3 +301,4 @@ Do not push or open a PR without explicit user approval.
 - [ ] validation commands are defined
 - [ ] docs are updated when behavior changes
 - [ ] process state can be monitored under `.ptolemy/tasks/process/<pack-id>/`
+- [ ] when complete, move the pack to `/.ptolemy/resolve/`
