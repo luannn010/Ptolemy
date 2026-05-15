@@ -164,6 +164,9 @@ func writeKnowledgeBase(root string, tree FileTree, fileIndex map[string]FileInd
 	if err := ensureSeedFile(filepath.Join(kbRoot, "CHANGELOG.md"), "# KB Changelog\n"); err != nil {
 		return err
 	}
+	if err := ensureSeedFile(filepath.Join(kbRoot, "TASK_TEMPLATE.md"), seedTaskTemplate(root)); err != nil {
+		return err
+	}
 
 	if err := writeJSONFile(filepath.Join(kbRoot, "FILE_INDEX.json"), fileIndex); err != nil {
 		return err
@@ -514,6 +517,15 @@ func seedWorkflows(root string) string {
 	data, err := os.ReadFile(filepath.Join(root, "WORKFLOWS.md"))
 	if err != nil {
 		return "# Workflows\n\nMirror or summarize repo workflow guidance here when needed.\n"
+	}
+	return string(data)
+}
+
+func seedTaskTemplate(root string) string {
+	path := filepath.Join(root, "docs", "tasks", "templates", "ptolemy-task-template.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "# Ptolemy Task Template\n\nSee `docs/tasks/templates/ptolemy-task-template.md` for the canonical task template.\n"
 	}
 	return string(data)
 }
