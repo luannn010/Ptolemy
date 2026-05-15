@@ -55,12 +55,12 @@ func Tools() []mcp.Tool {
 		mcp.NewTool("ptolemy_kb_update", "Update the canonical .ptolemy/kb knowledge base for changed files and optional task-pack metadata.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"session_id":          map[string]any{"type": "string"},
-				"workspace":           map[string]any{"type": "string"},
-				"changed_files":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"pack_id":             map[string]any{"type": "string"},
-				"completed_task_ids":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-				"commit_sha":          map[string]any{"type": "string"},
+				"session_id":         map[string]any{"type": "string"},
+				"workspace":          map[string]any{"type": "string"},
+				"changed_files":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"pack_id":            map[string]any{"type": "string"},
+				"completed_task_ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"commit_sha":         map[string]any{"type": "string"},
 			},
 		}),
 		mcp.NewTool("ptolemy_kb_reset", "Safely archive stale KB files and rebuild canonical .ptolemy/kb structure.", map[string]any{
