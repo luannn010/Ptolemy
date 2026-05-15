@@ -1,8 +1,49 @@
 # Task Plan: <Pack Name>
 
+## Pack Location
+
+Create this pack under the date-based task pack root:
+
+```text
+.ptolemy/tasks/packs/<dd-mm-yyyy>/<pack-id>/
+```
+
+Example:
+
+```text
+.ptolemy/tasks/packs/15-05-2026/ptolemy-cli-feature/
+```
+
+Use the same `<pack-id>` in:
+
+- the folder name
+- `PACK_MANIFEST.yaml` `pack_id`
+- process state paths under `.ptolemy/tasks/process/<pack-id>/`
+- branch names when the pack or its tasks need git isolation
+
+## Required File Structure
+
+The pack must use this structure:
+
+```text
+<dd-mm-yyyy>/
+`-- <pack-id>/
+    |-- PACK_MANIFEST.yaml
+    |-- README.md
+    |-- TASK_PLAN.md
+    |-- inbox/
+    |   |-- 01-discover-context.md
+    |   |-- 02-implement-core.md
+    |   |-- 03-add-validation.md
+    |   `-- 99-finalize-pack.md
+    |-- snippets/
+    |-- task-scripts/
+    `-- scripts/
+```
+
 ## Goal
 
-Describe the final end state this pack should reach.
+Describe the final state this pack should reach.
 
 Include:
 
@@ -15,48 +56,174 @@ Example:
 
 > Ptolemy should support OS-aware command execution. Linux/macOS should use `bash -lc`, while Windows should use PowerShell. The pack is complete when command execution works on both operating systems and tests pass.
 
-## Execution Strategy
+## Manifest Requirements
 
-- Keep tasks small and deterministic.
-- Prefer one task per behavior slice or file group.
-- Validate as early as practical.
-- Read only the files needed for the current task.
-- Avoid broad refactors unless the task explicitly requires them.
-- Reserve the final task for pack-wide validation and documentation sync.
+`PACK_MANIFEST.yaml` must match the schema supported by `internal/tasks/pack.go`.
 
-## Monitoring Expectations
+Required runtime fields:
 
-The Pack Studio run monitor expects:
+- `pack_id`
+- `name`
+- `entrypoint`
+- `folders`
+- `execution_mode`
+- `requires`
+- `validation`
+- `rules`
 
-- each task to have stable `task_id` metadata
-- explicit `allowed_files`
-- `validation` commands when behavior changes
-- a `## Checklist` section with Markdown checkboxes
+The `folders` section should point to the pack-local folders:
 
-While the pack is running, the UI will show:
+- `inbox/`
+- `snippets/`
+- `task-scripts/`
+- `scripts/`
 
-- the pack and task tree
-- current progress and checklist state
-- recent actions and observations
-- the live tmux terminal for the current task session
+## Folder Responsibilities
 
-## Execution Order
+`PACK_MANIFEST.yaml`
 
-1. `01-discover-context.md`
-2. `02-implement-core.md`
-3. `03-add-validation.md`
-4. `99-finalize-pack.md`
+- Defines pack metadata, execution mode, folder paths, validation, and rules.
+- Should be the single source of truth for Pack Studio runtime setup.
 
-Optional tasks can be inserted in the middle, but the plan should stay sequential and easy to follow.
+`README.md`
 
-## Documentation Rule
+- Explains the pack purpose, scope, setup notes, and human-facing context.
+- Should stay concise enough to be useful inside Pack Studio.
 
-When a completed task changes documented behavior, commands, setup, workflow, API behavior, or user-facing expectations, add or run a documentation task before the pack is considered complete.
-- `.ptolemy/kb/WORKFLOWS.md`
+`TASK_PLAN.md`
 
----
+- Defines execution order, validation strategy, branch expectations, and completion rules.
+- Should be updated if the task sequence changes.
 
-## Global Validation
+`inbox/`
+
+- Contains the task files Pack Studio should execute.
+- Tasks should be narrow, sequential, and numbered by intended order.
+
+`snippets/`
+
+- Contains reusable prompt/context snippets referenced by tasks.
+- Keep snippets small and specific.
+
+`task-scripts/`
+
+- Contains scripts intended to be referenced by individual task files.
+- Scripts must not run unless the pack or task explicitly allows scripts.
+
+`scripts/`
+
+- Contains pack-level helper scripts for setup, validation, or maintenance.
+- Prefer Go-native implementation for permanent behavior.
+
+## Inbox Task Order
+
+Default task sequence:
+
+1. `inbox/01-discover-context.md`
+2. `inbox/02-implement-core.md`
+3. `inbox/03-add-validation.md`
+4. `inbox/99-finalize-pack.md`
+
+Optional tasks may be inserted between `02-implement-core.md` and `99-finalize-pack.md`.
+
+Recommended phases:
+
+- `01-discover-context.md`: inspect only, identify files, confirm constraints
+- `02-implement-core.md`: make the smallest behavior change
+- `03-add-validation.md`: add or update tests and validation commands
+- `99-finalize-pack.md`: run pack-wide validation, sync docs, summarize outcome
+
+## Task File Requirements
+
+Each inbox task must include YAML frontmatter with at least:
+
+- `task_id`
+- `priority`
+- `parent_task`
+- `owner`
+- `status`
+- `branch`
+- `allowed_files`
+- `created_by`
+
+Pack Studio may also write:
+
+- `execution_group`
+- `depends_on`
+- `validation`
+- `scripts`
+- `snippets`
+
+Each task must include a `## Checklist` section with Markdown checkboxes.
+
+Keep each task narrow:
+
+- one goal
+- one phase
+- one small `allowed_files` scope
+- at most 3-5 explicit steps
+- about 1200-2000 chars when possible
+
+Tasks above 4000 chars should usually be split before execution.
+
+## Execution Model
+
+Pack Studio runs the pack sequentially through `agent-runs`.
+
+Expected runtime flow:
+
+```text
+program run
+-> pack
+-> inbox task
+-> optional child task split
+-> fresh agent context
+-> validation
+-> compact result summary
+-> next task
+```
+
+Large tasks should be split into child tasks before execution or during the process flow. Child tasks should use compact manifest state and result summaries rather than full prior chat history.
+
+## Process State
+
+During execution, Ptolemy writes process state under:
+
+```text
+.ptolemy/tasks/process/<pack-id>/
+|-- manifest.json
+|-- todo.md
+`-- state/
+    |-- 001-...-result.md
+    |-- 002-...-result.md
+    `-- ...
+```
+
+`manifest.json` tracks task status, dependencies, changed files, commands run, and failure reasons.
+
+`todo.md` is the human-readable checklist view.
+
+Each result file should be compact enough to carry forward as memory for the next task.
+
+## Branching Strategy
+
+Use the task metadata `branch` field as the source of truth for task branches.
+
+When the whole pack needs isolation, use a pack branch:
+
+```text
+ptolemy/<pack-id>
+```
+
+For task-specific branches, use each task's `branch` value. A typical pattern is:
+
+```text
+ptolemy/<task-id>
+```
+
+No task should commit directly to the parent branch. Stage explicit files only, and do not use `git add .`.
+
+## Validation
 
 Use the narrowest command that proves the pack is complete.
 
@@ -66,39 +233,71 @@ Default:
 go test ./...
 ```
 
-Replace this with a narrower command when possible.
-
-Examples:
+Replace this with narrower commands when possible:
 
 ```bash
-go test ./internal/executor/...
-go test ./internal/httpapi/...
-go test ./cmd/workerd/...
+go test ./internal/tasks/...
+go test ./internal/packstudio/...
+go test ./cmd/ptolemy-task-runner/...
 ```
 
----
+Each task that changes behavior should include its own `validation` command in frontmatter or task body.
+
+## Documentation Rule
+
+When a completed task changes documented behavior, commands, setup, workflow, API behavior, or user-facing expectations, add or run a documentation task before the pack is considered complete.
+
+Relevant docs may include:
+
+- `README.md`
+- `WORKFLOWS.md`
+- `docs/workflows/agent/task-pack-execution.md`
+- files under `.ptolemy/kb/` when the change affects local knowledge
+
+## Monitoring
+
+Use the embedded UI under `/ui`:
+
+- `Studio` creates packs and programs
+- `Overview` shows catalog and run history
+- `Runs` shows the program, pack, task tree, checklist progress, recent actions, and live terminal output
+
+The run monitor expects:
+
+- stable `task_id` metadata
+- explicit `allowed_files`
+- validation commands when behavior changes
+- a `## Checklist` section in each task
 
 ## Final Pull Request
 
-After all tasks are merged into the pack branch, raise one Pull Request.
+Create one pull request for the completed pack if PR creation is requested.
 
-PR source branch:
-
-```text
-feature/<ddmmyy>-<pack-name>
-```
-
-PR target branch:
-
-```text
-main
-```
-
-The PR description should include:
+The PR should include:
 
 - pack goal
-- task list completed
+- completed task list
 - files changed
 - validation commands
 - documentation updates
 - known risks or follow-up work
+
+Follow:
+
+- `.github/pull_request_template.md`
+- `docs/workflows/git/pull-request.md`
+
+Do not push or open a PR without explicit user approval.
+
+## Completion Checklist
+
+- [ ] Pack is under `.ptolemy/tasks/packs/<dd-mm-yyyy>/<pack-id>/`
+- [ ] `PACK_MANIFEST.yaml` matches the runtime schema
+- [ ] `README.md` describes pack scope and usage
+- [ ] `TASK_PLAN.md` matches this file structure
+- [ ] `inbox/` contains ordered task files
+- [ ] every task has valid metadata and `allowed_files`
+- [ ] every task has a `## Checklist`
+- [ ] validation commands are defined
+- [ ] docs are updated when behavior changes
+- [ ] process state can be monitored under `.ptolemy/tasks/process/<pack-id>/`
