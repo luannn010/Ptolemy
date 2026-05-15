@@ -24,3 +24,8 @@ rules:
   require_validation: true
   require_branch: true
   stop_on_failure: true
+  branch_strategy: task_sub_branches
+  require_pr: true
+  pr_template: .github/pull_request_template.md
+  auto_generate_readme: true
+  enforce_readme_report: true

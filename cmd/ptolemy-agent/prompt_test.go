@@ -24,4 +24,3 @@ func TestBuildKnowledgeBasePromptIncludesFilesInOrder(t *testing.T) {
 		t.Fatalf("expected guide before project map, got %q", prompt)
 	}
 }
-
