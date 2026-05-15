@@ -2,10 +2,68 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+func TestWorkerURLFromEnvDefault(t *testing.T) {
+	got := WorkerURLFromEnv(func(string) string { return "" })
+	if got != DefaultWorkerURL {
+		t.Fatalf("WorkerURLFromEnv() = %q, want %q", got, DefaultWorkerURL)
+	}
+}
+
+func TestWorkerURLFromEnvOverride(t *testing.T) {
+	got := WorkerURLFromEnv(func(key string) string {
+		if key != "PTOLEMY_WORKER_URL" {
+			t.Fatalf("unexpected env key %q", key)
+		}
+		return "http://example.test/"
+	})
+	if got != "http://example.test" {
+		t.Fatalf("WorkerURLFromEnv() = %q, want http://example.test", got)
+	}
+}
+
+func TestHealth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(HealthResponse{Status: "ok", Service: "workerd"})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	result, err := client.Health(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result.Status != "ok" || result.Service != "workerd" {
+		t.Fatalf("unexpected health result: %+v", result)
+	}
+}
+
+func TestListSessions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/sessions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode([]Session{{ID: "session-1", Name: "test", Status: "open"}})
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL)
+	sessions, err := client.ListSessions(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != "session-1" {
+		t.Fatalf("unexpected sessions: %+v", sessions)
+	}
+}
 
 func TestCreateSession(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
