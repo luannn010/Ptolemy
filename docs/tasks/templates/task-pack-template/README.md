@@ -247,6 +247,14 @@ Notes: <short summary>
 
 Status: `<draft | ready | running | done | failed>`
 
+Resolve location for completed packs:
+
+```text
+/.ptolemy/resolve/
+```
+
+When all inbox tasks are done and validation passes, move the completed pack to `/.ptolemy/resolve` so future runs can confirm it is already resolved.
+
 Completed tasks:
 
 - [ ] `inbox/01-discover-context.md`
