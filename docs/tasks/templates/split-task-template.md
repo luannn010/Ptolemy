@@ -8,6 +8,8 @@ branch: ptolemy/normal-example-task-id-part-1
 allowed_files:
   - WORKFLOWS.md
   - docs/workflows/agent/task-flags-and-isolation.md
+validation:
+  - go test ./...
 created_by: codex
 ---
 
