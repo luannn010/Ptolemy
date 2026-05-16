@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -63,8 +62,6 @@ func Run(ctx context.Context, cfg Config) error {
 		return runKBUpdate(cfg.Stdout, root)
 	case "kb-reset":
 		return runKBReset(cfg.Stdout, root)
-	case "init":
-		return runInit(cfg.Stdout, root, cfg.Args[1:])
 	case "health":
 		return runHealth(ctx, cfg.Stdout, cfg.Getenv)
 	case "session":
@@ -122,32 +119,7 @@ func runHealth(ctx context.Context, stdout io.Writer, getenv func(string) string
 	if strings.TrimSpace(result.Service) != "" {
 		fmt.Fprintf(stdout, "service: %s\n", result.Service)
 	}
-	if result.Checks.MCP.Enabled {
-		fmt.Fprintf(stdout, "mcp: %t\n", result.Checks.MCP.Reachable)
-		if strings.TrimSpace(result.Checks.MCP.Target) != "" {
-			fmt.Fprintf(stdout, "mcp_target: %s\n", result.Checks.MCP.Target)
-		}
-		if strings.TrimSpace(result.Checks.MCP.Error) != "" {
-			fmt.Fprintf(stdout, "mcp_error: %s\n", result.Checks.MCP.Error)
-		}
-	}
-	for _, cmd := range []string{"go", "npm", "python"} {
-		entry, ok := result.Checks.Runtime.Commands[cmd]
-		if !ok {
-			continue
-		}
-		fmt.Fprintf(stdout, "runtime_%s: %t\n", cmd, entry.Available)
-		if strings.TrimSpace(entry.Path) != "" {
-			fmt.Fprintf(stdout, "runtime_%s_path: %s\n", cmd, entry.Path)
-		}
-		if strings.TrimSpace(entry.Error) != "" {
-			fmt.Fprintf(stdout, "runtime_%s_error: %s\n", cmd, entry.Error)
-		}
-	}
 	fmt.Fprintf(stdout, "url: %s\n", baseURL)
-	if strings.EqualFold(cleanStatus(result.Status), "degraded") {
-		return fmt.Errorf("worker health is degraded")
-	}
 	return nil
 }
 
@@ -225,50 +197,8 @@ func printUsage(stdout io.Writer) {
   ptolemy kb-build
   ptolemy kb-update
   ptolemy kb-reset
-  ptolemy init [--include-task-pack] [--presets core,api,routes,docs,tasks] [--include-globs \"cmd/*,internal/*\"] [--exclude-globs \".state/*\"]
   ptolemy health
   ptolemy session
   ptolemy session <sessionID>
   ptolemy session ps`)
-}
-
-func runInit(stdout io.Writer, root string, args []string) error {
-	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	includeTaskPack := fs.Bool("include-task-pack", false, "")
-	presets := fs.String("presets", "core,api,routes,docs,tasks", "")
-	includeGlobs := fs.String("include-globs", "", "")
-	excludeGlobs := fs.String("exclude-globs", "", "")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	opts := navigator.InitContextOptions{
-		IncludeTaskPack: *includeTaskPack,
-		Presets:         splitCSV(*presets),
-		IncludeGlobs:    splitCSV(*includeGlobs),
-		ExcludeGlobs:    splitCSV(*excludeGlobs),
-	}
-	result, err := navigator.InitContext(root, opts)
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(stdout, "Initialized Ptolemy context in %s\n", result.Workspace)
-	fmt.Fprintf(stdout, "Config: %s\n", result.ConfigPath)
-	return nil
-}
-
-func splitCSV(s string) []string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
 }

@@ -144,7 +144,6 @@ Each inbox task must include YAML frontmatter with at least:
 - `status`
 - `branch`
 - `allowed_files`
-- `validation`
 - `created_by`
 
 Pack Studio may also write:
@@ -242,7 +241,7 @@ go test ./internal/packstudio/...
 go test ./cmd/ptolemy-task-runner/...
 ```
 
-Each task should include its own `validation` command in frontmatter so runner validation can fail fast before execution.
+Each task that changes behavior should include its own `validation` command in frontmatter or task body.
 
 ## Documentation Rule
 
