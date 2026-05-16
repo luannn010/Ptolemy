@@ -67,16 +67,6 @@ go run ./cmd/ptolemy-task-runner plan --pack docs/tasks/templates/task-pack-temp
 go run ./cmd/ptolemy-task-runner run --pack docs/tasks/templates/task-pack-template --workspace .
 ```
 
-### Init
-
-Initialize `.ptolemy/context` indexes and optional starter task-pack scaffold:
-
-```bash
-ptolemy init
-ptolemy init --include-task-pack
-ptolemy init --presets core,api,routes --include-globs "cmd/*,internal/*" --exclude-globs ".state/*"
-```
-
 ## Typical Checks
 
 ```bash
