@@ -129,6 +129,7 @@ Required task metadata:
 - `status`
 - `branch`
 - `allowed_files`
+- `validation`
 - `created_by`
 
 Pack Studio may also write:
