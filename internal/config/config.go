@@ -18,12 +18,15 @@ type Config struct {
 	BrainBaseURL    string
 	BrainModel      string
 	AgentBinaryPath string
+	MCPBaseURL      string
+	HealthTimeoutMS int
 }
 
 const (
 	DefaultWorkerBaseURL = "http://127.0.0.1:8080"
 	DefaultBrainBaseURL  = "http://127.0.0.1:8088"
 	DefaultBrainModel    = "gemma-4-e2b"
+	DefaultMCPBaseURL    = ""
 )
 
 func Load() (Config, error) {
@@ -39,6 +42,8 @@ func Load() (Config, error) {
 		BrainBaseURL:    getEnv("BRAIN_BASE_URL", DefaultBrainBaseURL),
 		BrainModel:      getEnv("BRAIN_MODEL", DefaultBrainModel),
 		AgentBinaryPath: getEnv("PTOLEMY_AGENT_BIN", ""),
+		MCPBaseURL:      getEnv("MCP_BASE_URL", DefaultMCPBaseURL),
+		HealthTimeoutMS: getEnvInt("HEALTH_TIMEOUT_MS", 1500),
 	}
 
 	if cfg.HTTPPort == "" {
@@ -50,6 +55,19 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func getEnvInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	var parsed int
+	_, err := fmt.Sscanf(value, "%d", &parsed)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func getEnv(key, fallback string) string {

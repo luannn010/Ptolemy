@@ -15,6 +15,8 @@ func TestLoadConfigWithEnv(t *testing.T) {
 	t.Setenv("BRAIN_BASE_URL", "http://127.0.0.1:18088")
 	t.Setenv("BRAIN_MODEL", "test-model")
 	t.Setenv("PTOLEMY_AGENT_BIN", "/tmp/ptolemy-agent")
+	t.Setenv("MCP_BASE_URL", "http://127.0.0.1:18081")
+	t.Setenv("HEALTH_TIMEOUT_MS", "2500")
 
 	cfg, err := Load()
 	if err != nil {
@@ -52,6 +54,12 @@ func TestLoadConfigWithEnv(t *testing.T) {
 	if cfg.AgentBinaryPath != "/tmp/ptolemy-agent" {
 		t.Fatalf("expected PTOLEMY_AGENT_BIN override, got %s", cfg.AgentBinaryPath)
 	}
+	if cfg.MCPBaseURL != "http://127.0.0.1:18081" {
+		t.Fatalf("expected MCP_BASE_URL override, got %s", cfg.MCPBaseURL)
+	}
+	if cfg.HealthTimeoutMS != 2500 {
+		t.Fatalf("expected HEALTH_TIMEOUT_MS override, got %d", cfg.HealthTimeoutMS)
+	}
 }
 
 func TestLoadConfigDefaults(t *testing.T) {
@@ -64,6 +72,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	t.Setenv("BRAIN_BASE_URL", "")
 	t.Setenv("BRAIN_MODEL", "")
 	t.Setenv("PTOLEMY_AGENT_BIN", "")
+	t.Setenv("MCP_BASE_URL", "")
+	t.Setenv("HEALTH_TIMEOUT_MS", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -92,6 +102,12 @@ func TestLoadConfigDefaults(t *testing.T) {
 
 	if cfg.BrainModel != DefaultBrainModel {
 		t.Fatalf("expected default BrainModel %s, got %s", DefaultBrainModel, cfg.BrainModel)
+	}
+	if cfg.MCPBaseURL != DefaultMCPBaseURL {
+		t.Fatalf("expected default MCPBaseURL %q, got %q", DefaultMCPBaseURL, cfg.MCPBaseURL)
+	}
+	if cfg.HealthTimeoutMS <= 0 {
+		t.Fatalf("expected positive HealthTimeoutMS, got %d", cfg.HealthTimeoutMS)
 	}
 }
 
