@@ -38,7 +38,7 @@ func TestWorkerdBootRouter(t *testing.T) {
 
 	approvalStore := approval.NewStore(baseStore.SQLDB())
 
-	router := httpapi.NewRouter(sessionStore, commandStore, actionStore, agentRunStore, nil, logStore, approvalStore, runner, nil)
+	router := httpapi.NewRouter(sessionStore, commandStore, actionStore, agentRunStore, nil, logStore, approvalStore, runner, nil, httpapi.HealthConfig{})
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()

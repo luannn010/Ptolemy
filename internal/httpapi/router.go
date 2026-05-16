@@ -1,7 +1,10 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,6 +23,38 @@ type healthResponse struct {
 	Status    string `json:"status"`
 	Service   string `json:"service"`
 	Timestamp string `json:"timestamp"`
+	Checks    healthChecks `json:"checks"`
+}
+
+type healthChecks struct {
+	MCP     mcpHealthCheck     `json:"mcp"`
+	Runtime runtimeHealthCheck `json:"runtime"`
+}
+
+type mcpHealthCheck struct {
+	Enabled      bool   `json:"enabled"`
+	Reachable    bool   `json:"reachable"`
+	LatencyMS    int64  `json:"latency_ms,omitempty"`
+	Error        string `json:"error,omitempty"`
+	Target       string `json:"target,omitempty"`
+	Probe        string `json:"probe,omitempty"`
+}
+
+type runtimeHealthCheck struct {
+	Context  string               `json:"context"`
+	Strategy string               `json:"strategy"`
+	Commands map[string]cmdHealth `json:"commands"`
+}
+
+type cmdHealth struct {
+	Available bool   `json:"available"`
+	Path      string `json:"path,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+type HealthConfig struct {
+	MCPBaseURL string
+	Timeout    time.Duration
 }
 
 func NewRouter(
@@ -32,19 +67,27 @@ func NewRouter(
 	approvalStore *approval.Store,
 	runner *terminal.TmuxRunner,
 	packStudioHandler *PackStudioHandler,
+	healthCfg HealthConfig,
 ) http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		checks := evaluateHealthChecks(r.Context(), r, healthCfg)
+		status := "ok"
+		if (checks.MCP.Enabled && !checks.MCP.Reachable) || hasMissingRuntimeCommand(checks.Runtime.Commands) {
+			status = "degraded"
+		}
+
 		log.Info().
 			Str("method", r.Method).
 			Str("path", r.URL.Path).
 			Msg("health check called")
 
 		writeJSON(w, http.StatusOK, healthResponse{
-			Status:    "ok",
+			Status:    status,
 			Service:   "workerd",
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Checks:    checks,
 		})
 	})
 
@@ -113,4 +156,97 @@ func NewRouter(
 	}
 
 	return r
+}
+
+func evaluateHealthChecks(ctx context.Context, r *http.Request, cfg HealthConfig) healthChecks {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 1500 * time.Millisecond
+	}
+
+	tool := strings.TrimSpace(r.URL.Query().Get("tool"))
+	return healthChecks{
+		MCP:     checkMCP(ctx, cfg.MCPBaseURL, timeout),
+		Runtime: checkRuntimeCommands(tool),
+	}
+}
+
+func checkMCP(ctx context.Context, baseURL string, timeout time.Duration) mcpHealthCheck {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		return mcpHealthCheck{Enabled: false}
+	}
+
+	start := time.Now()
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, baseURL+"/health", nil)
+	if err != nil {
+		return mcpHealthCheck{Enabled: true, Reachable: false, Error: err.Error(), Target: baseURL, Probe: "/health"}
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return mcpHealthCheck{Enabled: true, Reachable: false, Error: err.Error(), Target: baseURL, Probe: "/health"}
+	}
+	defer resp.Body.Close()
+
+	check := mcpHealthCheck{
+		Enabled:   true,
+		Reachable: resp.StatusCode < 400,
+		LatencyMS: time.Since(start).Milliseconds(),
+		Target:    baseURL,
+		Probe:     "/health",
+	}
+	if resp.StatusCode >= 400 {
+		check.Error = resp.Status
+	}
+	return check
+}
+
+func checkRuntimeCommands(tool string) runtimeHealthCheck {
+	required := commandsForTool(tool)
+	result := runtimeHealthCheck{
+		Context:  withDefault(tool, "generic"),
+		Strategy: "static_allowlist_with_fallback",
+		Commands: map[string]cmdHealth{},
+	}
+	for _, name := range required {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			result.Commands[name] = cmdHealth{Available: false, Error: err.Error()}
+			continue
+		}
+		result.Commands[name] = cmdHealth{Available: true, Path: path}
+	}
+	return result
+}
+
+func commandsForTool(tool string) []string {
+	switch strings.TrimSpace(tool) {
+	case "go", "ptolemy_kb_build", "ptolemy_kb_update":
+		return []string{"go"}
+	case "npm":
+		return []string{"npm"}
+	case "python":
+		return []string{"python"}
+	default:
+		return []string{"go", "npm", "python"}
+	}
+}
+
+func hasMissingRuntimeCommand(commands map[string]cmdHealth) bool {
+	for _, cmd := range commands {
+		if !cmd.Available {
+			return true
+		}
+	}
+	return false
+}
+
+func withDefault(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
 }

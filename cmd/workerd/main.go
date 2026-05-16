@@ -98,6 +98,10 @@ func main() {
 		approvalStore,
 		runner,
 		httpapi.NewPackStudioHandler(packStudioService),
+		httpapi.HealthConfig{
+			MCPBaseURL: cfg.MCPBaseURL,
+			Timeout:    time.Duration(cfg.HealthTimeoutMS) * time.Millisecond,
+		},
 	)
 
 	server := &http.Server{

@@ -44,7 +44,7 @@ func newTestRouter(t *testing.T) http.Handler {
 	approvalStore := approval.NewStore(baseStore.SQLDB())
 	runner := terminal.NewTmuxRunner()
 
-	return NewRouter(sessionStore, commandStore, actionStore, agentRunStore, nil, logStore, approvalStore, runner, nil)
+	return NewRouter(sessionStore, commandStore, actionStore, agentRunStore, nil, logStore, approvalStore, runner, nil, HealthConfig{})
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -61,6 +61,9 @@ func TestHealthEndpoint(t *testing.T) {
 
 	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
 		t.Fatalf("expected health ok response, got %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"checks":`) {
+		t.Fatalf("expected health checks response, got %s", rec.Body.String())
 	}
 }
 
