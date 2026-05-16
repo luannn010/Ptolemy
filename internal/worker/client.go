@@ -39,6 +39,23 @@ type HealthResponse struct {
 	Status    string `json:"status"`
 	Service   string `json:"service"`
 	Timestamp string `json:"timestamp,omitempty"`
+	Checks    struct {
+		MCP struct {
+			Enabled   bool   `json:"enabled"`
+			Reachable bool   `json:"reachable"`
+			Error     string `json:"error,omitempty"`
+			Target    string `json:"target,omitempty"`
+		} `json:"mcp"`
+		Runtime struct {
+			Context  string `json:"context"`
+			Strategy string `json:"strategy"`
+			Commands map[string]struct {
+				Available bool   `json:"available"`
+				Path      string `json:"path,omitempty"`
+				Error     string `json:"error,omitempty"`
+			} `json:"commands"`
+		} `json:"runtime"`
+	} `json:"checks"`
 }
 
 type RunCommandRequest struct {
