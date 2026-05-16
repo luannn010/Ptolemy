@@ -1,12 +1,6 @@
-# Ptolemy Task Template (Legacy)
+# Ptolemy Task Template
 
-This file is a legacy reference format. For task-runner execution, use pack-first templates:
-
-- `docs/tasks/templates/task-pack-template/` as the primary entrypoint
-- `docs/tasks/templates/task-file-template.md` for root task files
-- `docs/tasks/templates/split-task-template.md` for split child tasks
-
-Important: task files that are executed by `ptolemy-task-runner` must follow runner frontmatter requirements, including `task_id`, `status`, `branch`, `allowed_files`, and `validation`.
+Use this template whenever Codex is asked to build a task for DateDrop and execute it with Ptolemy. The task must be specific enough that a worker can follow it without inventing the implementation plan.
 
 ## Required Task Header
 
