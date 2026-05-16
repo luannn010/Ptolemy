@@ -4,6 +4,10 @@
 
 This file defines mandatory operating rules for Codex/agents working in this repository.
 
+Mandatory execution checklist:
+- `docs/workflows/agent/agents-compliance-checklist.md`
+- The checklist must be followed as a hard gate before coding, before each commit phase, before push, and before PR creation.
+
 ## Required Startup Flow
 
 Before any implementation task:
@@ -11,6 +15,7 @@ Before any implementation task:
 2. Load only the workflow file(s) needed for the current task.
 3. Confirm task scope and allowed files.
 4. Keep changes small, reversible, and task-scoped.
+5. Complete Section 1 (Startup Gate) in `docs/workflows/agent/agents-compliance-checklist.md`.
 
 ## Branching and Commit Policy
 
