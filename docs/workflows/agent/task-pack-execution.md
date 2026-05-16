@@ -20,21 +20,10 @@ Author task pack
 
 - Prefer task packs for multi-step work.
 - Keep each inbox task narrow when possible.
-- Inbox task frontmatter must satisfy runner validation before execution:
-  `task_id`, `status`, `branch`, `allowed_files`, and `validation`.
 - If a task is large, the runtime may split it into child tasks automatically.
 - Child tasks should stay in one phase only: `inspect`, `plan`, `edit`, `test`, `validate`, `docs`, or `finalize`.
 - Comfortable child task body size is roughly `1200-2000` chars.
 - Above `4000` chars is risky and should usually be split further.
-
-## Validation Failure Examples
-
-Common pre-execution failures and repairs:
-
-- missing `validation`: add `validation:` frontmatter with at least one command
-- invalid `status`: use one of `inbox`, `running`, `completed`, `failed`, `blocked`
-- empty or unsafe `allowed_files`: provide at least one non-empty, non-absolute, non-directory path without `..`
-- missing `branch`: set an explicit task branch name, usually `ptolemy/<task-id>`
 
 ## Runtime Behavior
 
