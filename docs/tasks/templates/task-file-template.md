@@ -8,6 +8,8 @@ branch: ptolemy/normal-example-task-id
 allowed_files:
   - WORKFLOWS.md
   - AGENTS.md
+validation:
+  - go test ./...
 created_by: codex
 ---
 
