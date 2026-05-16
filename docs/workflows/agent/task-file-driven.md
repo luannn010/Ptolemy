@@ -4,6 +4,8 @@ Use structured instructions instead of free-form prompts.
 
 Task files that participate in this workflow should also follow `docs/workflows/agent/task-flags-and-isolation.md`, and new task files should use the templates in `docs/tasks/templates/`.
 
+Pack-first recommendation: use `docs/tasks/templates/task-pack-template/` for new multi-step work. Task files inside pack `inbox/` must satisfy the same runner-validated frontmatter contract.
+
 ```text
 Agent
   -> Ensures task lifecycle folders exist
@@ -75,6 +77,7 @@ Notes:
 - the default command uses the queue-driven one-task-at-a-time workflow above
 - `plan` previews deterministic task order from metadata without running validations
 - `run` uses the sequential scheduler to validate task metadata and update task statuses
+- required executable task fields include `task_id`, `status`, `branch`, `allowed_files`, and `validation`
 - task packs are executed directly from the pack directory in v1; they are not copied into `docs/tasks/inbox` first
 - large tasks can be split into child tasks automatically during execution
 - child tasks carry forward compact summaries, not the whole raw chat history
