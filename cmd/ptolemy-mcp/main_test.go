@@ -9,6 +9,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/mcp/executortools"
 	"github.com/luannn010/ptolemy/internal/mcp/filetools"
 	"github.com/luannn010/ptolemy/internal/mcp/gittools"
+	"github.com/luannn010/ptolemy/internal/mcp/skilltools"
 	"github.com/luannn010/ptolemy/internal/mcp/sessiontools"
 )
 
@@ -20,12 +21,14 @@ func TestMCPServerBootAndListTools(t *testing.T) {
 		sessiontools.Tools(),
 		executortools.Tools(),
 		filetools.Tools(),
+		skilltools.Tools(),
 		gittools.Tools(),
 	)
 
 	server.RegisterHandler(sessiontools.Handle)
 	server.RegisterHandler(executortools.Handle)
 	server.RegisterHandler(filetools.Handle)
+	server.RegisterHandler(skilltools.Handle)
 	server.RegisterHandler(gittools.Handle)
 
 	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n")
@@ -39,6 +42,10 @@ func TestMCPServerBootAndListTools(t *testing.T) {
 
 	if !strings.Contains(output.String(), "ptolemy_git_status") {
 		t.Fatalf("expected git tool in MCP, got %s", output.String())
+	}
+
+	if !strings.Contains(output.String(), "ptolemy_list_skills") {
+		t.Fatalf("expected list skills tool in MCP, got %s", output.String())
 	}
 }
 
