@@ -141,6 +141,7 @@ func NewRouter(
 	r.Post("/git/branch", gitHandler.CreateBranch)
 	r.Post("/git/commit", gitHandler.Commit)
 	r.Post("/git/push", gitHandler.Push)
+	r.Post("/git/prepare-pr-description", gitHandler.PreparePRDescription)
 
 	worktreeHandler := NewWorktreeHandler(sessionStore)
 
