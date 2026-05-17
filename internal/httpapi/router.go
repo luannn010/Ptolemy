@@ -20,9 +20,9 @@ import (
 )
 
 type healthResponse struct {
-	Status    string `json:"status"`
-	Service   string `json:"service"`
-	Timestamp string `json:"timestamp"`
+	Status    string       `json:"status"`
+	Service   string       `json:"service"`
+	Timestamp string       `json:"timestamp"`
 	Checks    healthChecks `json:"checks"`
 }
 
@@ -32,12 +32,12 @@ type healthChecks struct {
 }
 
 type mcpHealthCheck struct {
-	Enabled      bool   `json:"enabled"`
-	Reachable    bool   `json:"reachable"`
-	LatencyMS    int64  `json:"latency_ms,omitempty"`
-	Error        string `json:"error,omitempty"`
-	Target       string `json:"target,omitempty"`
-	Probe        string `json:"probe,omitempty"`
+	Enabled   bool   `json:"enabled"`
+	Reachable bool   `json:"reachable"`
+	LatencyMS int64  `json:"latency_ms,omitempty"`
+	Error     string `json:"error,omitempty"`
+	Target    string `json:"target,omitempty"`
+	Probe     string `json:"probe,omitempty"`
 }
 
 type runtimeHealthCheck struct {
@@ -141,7 +141,8 @@ func NewRouter(
 	r.Post("/git/branch", gitHandler.CreateBranch)
 	r.Post("/git/commit", gitHandler.Commit)
 	r.Post("/git/push", gitHandler.Push)
-	r.Post("/git/prepare-pr-description", gitHandler.PreparePRDescription)
+	r.Post("/git/generate-pr-body", gitHandler.GeneratePRBody)
+	r.Post("/git/create-pr", gitHandler.CreatePR)
 
 	worktreeHandler := NewWorktreeHandler(sessionStore)
 

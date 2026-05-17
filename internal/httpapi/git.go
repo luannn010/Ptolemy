@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,19 +21,15 @@ func NewGitHandler(sessionStore *session.Store) *GitHandler {
 }
 
 type gitRequest struct {
-	SessionID string `json:"session_id"`
-	Branch    string `json:"branch"`
-	Message   string `json:"message"`
-	Remote    string `json:"remote"`
-}
-
-type prDescriptionContext struct {
-	TemplatePath    string        `json:"template_path"`
-	TemplateContent string        `json:"template_content"`
-	CurrentBranch   string        `json:"current_branch"`
-	Status          gitops.Result `json:"status"`
-	Diff            gitops.Result `json:"diff"`
-	Log             gitops.Result `json:"log"`
+	SessionID  string `json:"session_id"`
+	Branch     string `json:"branch"`
+	Message    string `json:"message"`
+	Remote     string `json:"remote"`
+	Base       string `json:"base"`
+	Head       string `json:"head"`
+	Title      string `json:"title"`
+	BodyPath   string `json:"body_path"`
+	OutputPath string `json:"output_path"`
 }
 
 func (h *GitHandler) gitForSession(w http.ResponseWriter, r *http.Request, sessionID string) (*gitops.GitOps, bool) {
@@ -146,7 +143,7 @@ func (h *GitHandler) Push(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, git.Push(r.Context(), req.Remote, req.Branch))
 }
 
-func (h *GitHandler) PreparePRDescription(w http.ResponseWriter, r *http.Request) {
+func (h *GitHandler) GeneratePRBody(w http.ResponseWriter, r *http.Request) {
 	var req gitRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
@@ -169,19 +166,130 @@ func (h *GitHandler) PreparePRDescription(w http.ResponseWriter, r *http.Request
 	if currentBranch == "" {
 		currentBranch = "unknown"
 	}
-
-	templatePath := filepath.Join(sess.Workspace, ".github", "pull_request_template.md")
-	templateContent := ""
-	if data, readErr := os.ReadFile(templatePath); readErr == nil {
-		templateContent = string(data)
+	base := strings.TrimSpace(req.Base)
+	if base == "" {
+		base = "main"
 	}
 
-	writeJSON(w, http.StatusOK, prDescriptionContext{
-		TemplatePath:    ".github/pull_request_template.md",
-		TemplateContent: templateContent,
-		CurrentBranch:   currentBranch,
-		Status:          git.Status(r.Context()),
-		Diff:            git.Diff(r.Context()),
-		Log:             git.Log(r.Context()),
+	templatePath := filepath.Join(sess.Workspace, ".github", "pull_request_template.md")
+	templateData, readErr := os.ReadFile(templatePath)
+	if readErr != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "pull request template not found at .github/pull_request_template.md"})
+		return
+	}
+
+	outputPath := strings.TrimSpace(req.OutputPath)
+	if outputPath == "" {
+		outputPath = filepath.ToSlash(filepath.Join(".github", "PRs", fmt.Sprintf("%s.md", strings.ReplaceAll(currentBranch, "/", "-"))))
+	}
+	absoluteOutputPath := filepath.Join(sess.Workspace, filepath.FromSlash(outputPath))
+	if err := os.MkdirAll(filepath.Dir(absoluteOutputPath), 0o755); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	changed := strings.TrimSpace(git.ChangedFiles(r.Context()).Output)
+	diffStat := strings.TrimSpace(gitops.New(sess.Workspace).Diff(r.Context()).Output)
+	if idx := strings.Index(diffStat, "--- DIFF EXCERPT ---"); idx >= 0 {
+		diffStat = strings.TrimSpace(diffStat[:idx])
+	}
+
+	generated := strings.TrimSpace(string(templateData)) +
+		"\n\n---\n\n" +
+		"### Autofill Context (Local)\n" +
+		fmt.Sprintf("- Branch: `%s`\n", currentBranch) +
+		fmt.Sprintf("- Base: `%s`\n", base) +
+		"- Changed files:\n" +
+		formatIndentedList(changed) +
+		"\n- Diff stat:\n" +
+		formatIndentedList(diffStat) +
+		"\n- Note: Edit sections above before opening or updating the PR.\n"
+
+	if err := os.WriteFile(absoluteOutputPath, []byte(generated), 0o644); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"template_path": ".github/pull_request_template.md",
+		"output_path":   filepath.ToSlash(outputPath),
+		"branch":        currentBranch,
+		"base":          base,
+		"changed_files": strings.Fields(changed),
+		"success":       true,
 	})
+}
+
+func (h *GitHandler) CreatePR(w http.ResponseWriter, r *http.Request) {
+	var req gitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+
+	if req.SessionID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "session_id is required"})
+		return
+	}
+
+	sess, err := h.sessionStore.Get(r.Context(), req.SessionID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+
+	git := gitops.New(sess.Workspace)
+	base := strings.TrimSpace(req.Base)
+	if base == "" {
+		base = "main"
+	}
+	head := strings.TrimSpace(req.Head)
+	if head == "" {
+		head = strings.TrimSpace(git.CurrentBranch(r.Context()).Output)
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = head
+	}
+
+	bodyPath := strings.TrimSpace(req.BodyPath)
+	if bodyPath == "" {
+		bodyPath = filepath.ToSlash(filepath.Join(".github", "PRs", fmt.Sprintf("%s.md", strings.ReplaceAll(head, "/", "-"))))
+	}
+
+	absoluteBodyPath := filepath.Join(sess.Workspace, filepath.FromSlash(bodyPath))
+	if _, err := os.Stat(absoluteBodyPath); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body file does not exist: " + bodyPath})
+		return
+	}
+
+	result := git.CreatePullRequest(r.Context(), base, head, title, absoluteBodyPath)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"result":    result,
+		"body_path": filepath.ToSlash(bodyPath),
+		"success":   result.Success,
+	})
+}
+
+func formatIndentedList(input string) string {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return "  - (none)\n"
+	}
+
+	lines := strings.Split(trimmed, "\n")
+	var b strings.Builder
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		b.WriteString("  - ")
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	if b.Len() == 0 {
+		return "  - (none)\n"
+	}
+	return b.String()
 }

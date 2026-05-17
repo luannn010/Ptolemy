@@ -6,7 +6,8 @@ func TestGitToolsRegistered(t *testing.T) {
 	tools := Tools()
 
 	expected := map[string]bool{
-		"ptolemy_git_prepare_pr_description": false,
+		"ptolemy_git_generate_pr_body": false,
+		"ptolemy_git_create_pr":        false,
 	}
 
 	for _, tool := range tools {
