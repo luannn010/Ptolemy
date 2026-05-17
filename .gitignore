@@ -28,3 +28,4 @@ Thumbs.db
 state/*.db-shm
 state/*.db-wal
 tmp-kb-reset.json
+.tmp/*
