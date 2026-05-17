@@ -4,6 +4,12 @@
 
 This file defines mandatory operating rules for Codex/agents working in this repository.
 
+## Ptolemy-First Rule (Always On)
+
+- For every user prompt in this repository, the agent must use Ptolemy workflows and Ptolemy-native capabilities first.
+- The agent must treat Ptolemy as the default execution path for planning, editing, task execution, validation, and delivery.
+- If a request is ambiguous, the agent should still anchor execution in Ptolemy workflow files before taking action.
+
 Mandatory execution checklist:
 - `docs/workflows/agent/agents-compliance-checklist.md`
 - The checklist must be followed as a hard gate before coding, before each commit phase, before push, and before PR creation.

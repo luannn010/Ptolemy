@@ -168,6 +168,10 @@ func (g *GitOps) CurrentCommitSHA(ctx context.Context) Result {
 	return g.run(ctx, "git rev-parse HEAD")
 }
 
+func (g *GitOps) CurrentBranch(ctx context.Context) Result {
+	return g.run(ctx, "git rev-parse --abbrev-ref HEAD")
+}
+
 func (g *GitOps) ChangedFiles(ctx context.Context) Result {
 	return g.run(ctx, "git status --short --untracked-files=all -- . ':(exclude)state/*.db' ':(exclude)bin/*' | awk '{print $2}'")
 }
