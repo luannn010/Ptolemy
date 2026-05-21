@@ -20,12 +20,12 @@ Supported entrypoints:
 
 - `ptolemy-agent` action: `insert_after`
 - HTTP: `POST /file/insert_after`
-- MCP: `ptolemy.insert_after`
+- MCP: `ptolemy_insert_after`
 
 For replacing existing code, prefer the first exact-match targeted replacement before whole-file writes:
 
 - `ptolemy-agent` action: `replace_block`
 - HTTP: `POST /file/replace_block`
-- MCP: `ptolemy.replace_block`
+- MCP: `ptolemy_replace_block`
 
 Status: supported by `ptolemy-agent`, worker HTTP file tools, and MCP file tools.

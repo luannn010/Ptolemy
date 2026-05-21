@@ -5,6 +5,7 @@ Use this page as the documentation hub for Ptolemy.
 ## Start Here
 
 - [Setup](./Setup.md)
+- [MCP Setup](./MCP_Setup.md)
 - [CLI Guide](./CLI.md)
 - [Worker API](./Worker_API.md)
 - [Development Workflow](./Development.md)
