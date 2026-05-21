@@ -14,25 +14,20 @@ Thumbs.db
 .env
 
 .state/
+/.ptolemy/
 /docs/tasks/*
 
 
 !/docs/tasks/templates/
 !/docs/tasks/templates/*.md
-!/docs/tasks/packs/
-/docs/tasks/packs/*
-!/docs/tasks/packs/ptolemy-kb-foundation/
-!/docs/tasks/packs/ptolemy-kb-foundation/**
-!/docs/tasks/packs/ptolemy-agent-kb-hooks/
-!/docs/tasks/packs/ptolemy-agent-kb-hooks/**
-!/docs/tasks/packs/ptolemy-kb-surface-and-migration/
-!/docs/tasks/packs/ptolemy-kb-surface-and-migration/**
-!/docs/tasks/packs/ptolemy-memory-refresh/
-/docs/tasks/packs/ptolemy-memory-refresh/**
-!/docs/tasks/packs/ptolemy-memory-refresh/README.md
-!/docs/tasks/packs/ptolemy-memory-refresh/TASK_PLAN.md
-!/docs/tasks/packs/ptolemy-execute-metadata/
-!/docs/tasks/packs/ptolemy-execute-metadata/**
+/docs/tasks/packs/
 /docs/plans/*
 /deploy/*
 .env
+
+.ptolemy/sessions/
+state/*.db-shm
+state/*.db-wal
+tmp-kb-reset.json
+.tmp/*
+/.worktrees/

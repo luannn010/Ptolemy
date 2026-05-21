@@ -1,11 +1,97 @@
-# Task Pack Template
+# Task Pack Report: <Pack Name>
 
-Use this folder when one implementation should be broken into several deterministic tasks that Ptolemy can create, run, and monitor from the embedded Pack Studio UI.
+Use this README as the human-facing report for a task pack. It should explain what the pack is for, where it lives, what it will run, and where Ptolemy writes runtime progress.
 
-## Runtime Shape
+## Pack Summary
 
-`PACK_MANIFEST.yaml` must match the schema supported by `internal/tasks/pack.go`.
-The important fields are:
+Pack ID: `<pack-id>`
+
+Date folder: `<dd-mm-yyyy>`
+
+Pack path:
+
+```text
+.ptolemy/tasks/packs/<dd-mm-yyyy>/<pack-id>/
+```
+
+Process state path:
+
+```text
+.ptolemy/tasks/process/<pack-id>/
+```
+
+Goal:
+
+> Describe the outcome this pack should produce.
+
+Success criteria:
+
+- [ ] behavior or documentation change is complete
+- [ ] task checklist items are complete
+- [ ] validation commands pass
+- [ ] task results are visible in Pack Studio Runs
+- [ ] any required documentation is updated
+
+## File Structure
+
+Each task pack must use this date-based structure:
+
+```text
+.ptolemy/tasks/packs/
+`-- <dd-mm-yyyy>/
+    `-- <pack-id>/
+        |-- PACK_MANIFEST.yaml
+        |-- README.md
+        |-- TASK_PLAN.md
+        |-- inbox/
+        |   |-- 01-discover-context.md
+        |   |-- 02-implement-core.md
+        |   |-- 03-add-validation.md
+        |   `-- 99-finalize-pack.md
+        |-- snippets/
+        |-- task-scripts/
+        `-- scripts/
+```
+
+## Pack Files
+
+`PACK_MANIFEST.yaml`
+
+- Runtime manifest used by Pack Studio and task-runner.
+- Must match the schema supported by `internal/tasks/pack.go`.
+- Defines `pack_id`, `name`, `entrypoint`, folders, validation, and rules.
+
+`README.md`
+
+- This human-facing pack report.
+- Should summarize purpose, scope, progress, validation, and known risks.
+
+`TASK_PLAN.md`
+
+- Execution plan for the pack.
+- Defines task order, validation strategy, branch expectations, and completion rules.
+
+`inbox/`
+
+- Ordered task files that Pack Studio executes.
+- Tasks should stay narrow and sequential.
+
+`snippets/`
+
+- Reusable context snippets referenced by tasks.
+
+`task-scripts/`
+
+- Task-specific helper scripts.
+- Scripts require explicit permission before execution.
+
+`scripts/`
+
+- Pack-level helper scripts for setup, validation, or maintenance.
+
+## Manifest Fields
+
+The runtime manifest should define:
 
 - `pack_id`
 - `name`
@@ -16,28 +102,25 @@ The important fields are:
 - `validation`
 - `rules`
 
-The checked-in template now matches the runtime manifest used by Pack Studio.
+The `folders` values should point to:
 
-## Suggested Structure
+- `inbox/`
+- `snippets/`
+- `task-scripts/`
+- `scripts/`
 
-```text
-<pack-id>/
-├── PACK_MANIFEST.yaml
-├── README.md
-├── TASK_PLAN.md
-├── inbox/
-│   ├── 01-discover-context.md
-│   ├── 02-implement-core.md
-│   ├── 03-add-validation.md
-│   └── 99-finalize-pack.md
-├── snippets/
-├── task-scripts/
-└── scripts/
-```
+## Task Report
 
-## Task Authoring Rules
+Pack Studio reports progress from each inbox task.
 
-Each task file should have YAML frontmatter with at least:
+Each task file should include:
+
+- YAML frontmatter with stable metadata
+- explicit `allowed_files`
+- validation commands when behavior changes
+- a `## Checklist` section with Markdown checkboxes
+
+Required task metadata:
 
 - `task_id`
 - `priority`
@@ -48,7 +131,7 @@ Each task file should have YAML frontmatter with at least:
 - `allowed_files`
 - `created_by`
 
-Pack Studio also writes:
+Pack Studio may also write:
 
 - `execution_group`
 - `depends_on`
@@ -56,50 +139,129 @@ Pack Studio also writes:
 - `scripts`
 - `snippets`
 
-Each task should include a `## Checklist` section with Markdown checkboxes so the run monitor can render explicit progress. If a legacy task does not include a checklist, the UI falls back to status-derived checklist items.
+## Execution Report
 
-## Execution Model
+Pack execution is sequential in v1:
 
-Pack Studio runs packs sequentially through `agent-runs`.
+```text
+program run
+-> pack
+-> inbox task
+-> optional child task split
+-> fresh agent context
+-> validation
+-> compact result summary
+-> next task
+```
 
-- One program run is active at a time in v1.
-- Packs inside a program run execute sequentially.
-- Large parent tasks are split into narrow child tasks before execution.
-- Each child task runs as a fresh brain call with compact manifest state instead of full prior chat history.
-- Tasks inside a pack execute sequentially.
-- The live terminal is streamed from the tmux-backed worker session.
+Large tasks may be split into child tasks. Child tasks should stay in one phase only:
 
-## Large Task Guidance
+- `inspect`
+- `plan`
+- `edit`
+- `test`
+- `validate`
+- `docs`
+- `finalize`
 
-Keep each child task small enough for the 24K local model context window.
+Keep child tasks small enough for the local model context:
 
-- Comfortable child task body: about 1200-2000 chars.
-- Risky child task body: above 4000 chars.
-- Prefer one narrow goal, one phase, one small `allowed_files` scope, and at most 3-5 explicit steps.
-- Split inspect/research, plan, implementation, tests, validation, and final summary into separate child tasks when possible.
+- comfortable: about 1200-2000 chars
+- risky: above 4000 chars
 
-## Process State
+## Runtime Report Files
 
 During execution, Ptolemy writes process state under:
 
 ```text
 .ptolemy/tasks/process/<pack-id>/
-├── manifest.json
-├── todo.md
-└── state/
-    ├── 001-...-result.md
-    ├── 002-...-result.md
-    └── ...
+|-- manifest.json
+|-- todo.md
+`-- state/
+    |-- 001-...-result.md
+    |-- 002-...-result.md
+    `-- ...
 ```
 
-`manifest.json` tracks child-task status, dependencies, changed files, commands run, and failure reasons.
-`todo.md` is the human-readable checklist view.
-Each child result summary is compact and becomes the memory carried into the next child task.
+`manifest.json` reports:
+
+- child-task status
+- dependencies
+- changed files
+- commands run
+- validation results
+- failure reasons
+
+`todo.md` reports:
+
+- the human-readable checklist view
+- current progress
+- remaining work
+
+`state/*-result.md` reports:
+
+- compact child-task summaries
+- files changed by that child task
+- commands run by that child task
+- observations needed by the next child task
 
 ## Monitoring
 
-After a pack or program is created, use the embedded UI under `/ui`:
+Use the embedded UI under `/ui`:
 
-- `Studio` creates packs and programs.
-- `Overview` shows catalog and run history.
-- `Runs` shows the tree, checklist progress, recent actions, and live terminal output.
+- `Studio` creates packs and programs
+- `Overview` shows catalog and run history
+- `Runs` shows the program, pack, task tree, checklist progress, recent actions, and live terminal output
+
+When debugging a failed run, inspect the process state files before rerunning. Prefer a fresh rerun after fixing the blocker.
+
+## Validation
+
+Default validation:
+
+```bash
+go test ./...
+```
+
+Use narrower validation when possible:
+
+```bash
+go test ./internal/tasks/...
+go test ./internal/packstudio/...
+go test ./cmd/ptolemy-task-runner/...
+```
+
+Record the final validation command and result here:
+
+```text
+Command: <validation command>
+Result: <pass/fail/not run>
+Notes: <short summary>
+```
+
+## Known Risks
+
+- <risk or follow-up>
+
+## Final Status
+
+Status: `<draft | ready | running | done | failed>`
+
+Resolve location for completed packs:
+
+```text
+/.ptolemy/resolve/
+```
+
+When all inbox tasks are done and validation passes, move the completed pack to `/.ptolemy/resolve` so future runs can confirm it is already resolved.
+
+Completed tasks:
+
+- [ ] `inbox/01-discover-context.md`
+- [ ] `inbox/02-implement-core.md`
+- [ ] `inbox/03-add-validation.md`
+- [ ] `inbox/99-finalize-pack.md`
+
+Final notes:
+
+> Summarize the completed result, validation evidence, documentation updates, and any follow-up work.
