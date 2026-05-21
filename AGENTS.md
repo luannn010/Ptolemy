@@ -30,6 +30,12 @@ Before any implementation task:
 When asked to implement a feature, the agent must ask:
 - "Do you want me to create a new branch for this feature?"
 
+Before writing implementation code for a new feature, the agent MUST use the `@superpowers` TDD strategy workflow:
+- use the Superpowers TDD skill/process first,
+- write/define tests before implementation,
+- implement only until tests pass,
+- refactor while keeping tests green.
+
 Then apply one of these paths:
 
 1. If user says yes:
@@ -102,6 +108,12 @@ If no parent branch is approved:
 - Agent must fill all required template sections before opening the PR.
 - If PR tooling is unavailable, write fallback PR instructions under `.state/pr/`.
 - Do not auto-merge PRs unless explicitly requested.
+
+## GitHub Tooling Policy
+
+- For GitHub operations, the agent MUST use the GitHub plugin/app workflows available in this environment.
+- Do NOT use `gh` CLI for GitHub operations.
+- If GitHub plugin tooling is unavailable for a required action, stop and report the limitation to the user before proceeding.
 
 ## Minimal Done Criteria
 
