@@ -5,9 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 )
+
+const DefaultWorkerURL = "http://127.0.0.1:1088"
 
 type Client struct {
 	baseURL    string
@@ -25,6 +30,32 @@ type Session struct {
 	Name      string `json:"name"`
 	Workspace string `json:"workspace"`
 	Status    string `json:"status"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	ClosedAt  string `json:"closed_at,omitempty"`
+}
+
+type HealthResponse struct {
+	Status    string `json:"status"`
+	Service   string `json:"service"`
+	Timestamp string `json:"timestamp,omitempty"`
+	Checks    struct {
+		MCP struct {
+			Enabled   bool   `json:"enabled"`
+			Reachable bool   `json:"reachable"`
+			Error     string `json:"error,omitempty"`
+			Target    string `json:"target,omitempty"`
+		} `json:"mcp"`
+		Runtime struct {
+			Context  string `json:"context"`
+			Strategy string `json:"strategy"`
+			Commands map[string]struct {
+				Available bool   `json:"available"`
+				Path      string `json:"path,omitempty"`
+				Error     string `json:"error,omitempty"`
+			} `json:"commands"`
+		} `json:"runtime"`
+	} `json:"checks"`
 }
 
 type RunCommandRequest struct {
@@ -69,43 +100,104 @@ type WriteFileResponse struct {
 }
 
 type AgentRunRequest struct {
-	SessionID       string `json:"session_id,omitempty"`
-	TaskID          string `json:"task_id,omitempty"`
-	TaskFile        string `json:"task_file,omitempty"`
-	Workspace       string `json:"workspace,omitempty"`
-	Branch          string `json:"branch,omitempty"`
-	WorktreePath    string `json:"worktree_path,omitempty"`
+	SessionID        string `json:"session_id,omitempty"`
+	TaskID           string `json:"task_id,omitempty"`
+	TaskFile         string `json:"task_file,omitempty"`
+	Workspace        string `json:"workspace,omitempty"`
+	Branch           string `json:"branch,omitempty"`
+	WorktreePath     string `json:"worktree_path,omitempty"`
 	FinalizationMode string `json:"finalization_mode,omitempty"`
-	MaxSteps        int    `json:"max_steps,omitempty"`
-	CurrentPhase    string `json:"current_phase,omitempty"`
-	FinalReportPath string `json:"final_report_path,omitempty"`
-	AutoStart       bool   `json:"auto_start,omitempty"`
+	MaxSteps         int    `json:"max_steps,omitempty"`
+	CurrentPhase     string `json:"current_phase,omitempty"`
+	FinalReportPath  string `json:"final_report_path,omitempty"`
+	AutoStart        bool   `json:"auto_start,omitempty"`
 }
 
 type AgentRun struct {
-	ID              string `json:"id"`
-	SessionID       string `json:"session_id"`
-	TaskID          string `json:"task_id"`
-	TaskFile        string `json:"task_file"`
-	Workspace       string `json:"workspace"`
-	Branch          string `json:"branch"`
-	WorktreePath    string `json:"worktree_path"`
+	ID               string `json:"id"`
+	SessionID        string `json:"session_id"`
+	TaskID           string `json:"task_id"`
+	TaskFile         string `json:"task_file"`
+	Workspace        string `json:"workspace"`
+	Branch           string `json:"branch"`
+	WorktreePath     string `json:"worktree_path"`
 	FinalizationMode string `json:"finalization_mode"`
-	Status          string `json:"status"`
-	CurrentStep     int    `json:"current_step"`
-	MaxSteps        int    `json:"max_steps"`
-	CurrentPhase    string `json:"current_phase"`
-	LastError       string `json:"last_error"`
-	FinalReportPath string `json:"final_report_path"`
+	Status           string `json:"status"`
+	CurrentStep      int    `json:"current_step"`
+	MaxSteps         int    `json:"max_steps"`
+	CurrentPhase     string `json:"current_phase"`
+	LastError        string `json:"last_error"`
+	FinalReportPath  string `json:"final_report_path"`
 }
 
 func NewClient(baseURL string) *Client {
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = DefaultWorkerURL
+	}
 	return &Client{
-		baseURL: baseURL,
+		baseURL: strings.TrimRight(baseURL, "/"),
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second,
 		},
 	}
+}
+
+func WorkerURLFromEnv(getenv func(string) string) string {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if value := strings.TrimSpace(getenv("PTOLEMY_WORKER_URL")); value != "" {
+		return strings.TrimRight(value, "/")
+	}
+	return DefaultWorkerURL
+}
+
+func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/health", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("health check failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	var result HealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *Client) ListSessions(ctx context.Context) ([]Session, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/sessions", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("list sessions failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	var sessions []Session
+	if err := json.NewDecoder(resp.Body).Decode(&sessions); err != nil {
+		return nil, err
+	}
+	return sessions, nil
 }
 
 func (c *Client) CreateSession(ctx context.Context, reqBody CreateSessionRequest) (*Session, error) {
