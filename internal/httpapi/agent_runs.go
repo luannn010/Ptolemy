@@ -17,18 +17,18 @@ type AgentRunsHandler struct {
 }
 
 type agentRunRequest struct {
-	SessionID       string `json:"session_id"`
-	TaskID          string `json:"task_id"`
-	TaskFile        string `json:"task_file"`
-	Workspace       string `json:"workspace"`
-	Branch          string `json:"branch"`
-	WorktreePath    string `json:"worktree_path"`
+	SessionID        string `json:"session_id"`
+	TaskID           string `json:"task_id"`
+	TaskFile         string `json:"task_file"`
+	Workspace        string `json:"workspace"`
+	Branch           string `json:"branch"`
+	WorktreePath     string `json:"worktree_path"`
 	FinalizationMode string `json:"finalization_mode"`
-	MaxSteps        int    `json:"max_steps"`
-	CurrentPhase    string `json:"current_phase"`
-	FinalReportPath string `json:"final_report_path"`
-	LastError       string `json:"last_error"`
-	AutoStart       bool   `json:"auto_start"`
+	MaxSteps         int    `json:"max_steps"`
+	CurrentPhase     string `json:"current_phase"`
+	FinalReportPath  string `json:"final_report_path"`
+	LastError        string `json:"last_error"`
+	AutoStart        bool   `json:"auto_start"`
 }
 
 func NewAgentRunsHandler(store *agentloop.Store, actionStore *action.Store, service *agentloop.Service) *AgentRunsHandler {
@@ -58,18 +58,18 @@ func (h *AgentRunsHandler) createRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	run, err := h.store.CreateRun(r.Context(), agentloop.Run{
-		SessionID:       req.SessionID,
-		TaskID:          req.TaskID,
-		TaskFile:        req.TaskFile,
-		Workspace:       req.Workspace,
-		Branch:          req.Branch,
-		WorktreePath:    req.WorktreePath,
+		SessionID:        req.SessionID,
+		TaskID:           req.TaskID,
+		TaskFile:         req.TaskFile,
+		Workspace:        req.Workspace,
+		Branch:           req.Branch,
+		WorktreePath:     req.WorktreePath,
 		FinalizationMode: req.FinalizationMode,
-		Status:          agentloop.StatusPending,
-		MaxSteps:        req.MaxSteps,
-		CurrentPhase:    req.CurrentPhase,
-		FinalReportPath: req.FinalReportPath,
-		LastError:       req.LastError,
+		Status:           agentloop.StatusPending,
+		MaxSteps:         req.MaxSteps,
+		CurrentPhase:     req.CurrentPhase,
+		FinalReportPath:  req.FinalReportPath,
+		LastError:        req.LastError,
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})

@@ -15,8 +15,8 @@ func TestExecutorToolsRegistered(t *testing.T) {
 		t.Fatalf("expected 1 executor tool, got %d", len(tools))
 	}
 
-	if tools[0].Name != "ptolemy.execute" {
-		t.Fatalf("expected ptolemy.execute, got %s", tools[0].Name)
+	if tools[0].Name != "ptolemy_execute" {
+		t.Fatalf("expected ptolemy_execute, got %s", tools[0].Name)
 	}
 
 	properties, ok := tools[0].InputSchema["properties"].(map[string]any)

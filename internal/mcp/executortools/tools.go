@@ -4,7 +4,7 @@ import "github.com/luannn010/ptolemy/internal/mcp"
 
 func Tools() []mcp.Tool {
 	return []mcp.Tool{
-		mcp.NewTool("ptolemy.execute", "Run a command inside a Ptolemy worker session using tmux.", map[string]any{
+		mcp.NewTool("ptolemy_execute", "Run a command inside a Ptolemy worker session using tmux.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"session_id":     map[string]any{"type": "string"},
@@ -24,7 +24,7 @@ func Tools() []mcp.Tool {
 
 func Handle(name string, args map[string]any, client *mcp.WorkerClient) (map[string]any, bool, error) {
 	switch name {
-	case "ptolemy.execute":
+	case "ptolemy_execute":
 		body, err := client.Post("/execute", args)
 		return mcp.TextResult(body), true, err
 	}

@@ -8,13 +8,13 @@ func TestFileToolsRegistered(t *testing.T) {
 	tools := Tools()
 
 	expected := map[string]bool{
-		"ptolemy.read_file":       false,
-		"ptolemy.write_file":      false,
-		"ptolemy.list_directory":  false,
-		"ptolemy.search_codebase": false,
-		"ptolemy.apply_patch":     false,
-		"ptolemy.replace_block":   false,
-		"ptolemy.insert_after":    false,
+		"ptolemy_read_file":       false,
+		"ptolemy_write_file":      false,
+		"ptolemy_list_directory":  false,
+		"ptolemy_search_codebase": false,
+		"ptolemy_apply_patch":     false,
+		"ptolemy_replace_block":   false,
+		"ptolemy_insert_after":    false,
 	}
 
 	for _, tool := range tools {
@@ -38,12 +38,12 @@ func TestTargetedEditToolsRouteToWorkerEndpoints(t *testing.T) {
 	}{
 		{
 			name:     "replace block",
-			tool:     "ptolemy.replace_block",
+			tool:     "ptolemy_replace_block",
 			wantPath: "/file/replace_block",
 		},
 		{
 			name:     "insert after",
-			tool:     "ptolemy.insert_after",
+			tool:     "ptolemy_insert_after",
 			wantPath: "/file/insert_after",
 		},
 	}

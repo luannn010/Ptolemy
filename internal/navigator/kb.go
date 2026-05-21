@@ -38,6 +38,12 @@ type KBUpdateResult struct {
 	CommitSHA      string   `json:"commit_sha,omitempty"`
 }
 
+type KBResetResult struct {
+	Workspace    string   `json:"workspace"`
+	RemovedFiles []string `json:"removed_files"`
+	UpdatedFiles []string `json:"updated_files"`
+}
+
 func buildFileIndex(root string, tree FileTree) map[string]FileIndexEntry {
 	index := map[string]FileIndexEntry{}
 	for _, entry := range tree.Files {
@@ -158,6 +164,9 @@ func writeKnowledgeBase(root string, tree FileTree, fileIndex map[string]FileInd
 	if err := ensureSeedFile(filepath.Join(kbRoot, "CHANGELOG.md"), "# KB Changelog\n"); err != nil {
 		return err
 	}
+	if err := ensureSeedFile(filepath.Join(kbRoot, "TASK_TEMPLATE.md"), seedTaskTemplate(root)); err != nil {
+		return err
+	}
 
 	if err := writeJSONFile(filepath.Join(kbRoot, "FILE_INDEX.json"), fileIndex); err != nil {
 		return err
@@ -169,7 +178,7 @@ func writeKnowledgeBase(root string, tree FileTree, fileIndex map[string]FileInd
 		return err
 	}
 
-	return syncCompatibilityContext(root, projectMapContent)
+	return nil
 }
 
 func UpdateKnowledgeBase(workspace string, changedFiles []string, packID string, completedTaskIDs []string, commitSHA string) (KBUpdateResult, error) {
@@ -328,31 +337,50 @@ func ensureSeedFile(path string, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
-func syncCompatibilityContext(root string, projectMapContent string) error {
-	files := map[string]string{
-		filepath.Join(root, ".ptolemy", "context", "project-map.md"): projectMapContent,
-		filepath.Join(root, ".ptolemy", "context", "architecture.md"): "# Architecture\n\nCanonical architecture notes now live in `.ptolemy/kb/PROJECT_MAP.md` and `.ptolemy/kb/DECISIONS.md`.\n",
-		filepath.Join(root, ".ptolemy", "context", "commands.md"):     "# Commands\n\nSee `.ptolemy/kb/WORKFLOWS.md` and repository docs for current command guidance.\n",
-		filepath.Join(root, ".ptolemy", "context", "env.md"):          "# Environment\n\nSee `.env.example` and `.ptolemy/kb/DECISIONS.md` for environment guidance.\n",
-		filepath.Join(root, ".ptolemy", "context", "conventions.md"):  "# Conventions\n\nSee `.ptolemy/PTOLEMY.md` and `.ptolemy/kb/WORKFLOWS.md` for current conventions.\n",
+func ResetKnowledgeBase(workspace string) (KBResetResult, error) {
+	root, err := cleanWorkspace(workspace)
+	if err != nil {
+		return KBResetResult{}, err
 	}
-	for path, content := range files {
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			return err
-		}
+	if err := ensureLayout(root); err != nil {
+		return KBResetResult{}, err
 	}
-	return nil
+
+	result := KBResetResult{Workspace: root, RemovedFiles: []string{}, UpdatedFiles: []string{}}
+	indexResult, err := IndexWorkspace(root)
+	if err != nil {
+		return KBResetResult{}, err
+	}
+	result.UpdatedFiles = append(result.UpdatedFiles, indexResult.ContextFiles...)
+	result.UpdatedFiles = append(result.UpdatedFiles, indexResult.IndexFiles...)
+	sort.Strings(result.RemovedFiles)
+	sort.Strings(result.UpdatedFiles)
+
+	if err := appendKBDailyLog(root, "kb_reset", "", nil, nil, "rebuilt canonical KB files in place"); err != nil {
+		return KBResetResult{}, err
+	}
+	return result, nil
 }
 
 func appendKBChangelog(root string, packID string, completedTaskIDs []string, changedFiles []string, commitSHA string) error {
-	changelogPath := filepath.Join(root, ".ptolemy", "kb", "CHANGELOG.md")
+	return appendKBDailyLog(root, "kb_update", packID, completedTaskIDs, changedFiles, commitSHA)
+}
+
+func appendKBDailyLog(root string, operation string, packID string, completedTaskIDs []string, changedFiles []string, commitSHA string) error {
+	dayStamp := time.Now().UTC().Format("020106")
+	changelogPath := filepath.Join(root, ".ptolemy", "kb", "changelog", "CHANGELOG-"+dayStamp+".md")
 	var builder strings.Builder
 
 	builder.WriteString("\n## ")
-	builder.WriteString(time.Now().UTC().Format("2006-01-02"))
-	builder.WriteString(" - ")
-	builder.WriteString(packID)
+	builder.WriteString(time.Now().UTC().Format("2006-01-02 15:04:05"))
+	builder.WriteString("\n- Operation: ")
+	builder.WriteString(operation)
 	builder.WriteString("\n")
+	if strings.TrimSpace(packID) != "" {
+		builder.WriteString("- Pack: ")
+		builder.WriteString(packID)
+		builder.WriteString("\n")
+	}
 	if strings.TrimSpace(commitSHA) != "" {
 		builder.WriteString("- Commit: `")
 		builder.WriteString(commitSHA)
@@ -363,13 +391,20 @@ func appendKBChangelog(root string, packID string, completedTaskIDs []string, ch
 		builder.WriteString(strings.Join(completedTaskIDs, ", "))
 		builder.WriteString("\n")
 	}
-	builder.WriteString("- Affected files:\n")
-	for _, file := range changedFiles {
-		builder.WriteString("  - ")
-		builder.WriteString(file)
-		builder.WriteString("\n")
+	if len(changedFiles) > 0 {
+		builder.WriteString("- Affected files:\n")
+		for _, file := range changedFiles {
+			builder.WriteString("  - ")
+			builder.WriteString(file)
+			builder.WriteString("\n")
+		}
+	} else {
+		builder.WriteString("- Affected files: none listed\n")
 	}
 
+	if err := os.MkdirAll(filepath.Dir(changelogPath), 0o755); err != nil {
+		return err
+	}
 	file, err := os.OpenFile(changelogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return err
@@ -482,6 +517,15 @@ func seedWorkflows(root string) string {
 	data, err := os.ReadFile(filepath.Join(root, "WORKFLOWS.md"))
 	if err != nil {
 		return "# Workflows\n\nMirror or summarize repo workflow guidance here when needed.\n"
+	}
+	return string(data)
+}
+
+func seedTaskTemplate(root string) string {
+	path := filepath.Join(root, "docs", "tasks", "templates", "ptolemy-task-template.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "# Ptolemy Task Template\n\nSee `docs/tasks/templates/ptolemy-task-template.md` for the canonical task template.\n"
 	}
 	return string(data)
 }
