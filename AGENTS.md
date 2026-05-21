@@ -16,6 +16,13 @@ This file defines mandatory operating rules for Codex/agents working in this rep
 - Superpowers usage does not replace Ptolemy-first execution; it must be applied within Ptolemy workflow boundaries.
 - If Superpowers capabilities are unavailable in-session, the agent must continue with Ptolemy-native execution and clearly note the fallback.
 
+## GitHub Plugin Rule (Always On for Git Interactions)
+
+- For repository and GitHub interactions, the agent must use the GitHub plugin/app capabilities first.
+- Default GitHub-plugin-first scope includes: pull request creation/updates, PR comments/review handling, issue operations, and GitHub metadata retrieval.
+- If the GitHub plugin path is unavailable or lacks a required capability, the agent may fall back to git/CLI commands and must briefly state the reason for fallback.
+- Branching/commit safety rules in this file still apply when using either plugin or CLI fallback.
+
 ### TDD Convention (Required with Superpowers)
 
 - Follow strict TDD for all non-trivial code changes: `Red -> Green -> Refactor`.
