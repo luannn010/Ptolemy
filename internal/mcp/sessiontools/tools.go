@@ -8,7 +8,7 @@ import (
 
 func Tools() []mcp.Tool {
 	return []mcp.Tool{
-		mcp.NewTool("ptolemy.create_session", "Create a new Ptolemy worker session.", map[string]any{
+		mcp.NewTool("ptolemy_create_session", "Create a new Ptolemy worker session.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"name":        map[string]any{"type": "string"},
@@ -17,18 +17,18 @@ func Tools() []mcp.Tool {
 			},
 			"required": []string{"name", "workspace"},
 		}),
-		mcp.NewTool("ptolemy.list_sessions", "List existing Ptolemy worker sessions.", map[string]any{
+		mcp.NewTool("ptolemy_list_sessions", "List existing Ptolemy worker sessions.", map[string]any{
 			"type":       "object",
 			"properties": map[string]any{},
 		}),
-		mcp.NewTool("ptolemy.get_session", "Get a Ptolemy worker session by ID.", map[string]any{
+		mcp.NewTool("ptolemy_get_session", "Get a Ptolemy worker session by ID.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"session_id": map[string]any{"type": "string"},
 			},
 			"required": []string{"session_id"},
 		}),
-		mcp.NewTool("ptolemy.close_session", "Close a Ptolemy worker session.", map[string]any{
+		mcp.NewTool("ptolemy_close_session", "Close a Ptolemy worker session.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"session_id": map[string]any{"type": "string"},
@@ -40,15 +40,15 @@ func Tools() []mcp.Tool {
 
 func Handle(name string, args map[string]any, client *mcp.WorkerClient) (map[string]any, bool, error) {
 	switch name {
-	case "ptolemy.create_session":
+	case "ptolemy_create_session":
 		body, err := client.Post("/sessions", args)
 		return mcp.TextResult(body), true, err
 
-	case "ptolemy.list_sessions":
+	case "ptolemy_list_sessions":
 		body, err := client.Get("/sessions")
 		return mcp.TextResult(body), true, err
 
-	case "ptolemy.get_session":
+	case "ptolemy_get_session":
 		sessionID, ok := args["session_id"].(string)
 		if !ok || sessionID == "" {
 			return nil, true, fmt.Errorf("session_id is required")
@@ -57,7 +57,7 @@ func Handle(name string, args map[string]any, client *mcp.WorkerClient) (map[str
 		body, err := client.Get("/sessions/" + sessionID)
 		return mcp.TextResult(body), true, err
 
-	case "ptolemy.close_session":
+	case "ptolemy_close_session":
 		sessionID, ok := args["session_id"].(string)
 		if !ok || sessionID == "" {
 			return nil, true, fmt.Errorf("session_id is required")

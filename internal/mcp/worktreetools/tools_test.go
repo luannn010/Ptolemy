@@ -12,9 +12,9 @@ func TestWorktreeToolsRegistered(t *testing.T) {
 	tools := Tools()
 
 	expected := map[string]bool{
-		"ptolemy.create_worktree": false,
-		"ptolemy.list_worktrees":  false,
-		"ptolemy.remove_worktree": false,
+		"ptolemy_create_worktree": false,
+		"ptolemy_list_worktrees":  false,
+		"ptolemy_remove_worktree": false,
 	}
 
 	for _, tool := range tools {

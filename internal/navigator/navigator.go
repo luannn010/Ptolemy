@@ -163,27 +163,7 @@ func ReadContext(workspace string) ([]ContextFile, error) {
 
 	entries, err := os.ReadDir(kbRoot)
 	if err != nil {
-		contextRoot := filepath.Join(root, ".ptolemy", "context")
-		entries, legacyErr := os.ReadDir(contextRoot)
-		if legacyErr != nil {
-			return nil, err
-		}
-		for _, entry := range entries {
-			if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
-				continue
-			}
-			paths = append(paths, filepath.ToSlash(filepath.Join(".ptolemy", "context", entry.Name())))
-		}
-		sort.Strings(paths)
-		files := make([]ContextFile, 0, len(paths))
-		for _, rel := range paths {
-			data, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
-			if readErr != nil {
-				return nil, readErr
-			}
-			files = append(files, ContextFile{Path: rel, Content: string(data)})
-		}
-		return files, nil
+		return nil, err
 	}
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
@@ -337,7 +317,6 @@ func ensureLayout(root string) error {
 	dirs := []string{
 		filepath.Join(root, ".ptolemy"),
 		filepath.Join(root, ".ptolemy", "kb"),
-		filepath.Join(root, ".ptolemy", "context"),
 		filepath.Join(root, ".ptolemy", "index"),
 		filepath.Join(root, ".ptolemy", "sessions"),
 	}

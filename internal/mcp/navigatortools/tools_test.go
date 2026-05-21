@@ -12,13 +12,14 @@ func TestNavigatorToolsRegistered(t *testing.T) {
 	tools := Tools()
 
 	expected := map[string]bool{
-		"ptolemy.index_workspace":     false,
-		"ptolemy.read_context":        false,
-		"ptolemy.start_task_session":  false,
-		"ptolemy.append_session_note": false,
-		"ptolemy.kb_build":            false,
-		"ptolemy.kb_read":             false,
-		"ptolemy.kb_update":           false,
+		"ptolemy_index_workspace":     false,
+		"ptolemy_read_context":        false,
+		"ptolemy_start_task_session":  false,
+		"ptolemy_append_session_note": false,
+		"ptolemy_kb_build":            false,
+		"ptolemy_kb_read":             false,
+		"ptolemy_kb_update":           false,
+		"ptolemy_kb_reset":            false,
 	}
 
 	for _, tool := range tools {

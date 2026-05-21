@@ -95,6 +95,24 @@ func (h *NavigatorHandler) UpdateKnowledgeBase(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *NavigatorHandler) ResetKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	var req navigatorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	workspace, ok := h.workspaceForRequest(w, r, req)
+	if !ok {
+		return
+	}
+	result, err := navigator.ResetKnowledgeBase(workspace)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *NavigatorHandler) StartTaskSession(w http.ResponseWriter, r *http.Request) {
 	var req navigatorRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
