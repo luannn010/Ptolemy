@@ -40,7 +40,7 @@ func TestMCPServerBootAndListTools(t *testing.T) {
 		t.Fatalf("expected execute tool in MCP, got %s", output.String())
 	}
 
-	if !strings.Contains(output.String(), "ptolemy_git_status") {
+	if !strings.Contains(output.String(), "ptolemy_git_generate_pr_body") {
 		t.Fatalf("expected git tool in MCP, got %s", output.String())
 	}
 

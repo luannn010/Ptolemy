@@ -95,6 +95,38 @@ If no parent branch is approved:
 - Prefer Go-native implementation for permanent capabilities.
 - Use scripts only for narrow bootstrap/migration steps.
 
+## Planning Rules
+
+When generating a plan:
+
+- ALWAYS follow the structure defined in:
+  `.ptolemy/context/PLAN_TEMPLATE.md`
+- DO NOT invent a new format.
+- DO NOT skip any section.
+
+### Step Requirements
+
+Each step MUST include:
+- files
+- actions
+- validation
+
+### Constraints
+
+- Must map to real files.
+- Must be testable.
+
+### Enforcement
+
+If a generated plan does not follow the template:
+- REWRITE the plan.
+- DO NOT proceed to implementation.
+
+### Behavior
+
+- For medium tasks -> generate plan using template.
+- For large tasks -> plan first, then convert to task pack.
+
 ## PR Rules
 
 - Create PR only when requested by workflow or user, or when operating on a user-approved feature/task branch.
