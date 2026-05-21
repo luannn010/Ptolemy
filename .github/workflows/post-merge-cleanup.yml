@@ -1,0 +1,44 @@
+name: Post-Merge Cleanup
+
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: write
+
+jobs:
+  delete-merged-branch:
+    name: Delete Merged Branch (Remote)
+    if: >
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref != 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete remote branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const ref = context.payload.pull_request.head.ref;
+            try {
+              await github.rest.git.deleteRef({
+                owner,
+                repo,
+                ref: `heads/${ref}`
+              });
+              core.info(`Deleted remote branch: ${ref}`);
+            } catch (error) {
+              core.warning(`Could not delete remote branch ${ref}: ${error.message}`);
+            }
+
+      - name: Local cleanup reminder
+        run: |
+          echo "Remote branch deleted (when permitted)."
+          echo "Local branches/worktrees cannot be deleted from GitHub Actions."
+          echo "Run local cleanup manually, e.g.:"
+          echo "  git branch -d <branch>"
+          echo "  git worktree remove <path>"
