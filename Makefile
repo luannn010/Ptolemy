@@ -6,11 +6,10 @@ run:
 
 build:
 	mkdir -p $(BIN_DIR)
-	go build -o $(BIN_DIR)/$(APP_NAME) ./cmd/workerd
-	
-build-mcp:
-	mkdir -p bin
-	go build -o bin/ptolemy-mcp ./cmd/ptolemy-mcp
+	go build -o $(BIN_DIR)/workerd ./cmd/workerd
+	go build -o $(BIN_DIR)/ptolemy ./cmd/ptolemy
+	go build -o $(BIN_DIR)/ptolemy-mcp ./cmd/ptolemy-mcp
+	go build -o $(BIN_DIR)/ptolemy-task-runner ./cmd/ptolemy-task-runner
 
 test:
 	go test -p 1 ./...
