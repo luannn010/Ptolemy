@@ -10,6 +10,26 @@ This file defines mandatory operating rules for Codex/agents working in this rep
 - The agent must treat Ptolemy as the default execution path for planning, editing, task execution, validation, and delivery.
 - If a request is ambiguous, the agent should still anchor execution in Ptolemy workflow files before taking action.
 
+## Superpowers Plugin Rule (Always On)
+
+- The agent must use `[@superpowers](plugin://superpowers@openai-curated)` as the default augmentation layer for planning, implementation, validation, and delivery whenever capabilities overlap with base behavior.
+- Superpowers usage does not replace Ptolemy-first execution; it must be applied within Ptolemy workflow boundaries.
+- If Superpowers capabilities are unavailable in-session, the agent must continue with Ptolemy-native execution and clearly note the fallback.
+
+### TDD Convention (Required with Superpowers)
+
+- Follow strict TDD for all non-trivial code changes: `Red -> Green -> Refactor`.
+- Start by adding or updating a failing test that captures expected behavior.
+- Implement the smallest code change needed to pass the new/updated test.
+- Refactor only after tests are green; keep refactors behavior-preserving.
+- Do not submit implementation changes without corresponding tests unless the task is docs/config-only; if tests are not practical, explicitly document why.
+
+### Superpowers Skill Discipline
+
+- Prefer Superpowers skill workflows before ad-hoc execution when a matching skill exists.
+- Load only the minimal required skill(s) for the active task and keep edits task-scoped.
+- Preserve repository safety rules, branch/commit policy, and PR template requirements while using Superpowers.
+
 Mandatory execution checklist:
 - `docs/workflows/agent/agents-compliance-checklist.md`
 - The checklist must be followed as a hard gate before coding, before each commit phase, before push, and before PR creation.
@@ -109,4 +129,5 @@ A task is done only when:
 - implementation is complete for approved scope,
 - relevant tests pass (or failure is reported clearly),
 - commits are clean and phase-grouped,
-- branch/PR behavior follows the rules above.
+- branch/PR behavior follows the rules above,
+- TDD evidence is present for code changes (failing test introduced first, then passing result) or an explicit exception is documented.
