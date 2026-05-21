@@ -31,3 +31,5 @@ state/*.db-wal
 tmp-kb-reset.json
 .tmp/*
 /.worktrees/
+coverage
+coverage.out
