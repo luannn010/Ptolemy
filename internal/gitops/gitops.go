@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -181,7 +182,7 @@ func (g *GitOps) Push(ctx context.Context, remote string, branch string) Result 
 		remote = "origin"
 	}
 
-	return g.run(ctx, fmt.Sprintf("git push %s %s", shellQuote(remote), shellQuote(branch)))
+	return g.runArgs(ctx, "git", "push", remote, branch)
 }
 
 func (g *GitOps) CreatePullRequest(ctx context.Context, base string, head string, title string, bodyFile string) Result {
@@ -201,16 +202,10 @@ func (g *GitOps) CreatePullRequest(ctx context.Context, base string, head string
 		title = head
 	}
 
-	command := fmt.Sprintf(
-		"gh pr create --base %s --head %s --title %s",
-		shellQuote(base),
-		shellQuote(head),
-		shellQuote(title),
-	)
 	if strings.TrimSpace(bodyFile) != "" {
-		command += fmt.Sprintf(" --body-file %s", shellQuote(bodyFile))
+		return g.runArgs(ctx, "gh", "pr", "create", "--base", base, "--head", head, "--title", title, "--body-file", bodyFile)
 	}
-	return g.run(ctx, command)
+	return g.runArgs(ctx, "gh", "pr", "create", "--base", base, "--head", head, "--title", title)
 }
 
 func (g *GitOps) run(ctx context.Context, command string) Result {
@@ -257,6 +252,47 @@ func (g *GitOps) run(ctx context.Context, command string) Result {
 	return result
 }
 
+func (g *GitOps) runArgs(ctx context.Context, name string, args ...string) Result {
+	start := time.Now()
+
+	runCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(runCtx, name, args...)
+	cmd.Dir = g.RepoPath
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	err := cmd.Run()
+
+	result := Result{
+		Command:    strings.TrimSpace(name + " " + strings.Join(args, " ")),
+		RepoPath:   g.RepoPath,
+		ExitCode:   0,
+		Output:     out.String(),
+		DurationMS: time.Since(start).Milliseconds(),
+		Success:    true,
+	}
+	if runCtx.Err() == context.DeadlineExceeded {
+		result.ExitCode = 124
+		result.Output += "\ncommand timed out"
+		result.Success = false
+		return result
+	}
+	if err != nil {
+		result.Success = false
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			result.ExitCode = 1
+			result.Output += err.Error()
+		}
+	}
+	return result
+}
+
 func isConventionalCommit(message string) bool {
 	pattern := `^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\([a-zA-Z0-9._-]+\))?: .+`
 	ok, _ := regexp.MatchString(pattern, message)
@@ -265,6 +301,13 @@ func isConventionalCommit(message string) bool {
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func shellQuotePath(value string) string {
+	if runtime.GOOS != "windows" {
+		return shellQuote(value)
+	}
+	return shellQuote(strings.ReplaceAll(value, "\\", "/"))
 }
 func truncateOutput(output string, max int) (string, bool) {
 	if len(output) <= max {

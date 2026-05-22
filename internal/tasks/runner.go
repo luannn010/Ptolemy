@@ -93,6 +93,9 @@ func (r *Runner) RunValidation(ctx context.Context, task Task) TaskRunResult {
 
 	for _, command := range task.Validation {
 		cmd := shellcmd.Command(ctx, command)
+		if bashPath, lookErr := exec.LookPath("bash"); lookErr == nil {
+			cmd = shellcmd.CommandForProgram(ctx, "", bashPath, command)
+		}
 		cmd.Dir = workspace
 
 		var stdout bytes.Buffer

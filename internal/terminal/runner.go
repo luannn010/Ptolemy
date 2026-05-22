@@ -34,6 +34,9 @@ func (r *Runner) Run(ctx context.Context, command string, cwd string, timeoutSec
 	defer cancel()
 
 	cmd := shellcmd.Command(runCtx, command)
+	if bashPath, err := exec.LookPath("bash"); err == nil {
+		cmd = shellcmd.CommandForProgram(runCtx, "", bashPath, command)
+	}
 
 	if cwd != "" {
 		cmd.Dir = cwd
