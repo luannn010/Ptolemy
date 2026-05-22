@@ -30,11 +30,16 @@ Before any implementation task:
 When asked to implement a feature, the agent must ask:
 - "Do you want me to create a new branch for this feature?"
 
-Before writing implementation code for a new feature, the agent MUST use the `@superpowers` TDD strategy workflow:
-- use the Superpowers TDD skill/process first,
-- write/define tests before implementation,
-- implement only until tests pass,
-- refactor while keeping tests green.
+Before writing implementation code for a new feature, the agent MUST follow the Superpowers feature workflow sequence:
+1. `superpowers:brainstorming`
+2. `superpowers:writing-plans`
+3. `superpowers:test-driven-development`
+4. `superpowers:verification-before-completion`
+
+TDD policy for new features:
+- define or update tests before implementation code,
+- implement only the smallest change needed to pass tests,
+- refactor only while keeping tests green.
 
 Then apply one of these paths:
 
@@ -80,6 +85,10 @@ If yes, enforce this workflow:
 If no parent branch is approved:
 - stop and ask user how to proceed before implementing the taskpack.
 
+Superpowers policy for taskpacks and parallel work:
+- use `superpowers:dispatching-parallel-agents` only for independent tasks with non-overlapping file ownership.
+- use `superpowers:subagent-driven-development` when executing a multi-task implementation plan.
+
 ## Task Isolation Rules
 
 - Work on one `task_id` at a time unless taskpack workflow explicitly defines parallel child tasks.
@@ -94,6 +103,7 @@ If no parent branch is approved:
 - Never delete files unless task instructions explicitly require deletion.
 - Do not auto-resolve merge conflicts; stop and report.
 - If a command fails repeatedly, inspect logs/artifacts before retrying.
+- For debugging/fix work, run `superpowers:systematic-debugging` before implementing fixes.
 
 ## Script Execution Rules
 
@@ -108,11 +118,13 @@ If no parent branch is approved:
 - Agent must fill all required template sections before opening the PR.
 - If PR tooling is unavailable, write fallback PR instructions under `.state/pr/`.
 - Do not auto-merge PRs unless explicitly requested.
+- Before opening a PR, run `superpowers:requesting-code-review`.
+- When review feedback is received, process it with `superpowers:receiving-code-review` before applying changes.
 
 ## GitHub Tooling Policy
 
-- For GitHub operations, the agent MUST use the GitHub plugin/app workflows available in this environment.
-- Do NOT use `gh` CLI for GitHub operations.
+- For all GitHub operations (including PR creation, PR updates, review triage, checks, and comments), the agent MUST use the GitHub plugin/app workflows available in this environment.
+- Do NOT use `gh` CLI for any GitHub operation.
 - If GitHub plugin tooling is unavailable for a required action, stop and report the limitation to the user before proceeding.
 
 ## Minimal Done Criteria
