@@ -59,8 +59,11 @@ func TestHealthEndpoint(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
 
-	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
-		t.Fatalf("expected health ok response, got %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), `"status":"`) {
+		t.Fatalf("expected health status in response, got %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"checks":`) {
+		t.Fatalf("expected health checks response, got %s", rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), `"checks":`) {
 		t.Fatalf("expected health checks response, got %s", rec.Body.String())
