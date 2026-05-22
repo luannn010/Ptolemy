@@ -8,6 +8,7 @@ Use this checklist before implementation, before each commit phase, before push,
 - [ ] Load only workflow file(s) needed for this task.
 - [ ] Confirm task scope and allowed files.
 - [ ] Confirm change is small/reversible/task-scoped.
+- [ ] If implementing a new feature, planned Superpowers sequence: `brainstorming` -> `writing-plans` -> `test-driven-development` -> `verification-before-completion`.
 
 ## 2) Branching Gate
 
@@ -16,6 +17,7 @@ Use this checklist before implementation, before each commit phase, before push,
 - [ ] Asked user: "Do you want me to create a new branch for this feature?"
 - [ ] If yes, created `ptolemy/<task-slug>` (unless task metadata says otherwise).
 - [ ] If no, confirmed implementation will continue on current branch.
+- [ ] For new features, TDD cycle applied: tests first -> minimal implementation -> green tests -> refactor.
 
 ### Taskpack work
 
@@ -27,6 +29,7 @@ Use this checklist before implementation, before each commit phase, before push,
   - [ ] Parent branch validations/tests run after merges.
   - [ ] Single PR planned from parent -> original branch.
 - [ ] If no parent branch approved, stop and ask user how to proceed.
+- [ ] If parallelized, used `superpowers:dispatching-parallel-agents` only for independent, non-overlapping tasks.
 
 ## 3) Task Isolation Gate
 
@@ -42,6 +45,7 @@ Use this checklist before implementation, before each commit phase, before push,
 - [ ] No file deletion unless explicitly required by task instructions.
 - [ ] No auto-resolve merge conflicts.
 - [ ] Repeated command failures handled by checking logs/artifacts before retry.
+- [ ] For debugging/fixes, `superpowers:systematic-debugging` run before applying fixes.
 
 ## 5) Script Execution Gate
 
@@ -73,6 +77,9 @@ Use this checklist before implementation, before each commit phase, before push,
 - [ ] All template sections completed (or clearly marked N/A).
 - [ ] If PR tooling unavailable, fallback instructions written under `.state/pr/`.
 - [ ] No auto-merge unless explicitly requested.
+- [ ] `superpowers:requesting-code-review` run before opening PR.
+- [ ] Review feedback handled with `superpowers:receiving-code-review`.
+- [ ] GitHub operations performed via GitHub plugin/app workflows (no `gh` CLI).
 
 ## 9) Done Gate
 
@@ -82,4 +89,3 @@ Task is done only when all are true:
 - [ ] Relevant tests passed (or failure/limits clearly reported).
 - [ ] Commits are clean and phase-grouped.
 - [ ] Branch/PR behavior follows all AGENTS rules.
-
