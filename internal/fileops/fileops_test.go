@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -196,6 +197,10 @@ func TestTargetedEditsRejectPathEscape(t *testing.T) {
 }
 
 func TestSearchUsesRipgrepFallbackPath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fallback executable script test is unix-only")
+	}
+
 	originalLookPath := lookPath
 	originalFallbackPaths := ripgrepFallbackPaths
 	t.Cleanup(func() {
