@@ -254,6 +254,16 @@ func (g *GitOps) run(ctx context.Context, command string) Result {
 
 func (g *GitOps) runArgs(ctx context.Context, name string, args ...string) Result {
 	start := time.Now()
+	if !isAllowedExecutable(name) {
+		return Result{
+			Command:    strings.TrimSpace(name + " " + strings.Join(args, " ")),
+			RepoPath:   g.RepoPath,
+			ExitCode:   1,
+			Output:     fmt.Sprintf("disallowed executable: %s", name),
+			DurationMS: time.Since(start).Milliseconds(),
+			Success:    false,
+		}
+	}
 
 	runCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
@@ -291,6 +301,15 @@ func (g *GitOps) runArgs(ctx context.Context, name string, args ...string) Resul
 		}
 	}
 	return result
+}
+
+func isAllowedExecutable(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "git", "gh":
+		return true
+	default:
+		return false
+	}
 }
 
 func isConventionalCommit(message string) bool {
