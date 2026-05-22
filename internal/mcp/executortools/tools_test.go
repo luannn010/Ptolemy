@@ -1,6 +1,12 @@
 package executortools
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/luannn010/ptolemy/internal/mcp"
+)
 
 func TestExecutorToolsRegistered(t *testing.T) {
 	tools := Tools()
@@ -46,5 +52,39 @@ func TestExecutorToolsRegistered(t *testing.T) {
 
 	if len(expectedRequired) != 0 {
 		t.Fatalf("missing required fields: %v", expectedRequired)
+	}
+}
+
+func TestHandleRoutesExecuteRequest(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/execute" {
+			t.Fatalf("unexpected route %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	got, handled, err := Handle("ptolemy_execute", map[string]any{"session_id": "s", "command": "echo hi"}, mcp.NewWorkerClient(srv.URL))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !handled {
+		t.Fatal("expected handled=true")
+	}
+	if got["content"] == nil {
+		t.Fatalf("expected text result, got %#v", got)
+	}
+}
+
+func TestHandleUnknownTool(t *testing.T) {
+	got, handled, err := Handle("unknown", map[string]any{}, mcp.NewWorkerClient("http://example.com"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if handled {
+		t.Fatal("expected handled=false")
+	}
+	if got != nil {
+		t.Fatalf("expected nil result, got %#v", got)
 	}
 }

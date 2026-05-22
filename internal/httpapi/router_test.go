@@ -65,6 +65,9 @@ func TestHealthEndpoint(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"checks":`) {
 		t.Fatalf("expected health checks response, got %s", rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), `"checks":`) {
+		t.Fatalf("expected health checks response, got %s", rec.Body.String())
+	}
 }
 
 func TestCreateSessionEndpoint(t *testing.T) {

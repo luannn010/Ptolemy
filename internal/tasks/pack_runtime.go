@@ -445,6 +445,13 @@ func convergePackBranches(ctx context.Context, workspace string, artifactDir str
 	if !add.Success {
 		return integrationBranch, add.Worktree, "", fmt.Errorf("create integration worktree: %s", strings.TrimSpace(add.Output))
 	}
+	if info, statErr := os.Stat(add.Worktree); statErr != nil || !info.IsDir() {
+		fallbackPath, fallbackErr := createIntegrationClone(ctx, resolvedWorkspace, filepath.Join(artifactDir, "worktrees", integrationName+"-clone"), integrationBranch)
+		if fallbackErr != nil {
+			return integrationBranch, add.Worktree, "", fmt.Errorf("create integration worktree: %s", strings.TrimSpace(add.Output))
+		}
+		add.Worktree = fallbackPath
+	}
 
 	worktreeGit := gitops.New(add.Worktree)
 	var builder strings.Builder
@@ -458,6 +465,13 @@ func convergePackBranches(ctx context.Context, workspace string, artifactDir str
 			continue
 		}
 		result := worktreeGit.MergeNoFF(ctx, branch)
+		if !result.Success {
+			remoteBranch := "origin/" + branch
+			retry := worktreeGit.MergeNoFF(ctx, remoteBranch)
+			if retry.Success {
+				result = retry
+			}
+		}
 		builder.WriteString(fmt.Sprintf("\n## merge %s\ncommand: %s\nexit_code: %d\noutput:\n%s", branch, result.Command, result.ExitCode, result.Output))
 		if !result.Success {
 			logPath := filepath.Join(artifactDir, "integration", "merge.log")
@@ -473,6 +487,22 @@ func convergePackBranches(ctx context.Context, workspace string, artifactDir str
 	}
 
 	return integrationBranch, add.Worktree, logPath, nil
+}
+
+func createIntegrationClone(ctx context.Context, sourceRepo string, clonePath string, branch string) (string, error) {
+	_ = os.RemoveAll(clonePath)
+	if err := os.MkdirAll(filepath.Dir(clonePath), 0o755); err != nil {
+		return "", err
+	}
+	clone := exec.CommandContext(ctx, "git", "clone", sourceRepo, clonePath)
+	if out, err := clone.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("git clone: %w (%s)", err, strings.TrimSpace(string(out)))
+	}
+	checkout := exec.CommandContext(ctx, "git", "-C", clonePath, "checkout", branch)
+	if out, err := checkout.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("git checkout %s: %w (%s)", branch, err, strings.TrimSpace(string(out)))
+	}
+	return clonePath, nil
 }
 
 func pushIntegrationBranch(ctx context.Context, worktreePath string, branch string, artifactDir string) (string, error) {

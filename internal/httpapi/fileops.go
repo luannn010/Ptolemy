@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/luannn010/ptolemy/internal/fileops"
@@ -40,8 +39,8 @@ type fileRequest struct {
 
 func (h *FileHandler) Read(w http.ResponseWriter, r *http.Request) {
 	var req fileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 
@@ -70,8 +69,8 @@ func (h *FileHandler) Read(w http.ResponseWriter, r *http.Request) {
 
 func (h *FileHandler) Write(w http.ResponseWriter, r *http.Request) {
 	var req fileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 
@@ -93,8 +92,8 @@ func (h *FileHandler) Write(w http.ResponseWriter, r *http.Request) {
 
 func (h *FileHandler) List(w http.ResponseWriter, r *http.Request) {
 	var req fileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 
@@ -117,8 +116,8 @@ func (h *FileHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *FileHandler) Search(w http.ResponseWriter, r *http.Request) {
 	var req fileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 
@@ -141,8 +140,8 @@ func (h *FileHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 func (h *FileHandler) Apply(w http.ResponseWriter, r *http.Request) {
 	var req fileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 
@@ -164,8 +163,8 @@ func (h *FileHandler) Apply(w http.ResponseWriter, r *http.Request) {
 
 func (h *FileHandler) ReplaceBlock(w http.ResponseWriter, r *http.Request) {
 	var req fileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 
@@ -187,8 +186,8 @@ func (h *FileHandler) ReplaceBlock(w http.ResponseWriter, r *http.Request) {
 
 func (h *FileHandler) InsertAfter(w http.ResponseWriter, r *http.Request) {
 	var req fileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 

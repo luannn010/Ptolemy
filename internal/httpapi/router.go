@@ -214,14 +214,30 @@ func checkRuntimeCommands(tool string) runtimeHealthCheck {
 		Commands: map[string]cmdHealth{},
 	}
 	for _, name := range required {
-		path, err := exec.LookPath(name)
+		path, err := resolveCommandPath(name)
 		if err != nil {
 			result.Commands[name] = cmdHealth{Available: false, Error: err.Error()}
-			continue
+		} else {
+			result.Commands[name] = cmdHealth{Available: true, Path: path}
 		}
-		result.Commands[name] = cmdHealth{Available: true, Path: path}
 	}
 	return result
+}
+
+func resolveCommandPath(name string) (string, error) {
+	candidates := []string{name}
+	if name == "python" {
+		candidates = append(candidates, "python3")
+	}
+	var lastErr error
+	for _, candidate := range candidates {
+		path, err := exec.LookPath(candidate)
+		if err == nil {
+			return path, nil
+		}
+		lastErr = err
+	}
+	return "", lastErr
 }
 
 func commandsForTool(tool string) []string {

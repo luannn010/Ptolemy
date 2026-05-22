@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -44,6 +45,7 @@ func (m *Manager) Create(ctx context.Context, name string, branch string) Result
 	}
 
 	worktreePath := filepath.Join(m.WorktreeDir, sanitize(name))
+	commandPath := m.commandPath(worktreePath)
 
 	if err := os.MkdirAll(m.WorktreeDir, 0o755); err != nil {
 		return fail("mkdir worktree dir", m.RepoPath, worktreePath, branch, err.Error())
@@ -52,7 +54,7 @@ func (m *Manager) Create(ctx context.Context, name string, branch string) Result
 	cmd := fmt.Sprintf(
 		"git worktree add -b %s %s",
 		shellQuote(branch),
-		shellQuote(worktreePath),
+		shellQuotePath(commandPath),
 	)
 
 	result := m.run(ctx, cmd)
@@ -71,6 +73,7 @@ func (m *Manager) AddExisting(ctx context.Context, name string, branch string) R
 	}
 
 	worktreePath := filepath.Join(m.WorktreeDir, sanitize(name))
+	commandPath := m.commandPath(worktreePath)
 
 	if err := os.MkdirAll(m.WorktreeDir, 0o755); err != nil {
 		return fail("mkdir worktree dir", m.RepoPath, worktreePath, branch, err.Error())
@@ -78,7 +81,7 @@ func (m *Manager) AddExisting(ctx context.Context, name string, branch string) R
 
 	cmd := fmt.Sprintf(
 		"git worktree add %s %s",
-		shellQuote(worktreePath),
+		shellQuotePath(commandPath),
 		shellQuote(branch),
 	)
 
@@ -95,8 +98,9 @@ func (m *Manager) Remove(ctx context.Context, name string) Result {
 	}
 
 	worktreePath := filepath.Join(m.WorktreeDir, sanitize(name))
+	commandPath := m.commandPath(worktreePath)
 
-	cmd := fmt.Sprintf("git worktree remove --force %s", shellQuote(worktreePath))
+	cmd := fmt.Sprintf("git worktree remove --force %s", shellQuotePath(commandPath))
 
 	result := m.run(ctx, cmd)
 	result.Worktree = worktreePath
@@ -174,4 +178,22 @@ func sanitize(value string) string {
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func shellQuotePath(value string) string {
+	if runtime.GOOS != "windows" {
+		return shellQuote(value)
+	}
+	return shellQuote(strings.ReplaceAll(value, "\\", "/"))
+}
+
+func (m *Manager) commandPath(absPath string) string {
+	if runtime.GOOS != "windows" {
+		return absPath
+	}
+	rel, err := filepath.Rel(m.RepoPath, absPath)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		return rel
+	}
+	return absPath
 }

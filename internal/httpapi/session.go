@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -32,7 +31,7 @@ func (h *SessionHandler) Routes() chi.Router {
 func (h *SessionHandler) createSession(w http.ResponseWriter, r *http.Request) {
 	var req session.CreateSessionRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "invalid JSON body",
 		})
