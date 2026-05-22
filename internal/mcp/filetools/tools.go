@@ -81,27 +81,6 @@ func Handle(name string, args map[string]any, client *mcp.WorkerClient) (map[str
 
 func workerPath(name string) (string, bool) {
 	switch name {
-	case "ptolemy.read_file":
-		return "/file/read", true
-	case "ptolemy.write_file":
-		return "/file/write", true
-	case "ptolemy.list_directory":
-		return "/file/list", true
-	case "ptolemy.search_codebase":
-		return "/file/search", true
-	case "ptolemy.apply_patch":
-		return "/file/apply", true
-	case "ptolemy.replace_block":
-		return "/file/replace_block", true
-	case "ptolemy.insert_after":
-		return "/file/insert_after", true
-	default:
-		return "", false
-	}
-}
-
-func workerPath(name string) (string, bool) {
-	switch name {
 	case "ptolemy_read_file", "ptolemy.read_file":
 		return "/file/read", true
 	case "ptolemy_write_file", "ptolemy.write_file":

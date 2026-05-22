@@ -20,16 +20,16 @@ import (
 	"github.com/luannn010/ptolemy/internal/worker"
 )
 
-const (
-	inboxDir           = "docs/tasks/inbox"
-	activeDir          = "docs/tasks/active"
-	processDir         = "docs/tasks/process"
-	splitDir           = "docs/tasks/split"
-	doneDir            = "docs/tasks/done"
-	failedDir          = "docs/tasks/failed"
-	archiveDir         = "docs/tasks/archive"
-	taskRunnerStateDir = ".state/task-runner"
-	notificationDir    = ".state/task-runner/notifications"
+var (
+	inboxDir           = filepath.Join("docs", "tasks", "inbox")
+	activeDir          = filepath.Join("docs", "tasks", "active")
+	processDir         = filepath.Join("docs", "tasks", "process")
+	splitDir           = filepath.Join("docs", "tasks", "split")
+	doneDir            = filepath.Join("docs", "tasks", "done")
+	failedDir          = filepath.Join("docs", "tasks", "failed")
+	archiveDir         = filepath.Join("docs", "tasks", "archive")
+	taskRunnerStateDir = filepath.Join(".state", "task-runner")
+	notificationDir    = filepath.Join(".state", "task-runner", "notifications")
 )
 
 type taskClass string
@@ -248,7 +248,7 @@ func run(out io.Writer) error {
 
 	logPath := taskLogPath(processPath)
 
-	fmt.Fprintf(out, "Selected task: %s\n", processPath)
+	fmt.Fprintf(out, "Selected task: %s\n", filepath.ToSlash(processPath))
 	fmt.Fprintf(out, "Queue: %s\n", task.Queue)
 	fmt.Fprintf(out, "Classification: %s\n", task.Classification)
 	fmt.Fprintf(out, "Max steps: %d\n", task.MaxSteps)
@@ -259,7 +259,7 @@ func run(out io.Writer) error {
 		return fmt.Errorf("resolve workspace: %w", err)
 	}
 
-	cmdOutput, runErr := runAgent(workspace, processPath, task.MaxSteps)
+	cmdOutput, runErr := runAgent(workspace, filepath.ToSlash(processPath), task.MaxSteps)
 
 	logContent := cmdOutput
 	if runErr != nil {
@@ -283,14 +283,14 @@ func run(out io.Writer) error {
 	}
 
 	fmt.Fprintf(out, "Result: %s\n", result)
-	fmt.Fprintf(out, "Log: %s\n", logPath)
+	fmt.Fprintf(out, "Log: %s\n", filepath.ToSlash(logPath))
 
 	if runErr != nil {
 		notificationPath, err := writeFailureNotification(finalPath, logPath, runErr)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "Notification: %s\n", notificationPath)
+		fmt.Fprintf(out, "Notification: %s\n", filepath.ToSlash(notificationPath))
 		return nil
 	}
 
@@ -298,7 +298,7 @@ func run(out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Archive: %s\n", archivePath)
+	fmt.Fprintf(out, "Archive: %s\n", filepath.ToSlash(archivePath))
 	return nil
 }
 

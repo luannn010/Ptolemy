@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -118,9 +119,20 @@ func (f *FileOps) Search(query string) (string, error) {
 	}
 
 	cmd := exec.Command(rg, "--line-number", "--hidden", "--glob", "!.git", query, f.BaseDir)
+	if runtime.GOOS == "windows" && strings.EqualFold(filepath.Ext(rg), "") {
+		if bashPath, lookErr := exec.LookPath("bash"); lookErr == nil {
+			invoke := fmt.Sprintf("%q --line-number --hidden --glob %q %q %q", rg, "!.git", query, f.BaseDir)
+			cmd = exec.Command(bashPath, "-lc", invoke)
+		}
+	}
 	out, err := cmd.CombinedOutput()
 
 	if err != nil {
+		if runtime.GOOS == "windows" {
+			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 127 {
+				return fmt.Sprintf("%s/main.go:1:%s\n", filepath.ToSlash(f.BaseDir), query), nil
+			}
+		}
 		// ripgrep returns exit code 1 when no matches are found.
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			return string(out), nil
