@@ -23,9 +23,13 @@ Thumbs.db
 /docs/tasks/packs/
 /docs/plans/*
 /deploy/*
+.env
 
 .ptolemy/sessions/
 state/*.db-shm
 state/*.db-wal
 tmp-kb-reset.json
 .tmp/*
+/.worktrees/
+coverage
+coverage.out

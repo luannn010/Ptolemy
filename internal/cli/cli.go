@@ -120,11 +120,11 @@ func runHealth(ctx context.Context, stdout io.Writer, getenv func(string) string
 		fmt.Fprintf(stdout, "service: %s\n", result.Service)
 	}
 	fmt.Fprintf(stdout, "url: %s\n", baseURL)
-	fmt.Fprintf(stdout, "mcp: %t\n", result.Checks.MCP.Reachable)
-	for name, cmd := range result.Checks.Runtime.Commands {
-		fmt.Fprintf(stdout, "runtime_%s: %t\n", name, cmd.Available)
-	}
-	if !strings.EqualFold(cleanStatus(result.Status), "ok") {
+	if strings.TrimSpace(strings.ToLower(result.Status)) != "ok" {
+		fmt.Fprintf(stdout, "mcp: %t\n", result.Checks.MCP.Reachable)
+		for name, check := range result.Checks.Runtime.Commands {
+			fmt.Fprintf(stdout, "runtime_%s: %t\n", name, check.Available)
+		}
 		return fmt.Errorf("worker health is %s", cleanStatus(result.Status))
 	}
 	return nil

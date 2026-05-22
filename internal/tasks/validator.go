@@ -134,7 +134,7 @@ func validateAllowedFile(taskID string, allowed string) []ValidationError {
 		}}
 	}
 
-	if filepath.IsAbs(trimmed) {
+	if filepath.IsAbs(trimmed) || strings.HasPrefix(trimmed, "/") {
 		errs = append(errs, ValidationError{
 			TaskID: taskID,
 			Field:  "allowed_files",

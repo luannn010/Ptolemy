@@ -10,33 +10,6 @@ This file defines mandatory operating rules for Codex/agents working in this rep
 - The agent must treat Ptolemy as the default execution path for planning, editing, task execution, validation, and delivery.
 - If a request is ambiguous, the agent should still anchor execution in Ptolemy workflow files before taking action.
 
-## Superpowers Plugin Rule (Always On)
-
-- The agent must use `[@superpowers](plugin://superpowers@openai-curated)` as the default augmentation layer for planning, implementation, validation, and delivery whenever capabilities overlap with base behavior.
-- Superpowers usage does not replace Ptolemy-first execution; it must be applied within Ptolemy workflow boundaries.
-- If Superpowers capabilities are unavailable in-session, the agent must continue with Ptolemy-native execution and clearly note the fallback.
-
-## GitHub Plugin Rule (Always On for Git Interactions)
-
-- For repository and GitHub interactions, the agent must use the GitHub plugin/app capabilities first.
-- Default GitHub-plugin-first scope includes: pull request creation/updates, PR comments/review handling, issue operations, and GitHub metadata retrieval.
-- If the GitHub plugin path is unavailable or lacks a required capability, the agent may fall back to git/CLI commands and must briefly state the reason for fallback.
-- Branching/commit safety rules in this file still apply when using either plugin or CLI fallback.
-
-### TDD Convention (Required with Superpowers)
-
-- Follow strict TDD for all non-trivial code changes: `Red -> Green -> Refactor`.
-- Start by adding or updating a failing test that captures expected behavior.
-- Implement the smallest code change needed to pass the new/updated test.
-- Refactor only after tests are green; keep refactors behavior-preserving.
-- Do not submit implementation changes without corresponding tests unless the task is docs/config-only; if tests are not practical, explicitly document why.
-
-### Superpowers Skill Discipline
-
-- Prefer Superpowers skill workflows before ad-hoc execution when a matching skill exists.
-- Load only the minimal required skill(s) for the active task and keep edits task-scoped.
-- Preserve repository safety rules, branch/commit policy, and PR template requirements while using Superpowers.
-
 Mandatory execution checklist:
 - `docs/workflows/agent/agents-compliance-checklist.md`
 - The checklist must be followed as a hard gate before coding, before each commit phase, before push, and before PR creation.
@@ -56,6 +29,17 @@ Before any implementation task:
 
 When asked to implement a feature, the agent must ask:
 - "Do you want me to create a new branch for this feature?"
+
+Before writing implementation code for a new feature, the agent MUST follow the Superpowers feature workflow sequence:
+1. `superpowers:brainstorming`
+2. `superpowers:writing-plans`
+3. `superpowers:test-driven-development`
+4. `superpowers:verification-before-completion`
+
+TDD policy for new features:
+- define or update tests before implementation code,
+- implement only the smallest change needed to pass tests,
+- refactor only while keeping tests green.
 
 Then apply one of these paths:
 
@@ -101,6 +85,10 @@ If yes, enforce this workflow:
 If no parent branch is approved:
 - stop and ask user how to proceed before implementing the taskpack.
 
+Superpowers policy for taskpacks and parallel work:
+- use `superpowers:dispatching-parallel-agents` only for independent tasks with non-overlapping file ownership.
+- use `superpowers:subagent-driven-development` when executing a multi-task implementation plan.
+
 ## Task Isolation Rules
 
 - Work on one `task_id` at a time unless taskpack workflow explicitly defines parallel child tasks.
@@ -115,44 +103,13 @@ If no parent branch is approved:
 - Never delete files unless task instructions explicitly require deletion.
 - Do not auto-resolve merge conflicts; stop and report.
 - If a command fails repeatedly, inspect logs/artifacts before retrying.
+- For debugging/fix work, run `superpowers:systematic-debugging` before implementing fixes.
 
 ## Script Execution Rules
 
 - Do not run scripts unless user explicitly approves or `--allow-scripts` is provided.
 - Prefer Go-native implementation for permanent capabilities.
 - Use scripts only for narrow bootstrap/migration steps.
-
-## Planning Rules
-
-When generating a plan:
-
-- ALWAYS follow the structure defined in:
-  `.ptolemy/context/PLAN_TEMPLATE.md`
-- DO NOT invent a new format.
-- DO NOT skip any section.
-
-### Step Requirements
-
-Each step MUST include:
-- files
-- actions
-- validation
-
-### Constraints
-
-- Must map to real files.
-- Must be testable.
-
-### Enforcement
-
-If a generated plan does not follow the template:
-- REWRITE the plan.
-- DO NOT proceed to implementation.
-
-### Behavior
-
-- For medium tasks -> generate plan using template.
-- For large tasks -> plan first, then convert to task pack.
 
 ## PR Rules
 
@@ -161,6 +118,14 @@ If a generated plan does not follow the template:
 - Agent must fill all required template sections before opening the PR.
 - If PR tooling is unavailable, write fallback PR instructions under `.state/pr/`.
 - Do not auto-merge PRs unless explicitly requested.
+- Before opening a PR, run `superpowers:requesting-code-review`.
+- When review feedback is received, process it with `superpowers:receiving-code-review` before applying changes.
+
+## GitHub Tooling Policy
+
+- For all GitHub operations (including PR creation, PR updates, review triage, checks, and comments), the agent MUST use the GitHub plugin/app workflows available in this environment.
+- Do NOT use `gh` CLI for any GitHub operation.
+- If GitHub plugin tooling is unavailable for a required action, stop and report the limitation to the user before proceeding.
 
 ## Minimal Done Criteria
 
@@ -168,5 +133,4 @@ A task is done only when:
 - implementation is complete for approved scope,
 - relevant tests pass (or failure is reported clearly),
 - commits are clean and phase-grouped,
-- branch/PR behavior follows the rules above,
-- TDD evidence is present for code changes (failing test introduced first, then passing result) or an explicit exception is documented.
+- branch/PR behavior follows the rules above.

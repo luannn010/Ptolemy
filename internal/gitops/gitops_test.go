@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -186,13 +187,25 @@ func TestCreatePullRequestUsesGHCLI(t *testing.T) {
 	repo := setupGitRepo(t)
 	fakeBin := t.TempDir()
 	logPath := filepath.Join(fakeBin, "gh.log")
+	pathSep := ":"
 	scriptPath := filepath.Join(fakeBin, "gh")
-	script := "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" > " + shellQuote(logPath) + "\nprintf '%s\\n' 'https://example.com/pr/123'\n"
-	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
+	if runtime.GOOS == "windows" {
+		pathSep = ";"
+		scriptPath = filepath.Join(fakeBin, "gh.bat")
+		script := "@echo off\r\n" +
+			"echo %* > \"" + logPath + "\"\r\n" +
+			"echo https://example.com/pr/123\r\n"
+		if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		script := "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" > " + shellQuote(logPath) + "\nprintf '%s\\n' 'https://example.com/pr/123'\n"
+		if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	t.Setenv("PATH", fakeBin+":"+os.Getenv("PATH"))
+	t.Setenv("PATH", fakeBin+pathSep+os.Getenv("PATH"))
 	bodyFile := filepath.Join(repo, "pr.md")
 	if err := os.WriteFile(bodyFile, []byte("body\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -210,6 +223,19 @@ func TestCreatePullRequestUsesGHCLI(t *testing.T) {
 	}
 	if !strings.Contains(string(logData), "pr create") || !strings.Contains(string(logData), "--head feature/test") {
 		t.Fatalf("unexpected gh invocation: %s", string(logData))
+	}
+}
+
+func TestRunArgsRejectsDisallowedExecutable(t *testing.T) {
+	repo := setupGitRepo(t)
+	git := New(repo)
+
+	result := git.runArgs(context.Background(), "bash", "-lc", "echo hello")
+	if result.Success {
+		t.Fatal("expected disallowed executable to fail")
+	}
+	if !strings.Contains(result.Output, "disallowed executable") {
+		t.Fatalf("unexpected output: %q", result.Output)
 	}
 }
 

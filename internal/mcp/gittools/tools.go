@@ -4,6 +4,13 @@ import "github.com/luannn010/ptolemy/internal/mcp"
 
 func Tools() []mcp.Tool {
 	return []mcp.Tool{
+		mcp.NewTool("ptolemy_git_status", "Show git status for the current workspace.", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"session_id": map[string]any{"type": "string"},
+			},
+			"required": []string{"session_id"},
+		}),
 		mcp.NewTool("ptolemy_git_generate_pr_body", "Generate a local PR body file from the repository PR template and current git metadata.", map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -28,6 +35,9 @@ func Tools() []mcp.Tool {
 
 func Handle(name string, args map[string]any, client *mcp.WorkerClient) (map[string]any, bool, error) {
 	switch name {
+	case "ptolemy_git_status":
+		body, err := client.Post("/git/status", args)
+		return mcp.TextResult(body), true, err
 	case "ptolemy_git_generate_pr_body":
 		body, err := client.Post("/git/generate-pr-body", args)
 		return mcp.TextResult(body), true, err
