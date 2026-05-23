@@ -99,3 +99,39 @@ func wakeThreshold(variant string) int {
 	}
 	return 2
 }
+
+// minUsableSamples is the fewest non-empty enrollment captures needed to build a
+// personalized profile; below this we keep the default only.
+const minUsableSamples = 2
+
+// BuildProfileFromSamples turns raw enrollment transcripts into a WakeProfile.
+// It normalizes each sample, drops empties, dedupes, and always includes the
+// default wake phrase. If fewer than minUsableSamples usable samples were
+// captured it returns a default-only profile plus a warning (never an error).
+func BuildProfileFromSamples(samples []string) (*WakeProfile, []string) {
+	var warnings []string
+	seen := map[string]bool{}
+	variants := []string{defaultWakePhrase}
+	seen[defaultWakePhrase] = true
+
+	usable := 0
+	for _, s := range samples {
+		n := normalize(s)
+		if n == "" {
+			continue
+		}
+		usable++
+		if !seen[n] {
+			seen[n] = true
+			variants = append(variants, n)
+		}
+	}
+
+	if usable < minUsableSamples {
+		warnings = append(warnings, fmt.Sprintf(
+			"only %d usable sample(s) captured (need %d); keeping default wake phrase only",
+			usable, minUsableSamples))
+		return DefaultWakeProfile(), warnings
+	}
+	return &WakeProfile{Variants: variants}, warnings
+}
