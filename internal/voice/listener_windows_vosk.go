@@ -84,7 +84,9 @@ func (l *voskListener) Listen(ctx context.Context) (<-chan string, error) {
 			if err := stream.Read(); err != nil {
 				continue
 			}
-			if !rec.AcceptWaveform(buffer) {
+			// Vosk wants 16-bit LE PCM bytes; AcceptWaveform returns 1 when an
+			// utterance is complete (Result ready), 0 while still accumulating.
+			if rec.AcceptWaveform(int16ToLEBytes(buffer)) != 1 {
 				continue
 			}
 			var parsed voskResult
