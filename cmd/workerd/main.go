@@ -99,8 +99,9 @@ func main() {
 		runner,
 		httpapi.NewPackStudioHandler(packStudioService),
 		httpapi.HealthConfig{
-			MCPBaseURL: cfg.MCPBaseURL,
-			Timeout:    time.Duration(cfg.HealthTimeoutMS) * time.Millisecond,
+			MCPBaseURL:       cfg.MCPBaseURL,
+			VoiceExecutorURL: cfg.WorkerBaseURL,
+			Timeout:          time.Duration(cfg.HealthTimeoutMS) * time.Millisecond,
 		},
 	)
 

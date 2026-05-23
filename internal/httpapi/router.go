@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/terminal"
+	"github.com/luannn010/ptolemy/internal/voice"
 	"github.com/rs/zerolog/log"
 )
 
@@ -29,6 +31,34 @@ type healthResponse struct {
 type healthChecks struct {
 	MCP     mcpHealthCheck     `json:"mcp"`
 	Runtime runtimeHealthCheck `json:"runtime"`
+	Voice   voiceHealthCheck   `json:"voice"`
+}
+
+// voiceHealthCheck reports whether the voice catcher's two dependencies are
+// usable: the platform speech listener and the executor it sends spoken
+// commands to.
+type voiceHealthCheck struct {
+	Listener voiceListenerCheck `json:"listener"`
+	Executor voiceExecutorCheck `json:"executor"`
+}
+
+// voiceListenerCheck records whether voice.NewListener() can construct a
+// listener on this platform (it is windows-only in the MVP).
+type voiceListenerCheck struct {
+	Available bool   `json:"available"`
+	Platform  string `json:"platform"`
+	Error     string `json:"error,omitempty"`
+}
+
+// voiceExecutorCheck records whether the voice executor endpoint is reachable.
+// An empty URL means voice execution is not configured, which is not a failure.
+type voiceExecutorCheck struct {
+	Configured bool   `json:"configured"`
+	Reachable  bool   `json:"reachable"`
+	LatencyMS  int64  `json:"latency_ms,omitempty"`
+	Target     string `json:"target,omitempty"`
+	Probe      string `json:"probe,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 type mcpHealthCheck struct {
@@ -54,7 +84,11 @@ type cmdHealth struct {
 
 type HealthConfig struct {
 	MCPBaseURL string
-	Timeout    time.Duration
+	// VoiceExecutorURL is the base URL the voice catcher sends spoken commands
+	// to (typically WORKER_BASE_URL). Empty means voice execution is not
+	// configured and the executor sub-check is skipped without failing.
+	VoiceExecutorURL string
+	Timeout          time.Duration
 }
 
 func NewRouter(
@@ -74,7 +108,7 @@ func NewRouter(
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		checks := evaluateHealthChecks(r.Context(), r, healthCfg)
 		status := "ok"
-		if (checks.MCP.Enabled && !checks.MCP.Reachable) || hasMissingRuntimeCommand(checks.Runtime.Commands) {
+		if (checks.MCP.Enabled && !checks.MCP.Reachable) || hasMissingRuntimeCommand(checks.Runtime.Commands) || voiceUnhealthy(checks.Voice) {
 			status = "degraded"
 		}
 
@@ -170,7 +204,70 @@ func evaluateHealthChecks(ctx context.Context, r *http.Request, cfg HealthConfig
 	return healthChecks{
 		MCP:     checkMCP(ctx, cfg.MCPBaseURL, timeout),
 		Runtime: checkRuntimeCommands(tool),
+		Voice:   checkVoice(ctx, cfg.VoiceExecutorURL, timeout),
 	}
+}
+
+func checkVoice(ctx context.Context, executorURL string, timeout time.Duration) voiceHealthCheck {
+	return voiceHealthCheck{
+		Listener: checkVoiceListener(),
+		Executor: checkVoiceExecutor(ctx, executorURL, timeout),
+	}
+}
+
+// checkVoiceListener reports whether a platform speech listener can be built.
+// The MVP listener is windows-only, so this is expected to be unavailable on
+// other platforms with an explanatory error rather than a hard failure.
+func checkVoiceListener() voiceListenerCheck {
+	check := voiceListenerCheck{Platform: runtime.GOOS}
+	listener, err := voice.NewListener()
+	if err != nil {
+		check.Error = err.Error()
+		return check
+	}
+	check.Available = listener != nil
+	return check
+}
+
+// checkVoiceExecutor probes the voice executor's /health endpoint. An empty URL
+// means voice execution is not configured and is reported as such, not as a
+// failure.
+func checkVoiceExecutor(ctx context.Context, baseURL string, timeout time.Duration) voiceExecutorCheck {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		return voiceExecutorCheck{Configured: false}
+	}
+
+	check := voiceExecutorCheck{Configured: true, Target: baseURL, Probe: "/health"}
+
+	start := time.Now()
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, baseURL+"/health", nil)
+	if err != nil {
+		check.Error = err.Error()
+		return check
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		check.Error = err.Error()
+		return check
+	}
+	defer resp.Body.Close()
+
+	check.LatencyMS = time.Since(start).Milliseconds()
+	check.Reachable = resp.StatusCode < 400
+	if resp.StatusCode >= 400 {
+		check.Error = resp.Status
+	}
+	return check
+}
+
+// voiceUnhealthy returns true when a configured voice dependency is broken. An
+// unconfigured executor and a platform-unavailable listener are not failures.
+func voiceUnhealthy(v voiceHealthCheck) bool {
+	return v.Executor.Configured && !v.Executor.Reachable
 }
 
 func checkMCP(ctx context.Context, baseURL string, timeout time.Duration) mcpHealthCheck {

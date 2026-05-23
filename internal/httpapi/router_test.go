@@ -5,8 +5,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/luannn010/ptolemy/internal/action"
 	"github.com/luannn010/ptolemy/internal/agentloop"
@@ -67,6 +69,99 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"checks":`) {
 		t.Fatalf("expected health checks response, got %s", rec.Body.String())
+	}
+}
+
+func TestHealthEndpointIncludesVoiceCheck(t *testing.T) {
+	router := newTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `"voice":`) {
+		t.Fatalf("expected voice check in health response, got %s", body)
+	}
+	// The listener probe must report whether the platform listener is available.
+	if !strings.Contains(body, `"listener":`) {
+		t.Fatalf("expected voice listener sub-check, got %s", body)
+	}
+	if !strings.Contains(body, `"executor":`) {
+		t.Fatalf("expected voice executor sub-check, got %s", body)
+	}
+}
+
+func TestVoiceListenerCheckReflectsPlatform(t *testing.T) {
+	check := checkVoiceListener()
+
+	if runtime.GOOS == "windows" {
+		if !check.Available {
+			t.Fatalf("expected listener available on windows, got error %q", check.Error)
+		}
+	} else {
+		if check.Available {
+			t.Fatalf("expected listener unavailable on %s, got available", runtime.GOOS)
+		}
+		if check.Error == "" {
+			t.Fatalf("expected an error explaining why the listener is unavailable on %s", runtime.GOOS)
+		}
+	}
+}
+
+func TestVoiceExecutorCheckUnconfiguredIsNotAFailure(t *testing.T) {
+	check := checkVoiceExecutor(t.Context(), "", time.Second)
+
+	if check.Configured {
+		t.Fatalf("expected executor unconfigured when URL is empty")
+	}
+	if check.Reachable {
+		t.Fatalf("expected executor not reachable when URL is empty")
+	}
+}
+
+func TestVoiceExecutorCheckProbesURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			t.Errorf("expected probe to hit /health, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	check := checkVoiceExecutor(t.Context(), srv.URL, time.Second)
+
+	if !check.Configured {
+		t.Fatalf("expected executor configured when URL is set")
+	}
+	if !check.Reachable {
+		t.Fatalf("expected executor reachable, got error %q", check.Error)
+	}
+}
+
+func TestUnreachableVoiceExecutorDegradesHealth(t *testing.T) {
+	// A configured-but-unreachable voice executor must flip overall status to degraded.
+	checks := healthChecks{
+		Voice: voiceHealthCheck{
+			Executor: voiceExecutorCheck{Configured: true, Reachable: false, Error: "connection refused"},
+		},
+	}
+	if !voiceUnhealthy(checks.Voice) {
+		t.Fatalf("expected configured+unreachable executor to be unhealthy")
+	}
+
+	healthy := healthChecks{
+		Voice: voiceHealthCheck{
+			Executor: voiceExecutorCheck{Configured: false},
+		},
+	}
+	if voiceUnhealthy(healthy.Voice) {
+		t.Fatalf("expected unconfigured executor to be healthy")
 	}
 }
 
