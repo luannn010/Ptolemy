@@ -13,12 +13,14 @@ const (
 	CommandSleepPC     CommandType = "sleep_pc"
 	CommandSetAlarm    CommandType = "set_alarm"
 	CommandSetReminder CommandType = "set_reminder"
+	CommandRunShell    CommandType = "run_shell"
 )
 
 type Command struct {
 	Type    CommandType
 	When    time.Time
 	Message string
+	Shell   string
 }
 
 var (
@@ -26,12 +28,20 @@ var (
 	alarmSimpleRe = regexp.MustCompile(`^set alarm ([0-9]{1,2}):([0-9]{2})(?:\s*(am|pm))?$`)
 	reminderInRe  = regexp.MustCompile(`^set reminder (.+?) in ([0-9]+) minutes?$`)
 	reminderAtRe  = regexp.MustCompile(`^set reminder (.+?) at ([0-9]{1,2}):([0-9]{2})(?:\s*(am|pm))?$`)
+	runShellRe    = regexp.MustCompile(`^run(?: command)? (.+)$`)
 	wakePhraseRe  = regexp.MustCompile(`\bhey ptolemy\b`)
+	confirmRe     = regexp.MustCompile(`^(confirm|yes do it|execute)$`)
 	spaceCollapse = regexp.MustCompile(`\s+`)
 )
 
 func IsWakePhrase(text string) bool {
 	return wakePhraseRe.MatchString(strings.ToLower(text))
+}
+
+// IsConfirmPhrase reports whether the spoken text is an affirmative confirmation
+// used to execute a pending shell command.
+func IsConfirmPhrase(text string) bool {
+	return confirmRe.MatchString(normalize(text))
 }
 
 func ParseCommand(text string, now time.Time) (Command, bool) {
@@ -74,6 +84,13 @@ func ParseCommand(text string, now time.Time) (Command, bool) {
 			When:    when,
 			Message: strings.TrimSpace(m[1]),
 		}, true
+	}
+	if m := runShellRe.FindStringSubmatch(text); len(m) > 0 {
+		shell := strings.TrimSpace(m[1])
+		if shell == "" {
+			return Command{}, false
+		}
+		return Command{Type: CommandRunShell, Shell: shell}, true
 	}
 	return Command{}, false
 }
