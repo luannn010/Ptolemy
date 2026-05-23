@@ -81,3 +81,46 @@ func TestWakeProfilePathEnvOverride(t *testing.T) {
 		t.Fatalf("env override not honored: %q", WakeProfilePath())
 	}
 }
+
+func TestBuildProfileFromSamples(t *testing.T) {
+	p, warns := BuildProfileFromSamples([]string{"Hey Ptolemy", "hey  tolemy ", "hey tolemy", ""})
+	// Lowercased, whitespace-collapsed, deduped, default always present.
+	want := map[string]bool{"hey ptolemy": false, "hey tolemy": false}
+	for _, v := range p.Variants {
+		if _, ok := want[v]; !ok {
+			t.Errorf("unexpected variant %q", v)
+		}
+		want[v] = true
+	}
+	for v, seen := range want {
+		if !seen {
+			t.Errorf("missing expected variant %q (got %v)", v, p.Variants)
+		}
+	}
+	if len(warns) != 0 {
+		t.Errorf("did not expect warnings, got %v", warns)
+	}
+}
+
+func TestBuildProfileFromSamplesTooFewUsable(t *testing.T) {
+	p, warns := BuildProfileFromSamples([]string{"", "   "})
+	if len(p.Variants) != 1 || p.Variants[0] != "hey ptolemy" {
+		t.Fatalf("expected default-only profile, got %v", p.Variants)
+	}
+	if len(warns) == 0 {
+		t.Fatal("expected a warning about too few usable samples")
+	}
+}
+
+func TestBuildProfileAlwaysIncludesDefault(t *testing.T) {
+	p, _ := BuildProfileFromSamples([]string{"hey tolemy", "hey tolomy"})
+	found := false
+	for _, v := range p.Variants {
+		if v == "hey ptolemy" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("default wake phrase must always be present, got %v", p.Variants)
+	}
+}
