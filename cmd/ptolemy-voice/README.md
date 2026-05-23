@@ -60,10 +60,13 @@ Two listeners are available:
   Vosk uses **cgo**, so it links a C library at build *and* run time. One-time setup on
   Windows:
 
-  1. **C compiler** (for cgo): install MSYS2 + MinGW gcc.
+  1. **C compiler + PortAudio** (for cgo): install MSYS2, then the gcc toolchain and
+     PortAudio. The voice loop links PortAudio via `pkg-config`, so the `-portaudio`
+     package (which ships `portaudio-2.0.pc`) and `pkgconf` are required, not just gcc.
      ```powershell
      winget install -e --id MSYS2.MSYS2
-     # then in "MSYS2 MINGW64": pacman -S mingw-w64-x86_64-gcc
+     # then in "MSYS2 MINGW64":
+     #   pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-portaudio mingw-w64-x86_64-pkgconf
      # add C:\msys64\mingw64\bin to PATH
      ```
   2. **Vosk C library** (`libvosk.dll` + `libvosk.lib` + `vosk_api.h`): download
@@ -87,11 +90,22 @@ Two listeners are available:
   > reaches Vosk. If you previously set them, clear them first:
   > `Remove-Item Env:CGO_CFLAGS,Env:CGO_CPPFLAGS,Env:CGO_LDFLAGS -ErrorAction SilentlyContinue`
 
-  Run (`libvosk.dll` must be on PATH at runtime):
+  Run (`libvosk.dll` + `libportaudio.dll` must be on PATH at runtime):
   ```powershell
-  $env:Path += ";D:\Ptolemy\vosk-lib"
+  $env:Path += ";D:\Ptolemy\vosk-lib;C:\msys64\mingw64\bin"
+  $env:VOSK_MODEL_PATH = "D:\Ptolemy\.state\vosk-model"
   $env:WORKER_BASE_URL = "http://127.0.0.1:8080"
   .\bin\ptolemy-voice-vosk.exe
+  ```
+
+  ### Convenience scripts
+
+  `build-vosk.bat` and `run-vosk.bat` (repo root) set the correct PATH / env and do the
+  above for you (no `CGO_*` env vars on build; `vosk-lib` + MinGW on PATH and
+  `VOSK_MODEL_PATH` on run):
+  ```cmd
+  build-vosk.bat
+  run-vosk.bat -listen-only
   ```
 
 ## Flags
