@@ -108,6 +108,23 @@ Two listeners are available:
   run-vosk.bat -listen-only
   ```
 
+## Wake-phrase enrollment
+
+Ptolemy learns how *you* say the wake phrase. The first time you run the Vosk
+catcher with no saved profile, it runs a short setup: it asks you to say
+"hey ptolemy" a few times and saves what the recognizer heard to
+`.state\wake-profile.json`. Later runs load that profile automatically and
+wake on close matches (not just the exact words).
+
+Re-run setup any time:
+```cmd
+run-vosk.bat -enroll
+```
+
+The matcher always keeps the built-in "hey ptolemy" as a fallback, and uses a
+small edit-distance tolerance so minor recognizer wobble still wakes it.
+Override the profile location with `WAKE_PROFILE_PATH`.
+
 ## Flags
 
 - `-realtime-json` — emit runtime events as JSON lines (heard, wake_detected,
@@ -116,3 +133,4 @@ Two listeners are available:
 - `-listen-only` — only stream recognized phrases; no wake/command handling.
 - `-no-actions` — parse and acknowledge commands without executing. For `run <command>`
   it stops at the dry-run print and never calls the executor.
+- `-enroll` — (re)run wake-phrase enrollment, save the profile, then exit.
