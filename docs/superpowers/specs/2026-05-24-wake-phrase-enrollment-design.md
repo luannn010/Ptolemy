@@ -111,6 +111,14 @@ Rationale: substring keeps today's behavior (wake phrase embedded in a longer
 utterance). Edit-distance adds tolerance for Vosk's run-to-run variation. The
 phrase is long/distinctive enough that `len/4` keeps false wakes low.
 
+Worked example with variants `["hey ptolemy", "hey tolemy"]` (the second
+captured during enrollment): `"hey ptolomy"` → dist 1 to `"hey ptolemy"` →
+**wake**; `"hey tolomy"` → dist 1 to the enrolled `"hey tolemy"` → **wake**
+(the personalization win); `"ok hey ptolemy now"` → substring → **wake**;
+`"hey there"` (dist 4-5) and `"what time is it"` (dist 11-12) → **no wake**.
+Note: enrollment captures *systematic* mis-transcriptions directly as variants;
+the ±2 edit tolerance only absorbs minor run-to-run wobble around them.
+
 ## Data Flow
 
 **Enrollment:** mic → Vosk → transcript channel → `runEnrollment` collects N
