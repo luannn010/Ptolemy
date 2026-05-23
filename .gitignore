@@ -1,5 +1,13 @@
 # binaries
 bin/
+*.exe
+
+# vosk build artifacts (downloaded/unzipped locally, not committed)
+/vosk-lib/
+/vosk-tmp/
+/vosk-win64.zip
+/vosk-model.zip
+/build-error.txt
 
 # database
 state/*.db

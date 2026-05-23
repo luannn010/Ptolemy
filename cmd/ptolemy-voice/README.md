@@ -66,19 +66,26 @@ Two listeners are available:
      # then in "MSYS2 MINGW64": pacman -S mingw-w64-x86_64-gcc
      # add C:\msys64\mingw64\bin to PATH
      ```
-  2. **Vosk C library** (`libvosk.dll` + `vosk_api.h`): download `vosk-win64-*.zip` from
-     https://github.com/alphacep/vosk-api/releases and unzip to e.g. `D:\Ptolemy\vosk-lib\`.
+  2. **Vosk C library** (`libvosk.dll` + `libvosk.lib` + `vosk_api.h`): download
+     `vosk-win64-*.zip` from https://github.com/alphacep/vosk-api/releases and unzip it to
+     **`vosk-lib\` at the repo root** (i.e. `D:\Ptolemy\vosk-lib\`). The build finds it
+     there automatically via `third_party/vosk-go` — see that folder's `vendor-notes.md`.
   3. **Language model**: download `vosk-model-small-en-us-0.15` (~40MB) from
      https://alphacephei.com/vosk/models and unzip to `.state\vosk-model` (the folder must
      directly contain `am/`, `conf/`, ...), or set `VOSK_MODEL_PATH` to its location.
 
   Build (PowerShell, at the repo root):
   ```powershell
-  $env:CGO_ENABLED  = "1"
-  $env:CGO_CPPFLAGS = "-I D:\Ptolemy\vosk-lib"
-  $env:CGO_LDFLAGS  = "-L D:\Ptolemy\vosk-lib -lvosk"
+  $env:CGO_ENABLED = "1"
   go build -tags vosk -o bin\ptolemy-voice-vosk.exe .\cmd\ptolemy-voice
   ```
+
+  > **Do NOT set `CGO_CPPFLAGS` / `CGO_LDFLAGS`.** The Vosk header/lib paths are supplied by
+  > `third_party/vosk-go` (a local copy of the wrapper with package-scoped `#cgo` directives).
+  > Setting those env vars leaks the include path into Go's own `runtime/cgo`, which builds
+  > with `-Werror`, and the build dies with `runtime/cgo: ... exit status 2` before it ever
+  > reaches Vosk. If you previously set them, clear them first:
+  > `Remove-Item Env:CGO_CFLAGS,Env:CGO_CPPFLAGS,Env:CGO_LDFLAGS -ErrorAction SilentlyContinue`
 
   Run (`libvosk.dll` must be on PATH at runtime):
   ```powershell

@@ -23,3 +23,9 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+// Use a local copy of the Vosk Go wrapper whose #cgo directives point at the
+// repo's vosk-lib/ directory. This avoids setting CGO_CPPFLAGS/CGO_LDFLAGS as
+// global env vars, which would leak into runtime/cgo and break the build under
+// MinGW (-Werror). See third_party/vosk-go/vendor-notes.md.
+replace github.com/alphacep/vosk-api/go => ./third_party/vosk-go
