@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -69,6 +70,12 @@ func TestHTTPExecutorClientExecute(t *testing.T) {
 	}
 	if res.Summary != "go version go1.24" {
 		t.Fatalf("unexpected summary: %q", res.Summary)
+	}
+	if !strings.Contains(res.RequestPayload, `"command":"go version"`) {
+		t.Fatalf("expected request payload to contain the command, got: %q", res.RequestPayload)
+	}
+	if res.DurationMS < 0 {
+		t.Fatalf("expected non-negative duration, got %d", res.DurationMS)
 	}
 }
 
