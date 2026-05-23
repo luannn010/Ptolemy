@@ -8,6 +8,7 @@ bin/
 /vosk-win64.zip
 /vosk-model.zip
 /build-error.txt
+/vosk-run.log
 
 # database
 state/*.db
