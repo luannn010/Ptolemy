@@ -58,6 +58,7 @@ func main() {
 	realtimeJSON := flag.Bool("realtime-json", false, "emit runtime events as JSON lines")
 	listenOnly := flag.Bool("listen-only", false, "only stream recognized phrases; do not run wake/command state machine")
 	noActions := flag.Bool("no-actions", false, "parse and acknowledge commands without executing system actions")
+	enroll := flag.Bool("enroll", false, "(re)run wake-phrase enrollment, then exit")
 	flag.Parse()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -77,6 +78,26 @@ func main() {
 		fmt.Printf("failed to start listening: %v\n", err)
 		os.Exit(1)
 	}
+
+	profilePath := voice.WakeProfilePath()
+	if *enroll || !fileExists(profilePath) {
+		samples := runEnrollment(ctx, phrases)
+		profile, warnings := voice.BuildProfileFromSamples(samples)
+		if err := profile.Save(profilePath); err != nil {
+			fmt.Printf("could not save wake profile: %v\n", err)
+		} else {
+			fmt.Printf("Saved wake profile to %s\n", profilePath)
+		}
+		fmt.Printf("Wake variants: %s\n", strings.Join(profile.Variants, " | "))
+		for _, w := range warnings {
+			fmt.Printf("  note: %s\n", w)
+		}
+		if *enroll {
+			fmt.Println("Enrollment complete.")
+			return
+		}
+	}
+	profile := voice.LoadWakeProfile(profilePath)
 
 	execClient := voice.NewHTTPExecutorClient(workerBaseURL())
 	fmt.Printf("Voice catcher started. Executor: %s\n", workerBaseURL())
@@ -121,7 +142,7 @@ func main() {
 				continue
 			}
 			if activeUntil.IsZero() {
-				if voice.IsWakePhrase(normalized) {
+				if profile.Matches(normalized) {
 					activeUntil = time.Now().Add(commandWindow)
 					fmt.Println("Wake phrase detected. Listening for command for 30 seconds...")
 					printObservation(voice.Observation{Heard: phrase, Caught: "wake"})
@@ -254,6 +275,58 @@ func main() {
 			fmt.Println("Returning to wake mode.")
 		}
 	}
+}
+
+// enrollmentSamples is how many times the user is asked to say the wake phrase.
+const enrollmentSamples = 4
+
+// perSampleTimeout is how long to wait for one spoken sample before re-prompting.
+const perSampleTimeout = 10 * time.Second
+
+// maxSampleAttempts caps re-prompts per sample when the user is silent.
+const maxSampleAttempts = 3
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// runEnrollment guides the user through saying the wake phrase several times and
+// returns the raw transcripts Vosk produced. Silence on a sample is re-prompted
+// up to maxSampleAttempts times.
+func runEnrollment(ctx context.Context, phrases <-chan string) []string {
+	fmt.Println("--- Wake-phrase setup ---")
+	fmt.Printf("Say \"hey ptolemy\" %d times so Ptolemy learns how you say it.\n", enrollmentSamples)
+	samples := make([]string, 0, enrollmentSamples)
+	for i := 1; i <= enrollmentSamples; i++ {
+		captured := ""
+		for attempt := 1; attempt <= maxSampleAttempts && captured == ""; attempt++ {
+			fmt.Printf("  (%d/%d) Say \"hey ptolemy\" now...\n", i, enrollmentSamples)
+			timer := time.NewTimer(perSampleTimeout)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return samples
+			case phrase, ok := <-phrases:
+				timer.Stop()
+				if !ok {
+					return samples
+				}
+				captured = strings.TrimSpace(phrase)
+				if captured == "" {
+					continue
+				}
+				fmt.Printf("      heard: %q\n", captured)
+			case <-timer.C:
+				fmt.Println("      (didn't catch that — try again)")
+			}
+		}
+		if captured != "" {
+			samples = append(samples, captured)
+		}
+	}
+	fmt.Println("--- setup done ---")
+	return samples
 }
 
 func emitEvent(enabled bool, event runtimeEvent) {
