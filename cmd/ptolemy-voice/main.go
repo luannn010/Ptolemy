@@ -38,6 +38,22 @@ func workerBaseURL() string {
 	return config.DefaultWorkerBaseURL
 }
 
+// useColor reports whether the dimmed observation block should use ANSI codes.
+// Honors the NO_COLOR convention (https://no-color.org/).
+func useColor() bool {
+	return strings.TrimSpace(os.Getenv("NO_COLOR")) == ""
+}
+
+// printObservation prints the dimmed multi-line diagnostic block under the
+// normal output. It is always on, narrating what was heard, what it was caught
+// as, and (for executed commands) the request payload, tools used, and timing.
+func printObservation(obs voice.Observation) {
+	block := voice.FormatObservation(obs, useColor())
+	if block != "" {
+		fmt.Println(block)
+	}
+}
+
 func main() {
 	realtimeJSON := flag.Bool("realtime-json", false, "emit runtime events as JSON lines")
 	listenOnly := flag.Bool("listen-only", false, "only stream recognized phrases; do not run wake/command state machine")
@@ -98,6 +114,7 @@ func main() {
 				if voice.IsWakePhrase(normalized) {
 					activeUntil = time.Now().Add(commandWindow)
 					fmt.Println("Wake phrase detected. Listening for command for 30 seconds...")
+					printObservation(voice.Observation{Heard: phrase, Caught: "wake"})
 					emitEvent(*realtimeJSON, runtimeEvent{
 						Time:    time.Now().Format(time.RFC3339Nano),
 						Type:    "wake_detected",
@@ -127,13 +144,26 @@ func main() {
 			// Awaiting confirmation for a spoken shell command.
 			if pendingShell != "" {
 				if voice.IsConfirmPhrase(normalized) {
-					id, runErr := runShellViaExecutor(ctx, execClient, &sessionID, pendingShell, *realtimeJSON)
+					freshSession := sessionID == ""
+					id, res, runErr := runShellViaExecutor(ctx, execClient, &sessionID, pendingShell, *realtimeJSON)
 					sessionID = id
 					if runErr != nil {
 						fmt.Printf("Command failed: %v\n", runErr)
 					}
+					tools := []string{"execute"}
+					if freshSession {
+						tools = []string{"open_session", "execute"}
+					}
+					printObservation(voice.Observation{
+						Heard:    phrase,
+						Caught:   string(voice.CommandRunShell),
+						Request:  trimForObservation(res.RequestPayload),
+						Tools:    tools,
+						TimingMS: res.DurationMS,
+					})
 				} else {
 					fmt.Printf("Cancelled. Did not run: %s\n", pendingShell)
+					printObservation(voice.Observation{Heard: phrase, Caught: "cancel"})
 					emitEvent(*realtimeJSON, runtimeEvent{
 						Time:    time.Now().Format(time.RFC3339Nano),
 						Type:    "command_cancelled",
@@ -179,6 +209,10 @@ func main() {
 				pendingShell = cmd.Shell
 				activeUntil = time.Now().Add(commandWindow)
 				fmt.Printf("Would run: %s\nSay \"confirm\" within 30 seconds to execute, or anything else to cancel.\n", cmd.Shell)
+				printObservation(voice.Observation{
+					Heard:  phrase,
+					Caught: string(voice.CommandRunShell) + " (awaiting confirm)",
+				})
 				emitEvent(*realtimeJSON, runtimeEvent{
 					Time:    time.Now().Format(time.RFC3339Nano),
 					Type:    "command_pending",
@@ -191,13 +225,21 @@ func main() {
 			}
 			if *noActions {
 				fmt.Printf("Recognized command (dry-run): %s\n", cmd.Type)
+				printObservation(voice.Observation{Heard: phrase, Caught: string(cmd.Type) + " (dry-run)"})
 				activeUntil = time.Time{}
 				fmt.Println("Returning to wake mode.")
 				continue
 			}
+			start := time.Now()
 			if err := executeCommand(ctx, scheduler, cmd); err != nil {
 				fmt.Printf("Command failed: %v\n", err)
 			}
+			printObservation(voice.Observation{
+				Heard:    phrase,
+				Caught:   string(cmd.Type),
+				Tools:    []string{"local:" + string(cmd.Type)},
+				TimingMS: time.Since(start).Milliseconds(),
+			})
 			activeUntil = time.Time{}
 			fmt.Println("Returning to wake mode.")
 		}
@@ -215,15 +257,26 @@ func emitEvent(enabled bool, event runtimeEvent) {
 	fmt.Println(string(b))
 }
 
+// trimForObservation shortens a request payload so the dimmed observation block
+// stays to a single readable line.
+func trimForObservation(payload string) string {
+	const maxObservationPayload = 120
+	if len(payload) <= maxObservationPayload {
+		return payload
+	}
+	return payload[:maxObservationPayload] + "…"
+}
+
 // runShellViaExecutor sends a confirmed shell command to the executor, opening a
 // session lazily on first use and reusing it afterward. It returns the (possibly
-// newly opened) session ID so the caller can cache it.
-func runShellViaExecutor(ctx context.Context, client voice.ExecutorClient, sessionID *string, shell string, jsonEvents bool) (string, error) {
+// newly opened) session ID and the ExecResult (which carries the request payload
+// and round-trip timing for the observation block).
+func runShellViaExecutor(ctx context.Context, client voice.ExecutorClient, sessionID *string, shell string, jsonEvents bool) (string, voice.ExecResult, error) {
 	id := *sessionID
 	if id == "" {
 		opened, err := client.OpenSession(ctx)
 		if err != nil {
-			return id, fmt.Errorf("open executor session: %w", err)
+			return id, voice.ExecResult{}, fmt.Errorf("open executor session: %w", err)
 		}
 		id = opened
 	}
@@ -239,7 +292,7 @@ func runShellViaExecutor(ctx context.Context, client voice.ExecutorClient, sessi
 
 	res, err := client.Execute(ctx, id, shell)
 	if err != nil {
-		return id, err
+		return id, res, err
 	}
 
 	fmt.Printf("exit %d: %s\n", res.ExitCode, res.Summary)
@@ -250,7 +303,7 @@ func runShellViaExecutor(ctx context.Context, client voice.ExecutorClient, sessi
 		Active:  false,
 		Message: fmt.Sprintf("exit %d", res.ExitCode),
 	})
-	return id, nil
+	return id, res, nil
 }
 
 func executeCommand(ctx context.Context, scheduler *voice.Scheduler, cmd voice.Command) error {
