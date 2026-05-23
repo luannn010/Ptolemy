@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/luannn010/ptolemy/internal/executor"
 	"github.com/luannn010/ptolemy/internal/mcp"
@@ -11,11 +12,14 @@ import (
 )
 
 // ExecResult is the trimmed-down result the voice loop needs to report back to
-// the user after running a spoken command on the executor.
+// the user after running a spoken command on the executor. It also carries the
+// request payload and round-trip timing so the observation block can show them.
 type ExecResult struct {
-	ExitCode int
-	Summary  string
-	Success  bool
+	ExitCode       int
+	Summary        string
+	Success        bool
+	RequestPayload string // the JSON body sent to /execute
+	DurationMS     int64  // round-trip time for the /execute call
 }
 
 // ExecutorClient sends spoken shell commands to a Ptolemy worker's executor.
@@ -62,22 +66,29 @@ func (c *httpExecutorClient) OpenSession(ctx context.Context) (string, error) {
 
 func (c *httpExecutorClient) Execute(ctx context.Context, sessionID, command string) (ExecResult, error) {
 	_ = ctx
-	body, err := c.worker.Post("/execute", executor.ExecuteRequest{
+	req := executor.ExecuteRequest{
 		SessionID: sessionID,
 		Command:   command,
 		Title:     "voice command",
 		Reason:    "spoken command from the voice catcher",
-	})
+	}
+	payload, _ := json.Marshal(req)
+
+	start := time.Now()
+	body, err := c.worker.Post("/execute", req)
+	elapsed := time.Since(start).Milliseconds()
 	if err != nil {
-		return ExecResult{}, fmt.Errorf("execute command: %w", err)
+		return ExecResult{RequestPayload: string(payload), DurationMS: elapsed}, fmt.Errorf("execute command: %w", err)
 	}
 	var resp executor.ExecuteResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return ExecResult{}, fmt.Errorf("decode execute response: %w", err)
+		return ExecResult{RequestPayload: string(payload), DurationMS: elapsed}, fmt.Errorf("decode execute response: %w", err)
 	}
 	return ExecResult{
-		ExitCode: resp.ExitCode,
-		Summary:  resp.Summary,
-		Success:  resp.Success,
+		ExitCode:       resp.ExitCode,
+		Summary:        resp.Summary,
+		Success:        resp.Success,
+		RequestPayload: string(payload),
+		DurationMS:     elapsed,
 	}, nil
 }
