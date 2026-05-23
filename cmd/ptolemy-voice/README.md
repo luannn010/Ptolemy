@@ -52,14 +52,39 @@ Two listeners are available:
   go run ./cmd/ptolemy-voice
   ```
 
-- **Vosk (offline, higher quality):** built with the `vosk` tag. Requires the PortAudio
-  runtime and a Vosk model directory (`VOSK_MODEL_PATH`, default `.state/vosk-model`).
+- **Vosk (offline neural recognizer, recommended for accuracy):** built with the `vosk`
+  tag. The native Windows `System.Speech` engine uses free-form dictation and will not
+  reliably recognize the wake word "ptolemy" (it tends to transcribe random English
+  phrases). Vosk fixes this and also handles arbitrary `run <command>` dictation.
 
+  Vosk uses **cgo**, so it links a C library at build *and* run time. One-time setup on
+  Windows:
+
+  1. **C compiler** (for cgo): install MSYS2 + MinGW gcc.
+     ```powershell
+     winget install -e --id MSYS2.MSYS2
+     # then in "MSYS2 MINGW64": pacman -S mingw-w64-x86_64-gcc
+     # add C:\msys64\mingw64\bin to PATH
+     ```
+  2. **Vosk C library** (`libvosk.dll` + `vosk_api.h`): download `vosk-win64-*.zip` from
+     https://github.com/alphacep/vosk-api/releases and unzip to e.g. `D:\Ptolemy\vosk-lib\`.
+  3. **Language model**: download `vosk-model-small-en-us-0.15` (~40MB) from
+     https://alphacephei.com/vosk/models and unzip to `.state\vosk-model` (the folder must
+     directly contain `am/`, `conf/`, ...), or set `VOSK_MODEL_PATH` to its location.
+
+  Build (PowerShell, at the repo root):
   ```powershell
-  go get github.com/alphacep/vosk-api/go github.com/gordonklaus/portaudio
-  make voice
-  # or:
-  go run -tags vosk ./cmd/ptolemy-voice
+  $env:CGO_ENABLED  = "1"
+  $env:CGO_CPPFLAGS = "-I D:\Ptolemy\vosk-lib"
+  $env:CGO_LDFLAGS  = "-L D:\Ptolemy\vosk-lib -lvosk"
+  go build -tags vosk -o bin\ptolemy-voice-vosk.exe .\cmd\ptolemy-voice
+  ```
+
+  Run (`libvosk.dll` must be on PATH at runtime):
+  ```powershell
+  $env:Path += ";D:\Ptolemy\vosk-lib"
+  $env:WORKER_BASE_URL = "http://127.0.0.1:8080"
+  .\bin\ptolemy-voice-vosk.exe
   ```
 
 ## Flags

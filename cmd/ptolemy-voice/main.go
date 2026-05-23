@@ -81,6 +81,8 @@ func main() {
 	execClient := voice.NewHTTPExecutorClient(workerBaseURL())
 	fmt.Printf("Voice catcher started. Executor: %s\n", workerBaseURL())
 	fmt.Println("Say 'Hey Ptolemy' to activate.")
+	fmt.Println("Every phrase the speech engine recognizes is printed below as `heard: \"...\"`.")
+	fmt.Println("If you speak and see no `heard:` line, the microphone/speech engine is not picking up audio.")
 
 	activeUntil := time.Time{}
 	pendingShell := ""
@@ -107,6 +109,14 @@ func main() {
 			if normalized == "" {
 				continue
 			}
+			// Always echo what was recognized so you can see exactly what the
+			// speech engine transcribed, even when it isn't the wake phrase or a
+			// known command. This is the key diagnostic for "nothing caught".
+			state := "asleep — waiting for wake phrase"
+			if !activeUntil.IsZero() {
+				state = "awake — listening for command"
+			}
+			fmt.Printf("heard: %q  [%s]\n", phrase, state)
 			if *listenOnly {
 				continue
 			}

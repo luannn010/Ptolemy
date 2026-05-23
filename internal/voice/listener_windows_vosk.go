@@ -33,7 +33,11 @@ func NewListener() (Listener, error) {
 
 func (l *voskListener) Listen(ctx context.Context) (<-chan string, error) {
 	if _, err := os.Stat(l.modelPath); err != nil {
-		return nil, fmt.Errorf("vosk model path not found (%s): %w", l.modelPath, err)
+		return nil, fmt.Errorf(
+			"vosk model not found at %q.\n"+
+				"Download a model (e.g. vosk-model-small-en-us-0.15) from https://alphacephei.com/vosk/models,\n"+
+				"unzip it, and either place it at that path or set VOSK_MODEL_PATH to the unzipped folder: %w",
+			l.modelPath, err)
 	}
 	model, err := vosk.NewModel(l.modelPath)
 	if err != nil {
@@ -60,11 +64,13 @@ func (l *voskListener) Listen(ctx context.Context) (<-chan string, error) {
 		buffer := make([]int16, 2048)
 		stream, err := portaudio.OpenDefaultStream(1, 0, float64(sampleRate), len(buffer), &buffer)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "voice: cannot open default audio input stream (no microphone?): %v\n", err)
 			return
 		}
 		defer stream.Close()
 
 		if err := stream.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "voice: cannot start audio input stream: %v\n", err)
 			return
 		}
 		defer stream.Stop()
