@@ -55,6 +55,63 @@ func TestParseReminderInMinutes(t *testing.T) {
 	}
 }
 
+func TestParseRunShell(t *testing.T) {
+	now := time.Now()
+	cases := map[string]string{
+		"run go test ./...":       "go test ./...",
+		"run command git status":  "git status",
+		"RUN  go   version":       "go version",
+	}
+	for input, wantShell := range cases {
+		cmd, ok := ParseCommand(input, now)
+		if !ok {
+			t.Fatalf("expected %q to parse", input)
+		}
+		if cmd.Type != CommandRunShell {
+			t.Fatalf("%q: expected run_shell command, got %s", input, cmd.Type)
+		}
+		if cmd.Shell != wantShell {
+			t.Fatalf("%q: expected shell %q, got %q", input, wantShell, cmd.Shell)
+		}
+	}
+}
+
+func TestParseRunShellKeepsExistingCommands(t *testing.T) {
+	now := time.Date(2026, 5, 22, 10, 0, 0, 0, time.UTC)
+	cases := map[string]CommandType{
+		"sleep pc":                          CommandSleepPC,
+		"set alarm 7:30 am":                 CommandSetAlarm,
+		"set reminder buy milk in 10 minutes": CommandSetReminder,
+	}
+	for input, wantType := range cases {
+		cmd, ok := ParseCommand(input, now)
+		if !ok {
+			t.Fatalf("expected %q to parse", input)
+		}
+		if cmd.Type != wantType {
+			t.Fatalf("%q: expected %s, got %s (run-shell branch must not shadow it)", input, wantType, cmd.Type)
+		}
+	}
+
+	// "run" with no command should not parse as a runnable shell command.
+	if _, ok := ParseCommand("run", now); ok {
+		t.Fatal("bare 'run' should not parse")
+	}
+}
+
+func TestIsConfirmPhrase(t *testing.T) {
+	for _, p := range []string{"confirm", "yes do it", "execute", "  Confirm  "} {
+		if !IsConfirmPhrase(p) {
+			t.Fatalf("expected %q to be a confirm phrase", p)
+		}
+	}
+	for _, p := range []string{"cancel", "no", "run go test", ""} {
+		if IsConfirmPhrase(p) {
+			t.Fatalf("did not expect %q to be a confirm phrase", p)
+		}
+	}
+}
+
 func TestCommandWindowTimeout(t *testing.T) {
 	until := time.Date(2026, 5, 22, 10, 0, 30, 0, time.UTC)
 	if IsCommandWindowExpired(until, until.Add(-1*time.Second)) {
