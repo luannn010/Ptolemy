@@ -36,7 +36,10 @@ gracefully while the brain is down.
   contain recognition errors, and to silently correct it to the most likely
   intended question before answering concisely. No separate refinement call.
 - **Config:** read `BRAIN_BASE_URL` / `BRAIN_MODEL` from the environment;
-  `run-vosk.bat` sets `BRAIN_BASE_URL=http://127.0.0.1:1089`.
+  `run-vosk.bat` sets `BRAIN_BASE_URL=http://127.0.0.1:1089` and
+  `BRAIN_MODEL=qwen3.5:4b` (the user's model, served via Ollama's
+  OpenAI-compatible API). The repo config default model (`gemma-4-e2b`) is left
+  unchanged; the env var overrides it.
 
 ## Non-Goals (YAGNI)
 
@@ -85,8 +88,8 @@ only on `brain`, and the helper is unit-testable without the Windows/cgo build.
   side effects). (Documented; no special-casing.)
 
 ### 3. `run-vosk.bat` + README
-- `run-vosk.bat` sets `BRAIN_BASE_URL=http://127.0.0.1:1089` (and leaves
-  `BRAIN_MODEL` to the env/default) so the catcher targets the user's server.
+- `run-vosk.bat` sets `BRAIN_BASE_URL=http://127.0.0.1:1089` and
+  `BRAIN_MODEL=qwen3.5:4b` so the catcher targets the user's Ollama server/model.
 - README documents the chat behavior, the system-prompt refinement, the port,
   and the graceful-degradation message.
 
