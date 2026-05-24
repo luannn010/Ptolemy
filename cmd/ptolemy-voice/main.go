@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/luannn010/ptolemy/internal/brain"
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/voice"
 )
@@ -36,6 +37,20 @@ func workerBaseURL() string {
 		return v
 	}
 	return config.DefaultWorkerBaseURL
+}
+
+func brainBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("BRAIN_BASE_URL")); v != "" {
+		return v
+	}
+	return config.DefaultBrainBaseURL
+}
+
+func brainModel() string {
+	if v := strings.TrimSpace(os.Getenv("BRAIN_MODEL")); v != "" {
+		return v
+	}
+	return config.DefaultBrainModel
 }
 
 // useColor reports whether the dimmed observation block should use ANSI codes.
@@ -100,7 +115,9 @@ func main() {
 	profile := voice.LoadWakeProfile(profilePath)
 
 	execClient := voice.NewHTTPExecutorClient(workerBaseURL())
+	brainClient := brain.NewClient(brainBaseURL(), brainModel())
 	fmt.Printf("Voice catcher started. Executor: %s\n", workerBaseURL())
+	fmt.Printf("Brain: %s (model %s)\n", brainBaseURL(), brainModel())
 	fmt.Println("Say 'Hey Ptolemy' to activate.")
 	fmt.Println("Every phrase the speech engine recognizes is printed below as `heard: \"...\"`.")
 	fmt.Println("If you speak and see no `heard:` line, the microphone/speech engine is not picking up audio.")
@@ -211,14 +228,26 @@ func main() {
 			}
 			cmd, ok := voice.ParseCommand(normalized, time.Now())
 			if !ok {
-				fmt.Println("I didn't catch that.")
+				// Not a built-in command: ask the brain. The voice system prompt
+				// tells the model the input is raw speech-to-text and to correct
+				// it before answering, so the prompt is refined inside this call.
+				answer, chatErr := brainClient.Chat(ctx, brain.ChatMessagesForVoice(phrase))
+				eventMsg := strings.TrimSpace(answer)
+				if chatErr != nil {
+					fmt.Printf("Ptolemy (brain unavailable): %v\n", chatErr)
+					eventMsg = "brain unavailable: " + chatErr.Error()
+				} else {
+					fmt.Printf("Ptolemy: %s\n", strings.TrimSpace(answer))
+				}
 				emitEvent(*realtimeJSON, runtimeEvent{
 					Time:    time.Now().Format(time.RFC3339Nano),
-					Type:    "command_unrecognized",
+					Type:    "chat_response",
 					Heard:   phrase,
 					Active:  true,
-					Message: "not parsed as supported command",
+					Message: eventMsg,
 				})
+				// Stay awake so follow-up questions don't need the wake phrase.
+				activeUntil = time.Now().Add(commandWindow)
 				continue
 			}
 			emitEvent(*realtimeJSON, runtimeEvent{
