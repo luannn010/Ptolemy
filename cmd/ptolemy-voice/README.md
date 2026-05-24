@@ -142,9 +142,27 @@ input is raw speech-to-text, the chat's system prompt instructs the model to
 silently correct recognition errors before answering.
 
 Configure the brain with `BRAIN_BASE_URL` (default `http://127.0.0.1:8088`) and
-`BRAIN_MODEL` (default `gemma-4-e2b`). `run-vosk.bat` sets these to
-`http://127.0.0.1:1089` and `qwen3.5:4b` (Ollama). If the brain is unreachable
-you'll see `Ptolemy (brain unavailable): ...` and the catcher keeps running.
+`BRAIN_MODEL` (default `gemma-4-e2b`). If the brain is unreachable you'll see
+`Ptolemy (brain unavailable): ...` and the catcher keeps running.
+
+### Reaching a llama.cpp brain running inside WSL
+
+If your `llama-server` (llama.cpp) runs **inside WSL** bound to
+`127.0.0.1:1089`, the Windows voice catcher cannot reach it directly: Windows and
+WSL have separate loopback networks, and Windows `svchost` squats port 1089 so
+WSL2's localhost-forwarding can't expose it. The fix is the bundled relay:
+
+1. In **WSL**, start the relay (forwards a free port to llama-server):
+   ```bash
+   python3 brain-relay.py        # 127.0.0.1:18089 -> 127.0.0.1:1089
+   ```
+   WSL2 then forwards Windows `localhost:18089` to it automatically.
+2. `run-vosk.bat` already points `BRAIN_BASE_URL` at `http://127.0.0.1:18089`
+   and `BRAIN_MODEL` at `Qwen3.5-4B-Q4_K_M.gguf` (llama.cpp ignores the model
+   field, so any string works).
+
+The relay must be running for chat to work; re-run it after a WSL restart.
+Verify from Windows: `curl http://127.0.0.1:18089/v1/models` should return JSON.
 
 ## Flags
 
