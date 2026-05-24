@@ -125,6 +125,27 @@ The matcher always keeps the built-in "hey ptolemy" as a fallback, and uses a
 small edit-distance tolerance so minor recognizer wobble still wakes it.
 Override the profile location with `WAKE_PROFILE_PATH`.
 
+## Brain chat (ask anything)
+
+After the wake phrase, anything that isn't a built-in command is sent to the
+local brain LLM and answered out loud in the terminal:
+
+```
+hey ptolemy
+what's the capital of France
+Ptolemy: Paris.
+```
+
+It stays awake after each answer, so you can keep asking without repeating the
+wake phrase (each question is independent — there is no memory yet). Because the
+input is raw speech-to-text, the chat's system prompt instructs the model to
+silently correct recognition errors before answering.
+
+Configure the brain with `BRAIN_BASE_URL` (default `http://127.0.0.1:8088`) and
+`BRAIN_MODEL` (default `gemma-4-e2b`). `run-vosk.bat` sets these to
+`http://127.0.0.1:1089` and `qwen3.5:4b` (Ollama). If the brain is unreachable
+you'll see `Ptolemy (brain unavailable): ...` and the catcher keeps running.
+
 ## Flags
 
 - `-realtime-json` — emit runtime events as JSON lines (heard, wake_detected,
