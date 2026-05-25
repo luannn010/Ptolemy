@@ -16,6 +16,8 @@ func Tools() []mcp.Tool {
 				"purpose":        map[string]any{"type": "string"},
 				"reasoning_step": map[string]any{"type": "string"},
 				"target":         map[string]any{"type": "string"},
+				"confirm_token":  map[string]any{"type": "string"},
+				"pending_id":     map[string]any{"type": "string"},
 			},
 			"required": []string{"session_id", "command"},
 		}),

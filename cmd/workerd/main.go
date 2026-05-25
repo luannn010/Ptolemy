@@ -8,19 +8,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/luannn010/ptolemy/internal/action"
-	"github.com/luannn010/ptolemy/internal/agentloop"
-	"github.com/luannn010/ptolemy/internal/approval"
-	"github.com/luannn010/ptolemy/internal/brain"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/httpapi"
 	"github.com/luannn010/ptolemy/internal/logging"
-	"github.com/luannn010/ptolemy/internal/packstudio"
+	"github.com/luannn010/ptolemy/internal/policy"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
-
 	"github.com/rs/zerolog/log"
 )
 
@@ -38,75 +33,28 @@ func main() {
 	}
 	defer baseStore.Close()
 
-	// Phase 8: run SQLite migrations before any stores use the DB.
-	if err := store.RunMigrations(context.Background(), baseStore.SQLDB()); err != nil {
-		log.Fatal().Err(err).Msg("failed to run database migrations")
-	}
-
 	sessionStore := session.NewStore(baseStore)
 	commandStore := command.NewStore(baseStore)
-	actionStore := action.NewStore(baseStore.SQLDB())
-	agentRunStore := agentloop.NewStore(baseStore.SQLDB())
-	logStore := logging.NewStore(baseStore.SQLDB())
-	approvalStore := approval.NewStore(baseStore.SQLDB())
-	packStudioStore := packstudio.NewStore(baseStore.SQLDB())
-
-	runner := terminal.NewTmuxRunner()
-	toolRegistry := agentloop.NewToolRegistry()
-	toolExecutor := agentloop.NewToolExecutor(sessionStore, approvalStore, runner, ".state/agent-runs")
-	toolExecutor.RegisterAll(toolRegistry)
-	finalizer := agentloop.NewFinalizer(".state/agent-runs")
-	agentService := agentloop.NewService(
-		agentRunStore,
-		actionStore,
-		logStore,
-		sessionStore,
-		brain.NewClient(cfg.BrainBaseURL, cfg.BrainModel),
-		toolRegistry,
-		agentloop.DefaultLimits(),
-		finalizer,
-	)
-	agentService.SetSessionBootstrap(func(ctx context.Context, sessionID string, workspace string) error {
-		return runner.BootstrapSession(ctx, sessionID, workspace)
-	})
-
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to detect repo root")
-	}
-
-	packStudioService := packstudio.NewService(
-		repoRoot,
-		packStudioStore,
-		agentRunStore,
-		agentService,
-		actionStore,
-		commandStore,
-		runner,
-	)
-	if err := packStudioService.Recover(context.Background()); err != nil {
-		log.Fatal().Err(err).Msg("failed to recover pack studio runs")
-	}
-
-	router := httpapi.NewRouter(
-		sessionStore,
-		commandStore,
-		actionStore,
-		agentRunStore,
-		agentService,
-		logStore,
-		approvalStore,
-		runner,
-		httpapi.NewPackStudioHandler(packStudioService),
-		httpapi.HealthConfig{
-			MCPBaseURL: cfg.MCPBaseURL,
-			Timeout:    time.Duration(cfg.HealthTimeoutMS) * time.Millisecond,
-		},
-	)
+	engine := policy.NewEngine(policy.LoadRuleset(cfg.PolicyPath))
+	approvals := policy.NewApprovals()
+	rawRunner := terminal.NewRunner()
+	guardedRunner := policy.NewGuardedRunner(engine, approvals, rawRunner, baseStore.SQLDB())
+	commandService := command.NewService(guardedRunner, commandStore)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,
-		Handler:      router,
+		Handler: httpapi.NewRouter(httpapi.RouterDeps{
+			Sessions:  sessionStore,
+			Commands:  commandService,
+			CommandDB: commandStore,
+		}),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	approveServer := &http.Server{
+		Addr:         "127.0.0.1:" + cfg.ApprovePort,
+		Handler:      httpapi.NewApproveRouter(approvals),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -115,32 +63,26 @@ func main() {
 	log.Info().
 		Str("app_env", cfg.AppEnv).
 		Str("http_port", cfg.HTTPPort).
-		Str("state_dir", cfg.StateDir).
 		Str("db_path", cfg.DBPath).
-		Msg("starting workerd")
+		Msg("starting workerd (mvp rebuild baseline)")
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal().Err(err).Msg("http server failed")
 		}
 	}()
+	go func() {
+		if err := approveServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal().Err(err).Msg("approve server failed")
+		}
+	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	sig := <-stop
-	log.Info().
-		Str("signal", sig.String()).
-		Msg("shutdown signal received")
+	<-stop
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Error().Err(err).Msg("graceful shutdown failed")
-	} else {
-		log.Info().Msg("http server stopped gracefully")
-	}
-
-	log.Info().Msg("workerd exited")
+	_ = server.Shutdown(ctx)
+	_ = approveServer.Shutdown(ctx)
 }

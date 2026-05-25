@@ -11,9 +11,11 @@ import (
 type Config struct {
 	AppEnv          string
 	HTTPPort        string
+	ApprovePort     string
 	LogLevel        string
 	StateDir        string
 	DBPath          string
+	PolicyPath      string
 	WorkerBaseURL   string
 	BrainBaseURL    string
 	BrainModel      string
@@ -35,9 +37,11 @@ func Load() (Config, error) {
 	cfg := Config{
 		AppEnv:          getEnv("APP_ENV", "development"),
 		HTTPPort:        getEnv("HTTP_PORT", "8080"),
+		ApprovePort:     getEnv("APPROVE_PORT", "8081"),
 		LogLevel:        getEnv("LOG_LEVEL", "debug"),
 		StateDir:        getEnv("STATE_DIR", "./state"),
 		DBPath:          getEnv("DB_PATH", "./state/ptolemy.db"),
+		PolicyPath:      getEnv("POLICY_PATH", "./.ptolemy/policy.json"),
 		WorkerBaseURL:   getEnv("WORKER_BASE_URL", DefaultWorkerBaseURL),
 		BrainBaseURL:    getEnv("BRAIN_BASE_URL", DefaultBrainBaseURL),
 		BrainModel:      getEnv("BRAIN_MODEL", DefaultBrainModel),
