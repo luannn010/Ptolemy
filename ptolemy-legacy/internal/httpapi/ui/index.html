@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ptolemy Pack Studio</title>
+  <link rel="stylesheet" href="/ui/assets/styles.css">
+</head>
+<body>
+  <div class="ambient ambient-left"></div>
+  <div class="ambient ambient-right"></div>
+  <div id="app" class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div>
+          <p class="eyebrow">Local Orchestration Console</p>
+          <h1>Ptolemy Pack Studio</h1>
+          <p class="subtitle">Author task packs, queue deterministic runs, and monitor live execution without leaving the worker.</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div id="shell-status" class="shell-status">
+          <span class="status-dot"></span>
+          <span>Connecting</span>
+        </div>
+        <nav class="nav" aria-label="Primary">
+          <a data-nav="studio" href="/ui/studio">Studio</a>
+          <a data-nav="overview" href="/ui/overview">Overview</a>
+          <a data-nav="runs" href="/ui/overview">Runs</a>
+        </nav>
+      </div>
+    </header>
+    <main id="view" class="view" aria-live="polite"></main>
+  </div>
+  <script src="/ui/assets/app.js" defer></script>
+</body>
+</html>
