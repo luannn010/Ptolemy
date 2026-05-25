@@ -21,6 +21,11 @@ func (f *fakeGuardedRunner) Run(_ context.Context, _ string, _ string, _ string,
 	return f.runResult, f.runErr
 }
 
+func (f *fakeGuardedRunner) RunConfirmed(_ context.Context, _ string, _ string, _ string, _ string, _ int) (terminal.Result, error) {
+	f.calls++
+	return f.runResult, f.runErr
+}
+
 func newServiceHarness(t *testing.T) (*Service, *Store, *fakeGuardedRunner, *store.Store) {
 	t.Helper()
 
