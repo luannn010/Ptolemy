@@ -1,3 +1,0 @@
-[90m1:49PM[0m [32mINF[0m [1mstarting workerd[0m [36mapp_env=[0mdevelopment [36mdb_path=[0m./state/ptolemy.db [36mhttp_port=[0m8080 [36mstate_dir=[0m./state
-[90m1:49PM[0m [32mINF[0m [1mhealth check called[0m [36mmethod=[0mGET [36mpath=[0m/health
-[90m1:49PM[0m [32mINF[0m [1mhealth check called[0m [36mmethod=[0mGET [36mpath=[0m/health
