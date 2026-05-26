@@ -70,3 +70,15 @@ func TestPgStore_MarkSuperseded(t *testing.T) {
 		t.Fatalf("expected SupersededBy=b, got %+v", got[0].SupersededBy)
 	}
 }
+
+func TestNullableStr(t *testing.T) {
+	if got := nullableStr(""); got != nil {
+		t.Fatalf("nullableStr(\"\") must be nil, got %v", got)
+	}
+	if got := nullableStr("x"); got != "x" {
+		t.Fatalf("nullableStr(\"x\") must be \"x\", got %v", got)
+	}
+	if got := nullableStr("  "); got != "  " {
+		t.Fatalf("nullableStr preserves non-empty whitespace, got %v", got)
+	}
+}

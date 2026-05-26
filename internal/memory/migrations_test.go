@@ -46,3 +46,41 @@ func TestApplyMigrations_CreatesChunksTable(t *testing.T) {
 		t.Fatalf("second ApplyMigrations: %v", err)
 	}
 }
+
+func TestMigrationsFS_Contains0001(t *testing.T) {
+	entries, err := migrationFS.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	want := "0001_chunks_core.sql"
+	found := false
+	for _, n := range names {
+		if n == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected %s in embedded migrations, got %v", want, names)
+	}
+}
+
+func TestMigrationsFS_SubstitutesEmbeddingDim(t *testing.T) {
+	data, err := migrationFS.ReadFile("migrations/0001_chunks_core.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "__EMBEDDING_DIM__") {
+		t.Fatalf("migration file must contain __EMBEDDING_DIM__ placeholder")
+	}
+	substituted := strings.ReplaceAll(string(data), "__EMBEDDING_DIM__", "1536")
+	if strings.Contains(substituted, "__EMBEDDING_DIM__") {
+		t.Fatalf("substitution did not replace all occurrences")
+	}
+	if !strings.Contains(substituted, "VECTOR(1536)") {
+		t.Fatalf("expected VECTOR(1536) after substitution, got: %s", substituted)
+	}
+}
