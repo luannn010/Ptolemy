@@ -1,0 +1,48 @@
+{
+  "rules": [
+    {
+      "id": "deny-policy-write",
+      "contains": ".ptolemy/policy.json",
+      "effect": "deny",
+      "reason": "policy file is protected"
+    },
+    {
+      "id": "deny-secret-cmd",
+      "contains": ".env",
+      "effect": "deny",
+      "reason": "secret file access denied"
+    },
+    {
+      "id": "deny-destructive",
+      "contains": "git push --force",
+      "effect": "deny",
+      "reason": "force push denied"
+    },
+    {
+      "id": "deny-destructive-rm",
+      "contains": "rm -rf",
+      "effect": "deny",
+      "reason": "destructive deletion denied"
+    },
+    {
+      "id": "ask-push-cmd",
+      "contains": "git push",
+      "effect": "ask",
+      "channel": "oob",
+      "reason": "git push requires confirmation"
+    },
+    {
+      "id": "ask-network",
+      "contains": "curl http",
+      "effect": "ask",
+      "channel": "oob",
+      "reason": "network download requires confirmation"
+    },
+    {
+      "id": "allow-build-test",
+      "contains": "go test",
+      "effect": "allow",
+      "reason": "build/test command allowed"
+    }
+  ]
+}

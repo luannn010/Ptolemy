@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -25,7 +26,7 @@ func Open(dbPath string) (*Store, error) {
 
 	s := &Store{DB: db}
 
-	if err := s.migrate(); err != nil {
+	if err := RunMigrations(context.Background(), s.DB); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -52,45 +53,6 @@ func applyPragmas(db *sql.DB) error {
 	for _, pragma := range pragmas {
 		if _, err := db.Exec(pragma); err != nil {
 			return fmt.Errorf("configure sqlite pragma %q: %w", pragma, err)
-		}
-	}
-
-	return nil
-}
-
-func (s *Store) migrate() error {
-	queries := []string{
-		`
-		CREATE TABLE IF NOT EXISTS sessions (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			status TEXT NOT NULL,
-			workspace TEXT NOT NULL,
-			description TEXT NOT NULL DEFAULT '',
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			closed_at TEXT
-		);
-		`,
-		`
-		CREATE TABLE IF NOT EXISTS command_logs (
-			id TEXT PRIMARY KEY,
-			session_id TEXT NOT NULL,
-			command TEXT NOT NULL,
-			cwd TEXT NOT NULL,
-			exit_code INTEGER NOT NULL,
-			output TEXT NOT NULL,
-			error_output TEXT NOT NULL DEFAULT '',
-			duration_ms INTEGER NOT NULL,
-			created_at TEXT NOT NULL,
-			FOREIGN KEY(session_id) REFERENCES sessions(id)
-		);
-		`,
-	}
-
-	for _, query := range queries {
-		if _, err := s.DB.Exec(query); err != nil {
-			return fmt.Errorf("migration failed: %w", err)
 		}
 	}
 

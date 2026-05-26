@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"runtime"
 	"testing"
 )
 
@@ -30,8 +31,11 @@ func TestRunnerRunFailure(t *testing.T) {
 }
 
 func TestRunnerRunTimeout(t *testing.T) {
-	runner := NewRunner()
+	if runtime.GOOS == "windows" {
+		t.Skip("timeout command is environment-specific on Windows shells")
+	}
 
+	runner := NewRunner()
 	result := runner.Run(context.Background(), "sleep 2", "", 1)
 
 	if result.ExitCode != 124 {
