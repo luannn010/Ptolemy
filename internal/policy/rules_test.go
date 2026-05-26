@@ -1,0 +1,73 @@
+package policy
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/luannn010/ptolemy/internal/domain"
+)
+
+func TestLoadRuleset_FileMissingFallsBackToDefault(t *testing.T) {
+	rs := LoadRuleset(filepath.Join(t.TempDir(), "does-not-exist.json"))
+	if len(rs.Rules) == 0 {
+		t.Fatalf("missing file must yield DefaultRuleset, got empty rules")
+	}
+	if rs.Rules[0].ID != "deny-policy-write" {
+		t.Fatalf("expected default ruleset's first rule, got %q", rs.Rules[0].ID)
+	}
+}
+
+func TestLoadRuleset_InvalidJSONFallsBackToDefault(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.json")
+	if err := os.WriteFile(path, []byte("not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rs := LoadRuleset(path)
+	if len(rs.Rules) == 0 || rs.Rules[0].ID != "deny-policy-write" {
+		t.Fatalf("invalid JSON must yield DefaultRuleset")
+	}
+}
+
+func TestLoadRuleset_EmptyRulesArrayFallsBackToDefault(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "empty.json")
+	if err := os.WriteFile(path, []byte(`{"rules":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rs := LoadRuleset(path)
+	if len(rs.Rules) == 0 || rs.Rules[0].ID != "deny-policy-write" {
+		t.Fatalf("empty rules must yield DefaultRuleset")
+	}
+}
+
+func TestLoadRuleset_ValidFileParses(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ok.json")
+	body := `{"rules":[{"id":"only","contains":"frob","effect":"deny","reason":"r"}]}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rs := LoadRuleset(path)
+	if len(rs.Rules) != 1 || rs.Rules[0].ID != "only" {
+		t.Fatalf("expected single custom rule, got %+v", rs)
+	}
+	if rs.Rules[0].Effect != domain.EffectDeny {
+		t.Fatalf("effect must round-trip via JSON")
+	}
+}
+
+func TestErrDenied_Error(t *testing.T) {
+	e := ErrDenied{RuleID: "x", Reason: "y"}
+	if e.Error() != "denied: y" {
+		t.Fatalf("unexpected Error(): %q", e.Error())
+	}
+}
+
+func TestErrNeedsConfirmation_Error(t *testing.T) {
+	e := ErrNeedsConfirmation{PendingID: "p", Reason: "r"}
+	if e.Error() != "needs confirmation" {
+		t.Fatalf("unexpected Error(): %q", e.Error())
+	}
+}

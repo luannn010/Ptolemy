@@ -10,12 +10,15 @@ import (
 
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/config"
+	"github.com/luannn010/ptolemy/internal/fileops"
+	"github.com/luannn010/ptolemy/internal/gitops"
 	"github.com/luannn010/ptolemy/internal/httpapi"
 	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/policy"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
+	"github.com/luannn010/ptolemy/internal/worktree"
 	"github.com/rs/zerolog/log"
 )
 
@@ -37,9 +40,28 @@ func main() {
 	commandStore := command.NewStore(baseStore)
 	engine := policy.NewEngine(policy.LoadRuleset(cfg.PolicyPath))
 	approvals := policy.NewApprovals()
+	// Raw adapters — the only place these are visible to anything outside their guard.
+	workspaceRoot := "."
+	worktreeRoot := "./.worktrees"
 	rawRunner := terminal.NewRunner()
+	rawFileOps := fileops.New(workspaceRoot)
+	rawGit := gitops.New(workspaceRoot)
+	rawWorktrees := worktree.NewManager(workspaceRoot, worktreeRoot)
+
+	// Guards
 	guardedRunner := policy.NewGuardedRunner(engine, approvals, rawRunner, baseStore.SQLDB())
+	guardedFileOps := policy.NewGuardedFileOps(engine, approvals, rawFileOps, baseStore.SQLDB())
+	guardedGit := policy.NewGuardedGit(engine, approvals, rawGit, workspaceRoot, baseStore.SQLDB())
+	guardedWorktree := policy.NewGuardedWorktree(engine, approvals, rawWorktrees, workspaceRoot, baseStore.SQLDB())
+
 	commandService := command.NewService(guardedRunner, commandStore)
+
+	// GuardedFileOps/Git/Worktree are constructed here so services can be migrated
+	// onto them in follow-up work (plan §11). The discard assignments document the
+	// dependency without requiring a parallel service-layer rewrite in this PR.
+	_ = guardedFileOps
+	_ = guardedGit
+	_ = guardedWorktree
 
 	server := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,

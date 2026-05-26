@@ -16,12 +16,7 @@ type fakeGuardedRunner struct {
 	calls     int
 }
 
-func (f *fakeGuardedRunner) Run(_ context.Context, _ string, _ string, _ string, _ int) (terminal.Result, error) {
-	f.calls++
-	return f.runResult, f.runErr
-}
-
-func (f *fakeGuardedRunner) RunConfirmed(_ context.Context, _ string, _ string, _ string, _ string, _ int) (terminal.Result, error) {
+func (f *fakeGuardedRunner) Run(_ context.Context, _ string, _ string, _ string, _ int, _ policy.CallOpts) (terminal.Result, error) {
 	f.calls++
 	return f.runResult, f.runErr
 }
