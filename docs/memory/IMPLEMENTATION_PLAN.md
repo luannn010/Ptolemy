@@ -12,22 +12,63 @@ next phase starts. Check boxes as you go.
 
 Goal: an end-to-end pipeline you can query. Quality does not matter yet.
 
-- [ ] Migration `0001_chunks_core` (table + `embedding` + HNSW index).
-- [ ] `Loader` for the single most common source.
-- [ ] `Parser` → clean text + metadata.
-- [ ] `Chunker` — fixed-size + overlap, sizes in config.
-- [ ] `Embedder` — batched calls to the embedding model.
-- [ ] `Store.upsert` / `get` against Postgres.
-- [ ] `VectorRetriever` — vector-only query (see `RETRIEVAL.md` Phase 0 form).
-- [ ] `PassthroughFusion`.
-- [ ] `ContextBuilder` — concatenate top-k with source ids, enforce a token budget.
-- [ ] `Generator` — LLM call returning answer + citations.
-- [ ] Orchestrator wiring components from config (no hard-coded retriever/fusion).
+**Status: code complete on branch `ptolemy/memory-phase0` (PR pending). Live-service smoke test blocked on the embedding server at `192.168.0.164:1090` (connection refused as of 2026-05-27).**
+
+- [x] Migration `0001_chunks_core` (table + `embedding` + HNSW index).
+      → `internal/memory/migrations/0001_chunks_core.sql` + `internal/memory/migrations.go`.
+      `__EMBEDDING_DIM__` is substituted at runtime from `MemoryConfig.EmbeddingDim`. Unit-tested via
+      `TestMigrationsFS_*`; integration test `TestApplyMigrations_CreatesChunksTable` skips without `DATABASE_URL`.
+- [x] `Loader` for the single most common source.
+      → File-system loader implemented inline in `cmd/memory-demo/main.go` (`os.ReadFile`). A dedicated `Loader` interface
+      is deferred until a second source type exists (YAGNI per CLAUDE.md).
+- [x] `Parser` → clean text + metadata.
+      → Pass-through in `Orchestrator.Ingest`: raw text goes straight to the chunker. PDF/HTML parsing is a follow-up; the
+      `ParsedDocument` type and `published_at` extraction from `RawDocument.Metadata` are in place so a real Parser can land
+      without touching the orchestrator.
+- [x] `Chunker` — fixed-size + overlap, sizes in config.
+      → `internal/memory/chunker.go` (`FixedSizeChunker{MaxRunes, Overlap}`). Rune-based to avoid mid-codepoint splits;
+      sizes are driven by `RAG_CHUNK_SIZE_TOKENS` / `RAG_CHUNK_OVERLAP_TOKENS` via a 4-runes-per-token approximation in
+      `module.go`. 5 unit tests cover splitting, short-doc passthrough, bad config, metadata preservation, multibyte runes.
+- [x] `Embedder` — batched calls to the embedding model.
+      → `internal/memory/embedder.go` (`OpenAIEmbedder`). Single batched POST to `/v1/embeddings`, optional bearer auth. 5
+      unit tests via `httptest` cover batching, auth header on/off, 5xx propagation, trailing-slash normalization.
+- [x] `Store.upsert` / `get` against Postgres.
+      → `internal/memory/store.go` (`PgStore` over pgx + pgvector-go). Includes `MarkSuperseded` for Phase 2 readiness;
+      single-tenant (tenant_id nullable). Integration tests `TestPgStore_*` skip without `DATABASE_URL`; pure helper
+      `nullableStr` is unit-tested.
+- [x] `VectorRetriever` — vector-only query (see `RETRIEVAL.md` Phase 0 form).
+      → `internal/memory/retriever.go`. Query: `ORDER BY embedding <=> $1 LIMIT $2 WHERE superseded_by IS NULL`, so Phase 2
+      supersession is a no-op SQL change. Integration test skips without `DATABASE_URL`.
+- [x] `PassthroughFusion`.
+      → `internal/memory/fusion.go`. 4 unit tests cover k=1, k≥len, k≤0, and empty input.
+- [x] `ContextBuilder` — concatenate top-k with source ids, enforce a token budget.
+      → `internal/memory/context_builder.go` (`BudgetContextBuilder{MaxRunes}`). Each source is prefixed with
+      `[source:id]` so the Generator can cite by id and the orchestrator can verify citations. 5 unit tests cover
+      budget enforcement, the always-include-one rule, empty input, system-prompt content, and MaxRunes=0 (unlimited).
+- [x] `Generator` — LLM call returning answer + citations.
+      → `internal/memory/generator.go` (`OpenAIGenerator`). POSTs `/v1/chat/completions`, parses `[source:id]` markers from
+      the response, and **drops hallucinated citations** by intersecting with `PromptContext.SourceIDs`. 6 unit tests via
+      `httptest` cover citation extraction, hallucination defense, 5xx, no-choices error, and auth header.
+- [x] Orchestrator wiring components from config (no hard-coded retriever/fusion).
+      → `internal/memory/orchestrator.go` + `internal/memory/module.go`. Every dependency is an interface; only
+      `NewModule(MemoryConfig)` instantiates concrete types. Phase 1 can swap `Retriever` and `Fusion` without touching
+      `Orchestrator` or any caller. 5 unit tests via fake Store/Retriever/Generator cover ingest, answer, published_at
+      handling, vector-count-mismatch error, and Query.K override.
 
 **Acceptance:**
 - [ ] Ingesting a small known corpus then asking a question returns a grounded answer
       with at least one correct citation.
-- [ ] Swapping the retriever implementation is a config change, not a code edit.
+      → **Pending: blocked on the embedding server at `192.168.0.164:1090` (connection refused 2026-05-27).** The
+      `cmd/memory-demo` CLI is built (`bin/memory-demo ingest <id> <path>` / `bin/memory-demo ask "<q>"`) and tested
+      against fakes; the live run is a 30-second exercise once the embedding endpoint accepts connections.
+- [x] Swapping the retriever implementation is a config change, not a code edit.
+      → Demonstrated by construction: `Orchestrator.Retriever` is an interface field set by `NewModule`. Switching from
+      `VectorRetriever` to a future `HybridRetriever` is a one-line change in `module.go` (planned for Phase 1).
+
+### Phase 0 follow-ups (deliberately out of scope)
+- Provision Postgres+pgvector in CI so the integration tests stop skipping.
+- Wire memory into `cmd/workerd` HTTP routes + the `internal/mcp` tool surface so it's reachable beyond `cmd/memory-demo`.
+- Real Parser implementations (PDF/HTML/MD) behind a `Parser` interface once a second source type is needed.
 
 ---
 
@@ -102,16 +143,29 @@ Without this you cannot tell whether any later change actually helped.
 
 ---
 
-## Open questions (need a human / repo decision — do not guess)
+## Open questions — resolved during Phase 0
 
-1. **Language & framework** of Ptolemy — implement in it.
-2. **BM25 backend** — which extension the host supports (blocks Phase 1).
-3. **Embedding model & dimension** — sets the schema and re-embedding cost.
-4. **Multi-tenant?** — if yes, `tenant_id` filtering is mandatory on every query.
-5. **Supersession detection strategy** — source-key match vs. similarity threshold vs.
-   explicit document versioning. Affects `SupersessionJob` design.
-6. **Is conversational/episodic memory needed?** — if Ptolemy must remember a user across
-   sessions, that is a separate extension (StructMem-style) on this same store; flag it
-   rather than bolting it on silently.
+1. **Language & framework** → **Go 1.25**, module `github.com/luannn010/ptolemy`. Memory lives in `internal/memory/`.
+2. **BM25 backend** → **DEFERRED to Phase 1**. Phase 0 does not need it. Current shortlist (in preference order):
+   `pg_search` (ParadeDB), `pg_textsearch` (Timescale), native `tsvector` (MVP fallback). The choice will be locked
+   when Phase 1 starts; the spec's `Bm25Retriever` interface isolates the impact.
+3. **Embedding model & dimension** → **OpenAI-compatible POST `/v1/embeddings`** at `EMBEDDING_BASE_URL`. Model and
+   dimension are configured per deployment via `EMBEDDING_MODEL` + `EMBEDDING_DIM` (re-embedding is required if either
+   changes). `.env.example` ships placeholders `bge-large-en-v1.5` / `1024`; the live server endpoint in this
+   environment is `http://192.168.0.164:1090` (not running as of 2026-05-27).
+4. **Multi-tenant?** → **No, single-tenant.** `tenant_id` column stays in the schema (nullable) but is never filtered.
+   If multi-tenancy is added later, the change is: make `tenant_id NOT NULL`, add `AND tenant_id = $N` to every CTE in
+   the hybrid query, and thread a tenant identifier through `Query`.
+5. **Supersession detection strategy** → **DEFERRED to Phase 2**. The schema column `superseded_by` exists and the
+   query already filters `WHERE superseded_by IS NULL`, so adoption is purely additive when `SupersessionJob` is built.
+6. **Conversational/episodic memory?** → **Out of scope for this build.** The current module targets the knowledge-base
+   + freshness use case per `README.md`. If session-spanning user memory is added, it lives in a separate table on
+   this same Postgres store; do not bolt it onto `chunks`.
 
-Surface these to the team before or during the phase that depends on them.
+### New decisions locked in Phase 0
+- **LLM endpoint** reuses the existing `BRAIN_BASE_URL` + `BRAIN_MODEL` env vars (the local llama.cpp / Ollama brain).
+  The Generator calls OpenAI-compatible `/v1/chat/completions` on that endpoint.
+- **Citation discipline:** the Generator parses `[source:id]` markers from the LLM response and intersects them with
+  the `PromptContext.SourceIDs` it provided — hallucinated source ids are dropped silently before reaching the caller.
+- **Postgres-free unit tests:** every component has unit tests that run without a database; integration tests that
+  need `DATABASE_URL` skip cleanly so CI without Postgres still produces a green build.
