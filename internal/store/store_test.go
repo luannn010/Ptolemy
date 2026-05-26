@@ -1,6 +1,8 @@
 package store
 
 import (
+	"fmt"
+	"sort"
 	"testing"
 )
 
@@ -17,25 +19,34 @@ func TestOpenStoreAndMigrate(t *testing.T) {
 		t.Fatal("expected DB to be initialized")
 	}
 
-	tables := []string{
-		"sessions",
+	expectedTables := []string{
 		"command_logs",
+		"policy_decisions",
+		"schema_migrations",
+		"sessions",
 	}
 
-	for _, table := range tables {
+	rows, err := s.DB.Query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+	if err != nil {
+		t.Fatalf("expected to list tables, got %v", err)
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
 		var name string
-		err := s.DB.QueryRow(
-			"SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-			table,
-		).Scan(&name)
-
-		if err != nil {
-			t.Fatalf("expected table %s to exist: %v", table, err)
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("expected row scan to succeed, got %v", err)
 		}
-
-		if name != table {
-			t.Fatalf("expected table %s, got %s", table, name)
+		if name == "sqlite_sequence" {
+			continue
 		}
+		tables = append(tables, name)
+	}
+	sort.Strings(tables)
+
+	if fmt.Sprintf("%v", tables) != fmt.Sprintf("%v", expectedTables) {
+		t.Fatalf("expected exactly tables %v, got %v", expectedTables, tables)
 	}
 }
 
@@ -79,5 +90,31 @@ func TestOpenStoreConfiguresSQLiteForWorkerConcurrency(t *testing.T) {
 	}
 	if journalMode != "wal" {
 		t.Fatalf("expected journal_mode to be wal, got %s", journalMode)
+	}
+}
+
+func TestOpenStoreIsIdempotentAcrossReopen(t *testing.T) {
+	dbPath := t.TempDir() + "/test.db"
+
+	s1, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("expected first open to succeed, got %v", err)
+	}
+	if err := s1.Close(); err != nil {
+		t.Fatalf("expected first close to succeed, got %v", err)
+	}
+
+	s2, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("expected second open to succeed, got %v", err)
+	}
+	defer s2.Close()
+
+	var count int
+	if err := s2.DB.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version='v1'").Scan(&count); err != nil {
+		t.Fatalf("expected schema_migrations query to succeed, got %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected migration v1 recorded once, got %d", count)
 	}
 }
