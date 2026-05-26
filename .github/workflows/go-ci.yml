@@ -25,8 +25,20 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Install runtime test deps (tmux, ripgrep)
+        run: sudo apt-get update && sudo apt-get install -y tmux ripgrep
+
+      - name: Configure git for tests
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+          git config --global init.defaultBranch main
+
       - name: Run unit tests with coverage
-        run: go test -covermode=atomic -coverprofile=coverage.out ./...
+        # -coverpkg restricts the coverage denominator to library code under
+        # internal/. cmd/ entry points are pure wiring and intentionally
+        # excluded from the 80% threshold.
+        run: go test -covermode=atomic -coverpkg=./internal/... -coverprofile=coverage.out ./...
 
       - name: Validate coverage threshold (80%)
         shell: bash

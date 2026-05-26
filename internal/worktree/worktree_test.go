@@ -1,6 +1,3 @@
-//go:build integration
-// +build integration
-
 package worktree
 
 import (
@@ -98,5 +95,77 @@ func TestRemoveWorktree(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(worktreeRoot, "task-three")); !os.IsNotExist(err) {
 		t.Fatalf("expected worktree to be removed")
+	}
+}
+
+func TestCreateRejectsEmptyName(t *testing.T) {
+	m := NewManager(t.TempDir(), t.TempDir())
+	res := m.Create(context.Background(), "", "")
+	if res.Success {
+		t.Fatalf("Create with empty name must fail")
+	}
+	if !strings.Contains(res.Output, "name is required") {
+		t.Fatalf("expected 'name is required', got %q", res.Output)
+	}
+}
+
+func TestAddExistingRejectsEmptyName(t *testing.T) {
+	m := NewManager(t.TempDir(), t.TempDir())
+	res := m.AddExisting(context.Background(), "", "b")
+	if res.Success || !strings.Contains(res.Output, "name is required") {
+		t.Fatalf("expected name-required failure, got %q", res.Output)
+	}
+}
+
+func TestAddExistingRequiresBranch(t *testing.T) {
+	m := NewManager(t.TempDir(), t.TempDir())
+	res := m.AddExisting(context.Background(), "name", "")
+	if res.Success || !strings.Contains(res.Output, "branch is required") {
+		t.Fatalf("expected branch-required failure, got %q", res.Output)
+	}
+}
+
+func TestRemoveRejectsEmptyName(t *testing.T) {
+	m := NewManager(t.TempDir(), t.TempDir())
+	res := m.Remove(context.Background(), "")
+	if res.Success || !strings.Contains(res.Output, "name is required") {
+		t.Fatalf("expected name-required failure, got %q", res.Output)
+	}
+}
+
+func TestAddExistingAttachesExistingBranch(t *testing.T) {
+	repo := setupRepo(t)
+	wtDir := filepath.Join(t.TempDir(), "wt")
+	cmd := exec.Command("git", "branch", "preexisting")
+	cmd.Dir = repo
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("branch preexisting: %v\n%s", err, out)
+	}
+	m := NewManager(repo, wtDir)
+	res := m.AddExisting(context.Background(), "att", "preexisting")
+	if !res.Success {
+		t.Fatalf("AddExisting failed: %s", res.Output)
+	}
+}
+
+func TestSanitize(t *testing.T) {
+	cases := map[string]string{
+		"  hello world  ": "hello-world",
+		"a/b\\c":          "a-b-c",
+		"plain":           "plain",
+	}
+	for in, want := range cases {
+		if got := sanitize(in); got != want {
+			t.Fatalf("sanitize(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestShellQuoteAndPath(t *testing.T) {
+	if got := shellQuote("a'b"); !strings.Contains(got, `'\''`) {
+		t.Fatalf("shellQuote must escape single quotes: %q", got)
+	}
+	if got := shellQuotePath("/p/q"); !strings.Contains(got, "/p/q") {
+		t.Fatalf("shellQuotePath must contain original path: %q", got)
 	}
 }
