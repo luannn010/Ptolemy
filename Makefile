@@ -7,9 +7,8 @@ run:
 build:
 	mkdir -p $(BIN_DIR)
 	go build -o $(BIN_DIR)/workerd ./cmd/workerd
-	go build -o $(BIN_DIR)/ptolemy ./cmd/ptolemy
 	go build -o $(BIN_DIR)/ptolemy-mcp ./cmd/ptolemy-mcp
-	go build -o $(BIN_DIR)/ptolemy-task-runner ./cmd/ptolemy-task-runner
+	go build -o $(BIN_DIR)/policy-demo ./cmd/policy-demo
 
 test:
 	go test -p 1 ./...
