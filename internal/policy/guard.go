@@ -14,6 +14,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/fileops"
 	"github.com/luannn010/ptolemy/internal/gitops"
 	"github.com/luannn010/ptolemy/internal/terminal"
+	"github.com/luannn010/ptolemy/internal/worktree"
 )
 
 type CallOpts struct {
@@ -340,6 +341,57 @@ func (g *GuardedGit) CreatePullRequest(ctx context.Context, sessionID, base, hea
 		return gitops.Result{}, err
 	}
 	return g.raw.CreatePullRequest(ctx, base, head, title, bodyFile), nil
+}
+
+// ---------- GuardedWorktree ----------
+
+type RawWorktree interface {
+	Create(ctx context.Context, name, branch string) worktree.Result
+	AddExisting(ctx context.Context, name, branch string) worktree.Result
+	Remove(ctx context.Context, name string) worktree.Result
+	List(ctx context.Context) worktree.Result
+}
+
+type GuardedWorktree struct {
+	core         guardCore
+	raw          RawWorktree
+	worktreePath string
+}
+
+func NewGuardedWorktree(engine *Engine, approvals *Approvals, raw RawWorktree, worktreePath string, db *sql.DB) *GuardedWorktree {
+	return &GuardedWorktree{core: guardCore{engine: engine, approvals: approvals, db: db}, raw: raw, worktreePath: worktreePath}
+}
+
+func (g *GuardedWorktree) wtIntent(kind string, args ...string) domain.Intent {
+	return domain.Intent{Kind: kind, Program: "worktree", Args: args, Targets: []string{g.worktreePath}}
+}
+
+func (g *GuardedWorktree) Create(ctx context.Context, sessionID, name, branch string, opts CallOpts) (worktree.Result, error) {
+	if err := g.core.gate(ctx, sessionID, g.wtIntent("worktree.create", "create", name, branch), opts); err != nil {
+		return worktree.Result{}, err
+	}
+	return g.raw.Create(ctx, name, branch), nil
+}
+
+func (g *GuardedWorktree) AddExisting(ctx context.Context, sessionID, name, branch string, opts CallOpts) (worktree.Result, error) {
+	if err := g.core.gate(ctx, sessionID, g.wtIntent("worktree.add", "add", name, branch), opts); err != nil {
+		return worktree.Result{}, err
+	}
+	return g.raw.AddExisting(ctx, name, branch), nil
+}
+
+func (g *GuardedWorktree) Remove(ctx context.Context, sessionID, name string, opts CallOpts) (worktree.Result, error) {
+	if err := g.core.gate(ctx, sessionID, g.wtIntent("worktree.remove", "remove", name), opts); err != nil {
+		return worktree.Result{}, err
+	}
+	return g.raw.Remove(ctx, name), nil
+}
+
+func (g *GuardedWorktree) List(ctx context.Context, sessionID string, opts CallOpts) (worktree.Result, error) {
+	if err := g.core.gate(ctx, sessionID, g.wtIntent("worktree.list", "list"), opts); err != nil {
+		return worktree.Result{}, err
+	}
+	return g.raw.List(ctx), nil
 }
 
 // ---------- helpers ----------

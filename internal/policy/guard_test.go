@@ -9,6 +9,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/gitops"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
+	"github.com/luannn010/ptolemy/internal/worktree"
 )
 
 type fakeRunner struct {
@@ -239,5 +240,46 @@ func TestGuardedGit_DefaultAskOnStatus(t *testing.T) {
 	}
 	if gops.statuses != 0 {
 		t.Fatalf("raw status must not run before approval")
+	}
+}
+
+type fakeWorktree struct {
+	creates int
+	removes int
+}
+
+func (f *fakeWorktree) Create(_ context.Context, _, _ string) worktree.Result {
+	f.creates++
+	return worktree.Result{}
+}
+func (f *fakeWorktree) AddExisting(_ context.Context, _, _ string) worktree.Result {
+	return worktree.Result{}
+}
+func (f *fakeWorktree) Remove(_ context.Context, _ string) worktree.Result {
+	f.removes++
+	return worktree.Result{}
+}
+func (f *fakeWorktree) List(_ context.Context) worktree.Result { return worktree.Result{} }
+
+func TestGuardedWorktree_AskOnCreate(t *testing.T) {
+	s := openTestStore(t)
+	w := &fakeWorktree{}
+	g := NewGuardedWorktree(NewEngine(DefaultRuleset()), NewApprovals(), w, "/wt", s.DB)
+
+	_, err := g.Create(context.Background(), "s1", "x", "main", CallOpts{})
+	var needs ErrNeedsConfirmation
+	if !errors.As(err, &needs) {
+		t.Fatalf("expected default ask, got %v", err)
+	}
+	if w.creates != 0 {
+		t.Fatalf("raw create must not run before approval")
+	}
+
+	g.core.approvals.Approve(needs.PendingID)
+	if _, err := g.Create(context.Background(), "s1", "x", "main", CallOpts{ConfirmToken: needs.PendingID}); err != nil {
+		t.Fatalf("confirmed create failed: %v", err)
+	}
+	if w.creates != 1 {
+		t.Fatalf("expected one create after confirm, got %d", w.creates)
 	}
 }
