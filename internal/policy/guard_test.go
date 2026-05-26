@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/luannn010/ptolemy/internal/fileops"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
 )
@@ -80,5 +81,95 @@ func TestGuardedRunnerAskThenConfirm(t *testing.T) {
 	}
 	if r.calls != 1 {
 		t.Fatalf("expected one execution after confirmation, got %d", r.calls)
+	}
+}
+
+type fakeFileOps struct {
+	reads  int
+	writes int
+	lists  int
+}
+
+func (f *fakeFileOps) Resolve(path string) (string, error)                  { return path, nil }
+func (f *fakeFileOps) ReadFile(path string) (string, error)                 { f.reads++; return "content", nil }
+func (f *fakeFileOps) WriteFile(path, content string) error                 { f.writes++; return nil }
+func (f *fakeFileOps) ListDirectory(path string) ([]fileops.DirEntry, error) {
+	f.lists++
+	return nil, nil
+}
+func (f *fakeFileOps) Search(query string) (string, error)                  { return "", nil }
+func (f *fakeFileOps) ApplyPatch(path, newContent string) error             { return nil }
+func (f *fakeFileOps) ReplaceBlock(path, oldS, newS string) error           { return nil }
+func (f *fakeFileOps) InsertAfter(path, marker, content string) error       { return nil }
+
+func TestGuardedFileOps_DenyPolicyWrite(t *testing.T) {
+	s := openTestStore(t)
+	f := &fakeFileOps{}
+	g := NewGuardedFileOps(NewEngine(DefaultRuleset()), NewApprovals(), f, s.DB)
+
+	err := g.WriteFile(context.Background(), "s1", ".ptolemy/policy.json", "{}", CallOpts{})
+	var denied ErrDenied
+	if !errors.As(err, &denied) || denied.RuleID != "deny-policy-write" {
+		t.Fatalf("expected deny-policy-write, got %v", err)
+	}
+	if f.writes != 0 {
+		t.Fatalf("raw adapter must not be called on deny")
+	}
+}
+
+func TestGuardedFileOps_DenySecretRead(t *testing.T) {
+	s := openTestStore(t)
+	f := &fakeFileOps{}
+	g := NewGuardedFileOps(NewEngine(DefaultRuleset()), NewApprovals(), f, s.DB)
+
+	_, err := g.ReadFile(context.Background(), "s1", "./.env", CallOpts{})
+	var denied ErrDenied
+	if !errors.As(err, &denied) || denied.RuleID != "deny-secret-cmd" {
+		t.Fatalf("expected deny-secret-cmd, got %v", err)
+	}
+	if f.reads != 0 {
+		t.Fatalf("raw adapter must not be called on deny")
+	}
+}
+
+func TestGuardedFileOps_AskThenConfirmList(t *testing.T) {
+	s := openTestStore(t)
+	f := &fakeFileOps{}
+	g := NewGuardedFileOps(NewEngine(DefaultRuleset()), NewApprovals(), f, s.DB)
+
+	_, err := g.ListDirectory(context.Background(), "s1", "/some/dir", CallOpts{})
+	var needs ErrNeedsConfirmation
+	if !errors.As(err, &needs) {
+		t.Fatalf("expected ErrNeedsConfirmation, got %v", err)
+	}
+	if !g.core.approvals.Approve(needs.PendingID) {
+		t.Fatalf("approve failed")
+	}
+	if _, err := g.ListDirectory(context.Background(), "s1", "/some/dir", CallOpts{ConfirmToken: needs.PendingID}); err != nil {
+		t.Fatalf("confirmed retry failed: %v", err)
+	}
+	if f.lists != 1 {
+		t.Fatalf("expected exactly one list call after confirmation, got %d", f.lists)
+	}
+}
+
+func TestGate_SwapIntentRejected(t *testing.T) {
+	s := openTestStore(t)
+	f := &fakeFileOps{}
+	g := NewGuardedFileOps(NewEngine(DefaultRuleset()), NewApprovals(), f, s.DB)
+
+	_, err := g.ListDirectory(context.Background(), "s1", "/a", CallOpts{})
+	var needs ErrNeedsConfirmation
+	if !errors.As(err, &needs) {
+		t.Fatalf("expected ask, got %v", err)
+	}
+	g.core.approvals.Approve(needs.PendingID)
+
+	_, err = g.ListDirectory(context.Background(), "s1", "/b", CallOpts{ConfirmToken: needs.PendingID})
+	if err == nil {
+		t.Fatalf("expected swap-intent to be rejected, got nil")
+	}
+	if f.lists != 0 {
+		t.Fatalf("raw must not be called on swap-intent")
 	}
 }

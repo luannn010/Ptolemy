@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/luannn010/ptolemy/internal/domain"
+	"github.com/luannn010/ptolemy/internal/fileops"
 	"github.com/luannn010/ptolemy/internal/terminal"
 )
 
@@ -113,6 +114,93 @@ func (g *GuardedRunner) Run(ctx context.Context, sessionID, command, cwd string,
 		return terminal.Result{}, err
 	}
 	return g.raw.Run(ctx, command, cwd, timeoutSeconds), nil
+}
+
+// ---------- GuardedFileOps ----------
+
+type RawFileOps interface {
+	Resolve(path string) (string, error)
+	ReadFile(path string) (string, error)
+	WriteFile(path, content string) error
+	ListDirectory(path string) ([]fileops.DirEntry, error)
+	Search(query string) (string, error)
+	ApplyPatch(path, newContent string) error
+	ReplaceBlock(path, old, new string) error
+	InsertAfter(path, marker, content string) error
+}
+
+type GuardedFileOps struct {
+	core guardCore
+	raw  RawFileOps
+}
+
+func NewGuardedFileOps(engine *Engine, approvals *Approvals, raw RawFileOps, db *sql.DB) *GuardedFileOps {
+	return &GuardedFileOps{core: guardCore{engine: engine, approvals: approvals, db: db}, raw: raw}
+}
+
+func (g *GuardedFileOps) fileIntent(kind, program, path string, extraArgs ...string) domain.Intent {
+	resolved, err := g.raw.Resolve(path)
+	if err != nil {
+		resolved = path
+	}
+	return domain.Intent{Kind: kind, Program: program, Args: extraArgs, Targets: []string{resolved}}
+}
+
+func (g *GuardedFileOps) Resolve(ctx context.Context, sessionID, path string, opts CallOpts) (string, error) {
+	if err := g.core.gate(ctx, sessionID, g.fileIntent("file.resolve", "resolve", path), opts); err != nil {
+		return "", err
+	}
+	return g.raw.Resolve(path)
+}
+
+func (g *GuardedFileOps) ReadFile(ctx context.Context, sessionID, path string, opts CallOpts) (string, error) {
+	if err := g.core.gate(ctx, sessionID, g.fileIntent("file.read", "read", path), opts); err != nil {
+		return "", err
+	}
+	return g.raw.ReadFile(path)
+}
+
+func (g *GuardedFileOps) WriteFile(ctx context.Context, sessionID, path, content string, opts CallOpts) error {
+	if err := g.core.gate(ctx, sessionID, g.fileIntent("file.write", "write", path), opts); err != nil {
+		return err
+	}
+	return g.raw.WriteFile(path, content)
+}
+
+func (g *GuardedFileOps) ListDirectory(ctx context.Context, sessionID, path string, opts CallOpts) ([]fileops.DirEntry, error) {
+	if err := g.core.gate(ctx, sessionID, g.fileIntent("file.list", "list", path), opts); err != nil {
+		return nil, err
+	}
+	return g.raw.ListDirectory(path)
+}
+
+func (g *GuardedFileOps) Search(ctx context.Context, sessionID, query string, opts CallOpts) (string, error) {
+	intent := domain.Intent{Kind: "file.search", Program: "search", Args: []string{query}}
+	if err := g.core.gate(ctx, sessionID, intent, opts); err != nil {
+		return "", err
+	}
+	return g.raw.Search(query)
+}
+
+func (g *GuardedFileOps) ApplyPatch(ctx context.Context, sessionID, path, newContent string, opts CallOpts) error {
+	if err := g.core.gate(ctx, sessionID, g.fileIntent("file.patch", "patch", path), opts); err != nil {
+		return err
+	}
+	return g.raw.ApplyPatch(path, newContent)
+}
+
+func (g *GuardedFileOps) ReplaceBlock(ctx context.Context, sessionID, path, oldS, newS string, opts CallOpts) error {
+	if err := g.core.gate(ctx, sessionID, g.fileIntent("file.replace", "replace", path), opts); err != nil {
+		return err
+	}
+	return g.raw.ReplaceBlock(path, oldS, newS)
+}
+
+func (g *GuardedFileOps) InsertAfter(ctx context.Context, sessionID, path, marker, content string, opts CallOpts) error {
+	if err := g.core.gate(ctx, sessionID, g.fileIntent("file.insert", "insert", path, marker), opts); err != nil {
+		return err
+	}
+	return g.raw.InsertAfter(path, marker, content)
 }
 
 // ---------- helpers ----------
