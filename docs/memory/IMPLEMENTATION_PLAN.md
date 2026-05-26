@@ -12,7 +12,7 @@ next phase starts. Check boxes as you go.
 
 Goal: an end-to-end pipeline you can query. Quality does not matter yet.
 
-**Status: code complete on branch `ptolemy/memory-phase0` (PR pending). Live-service smoke test blocked on the embedding server at `192.168.0.164:1090` (connection refused as of 2026-05-27).**
+**Status: Phase 0 COMPLETE on branch `ptolemy/memory-phase0` (PR pending). Live-service smoke test PASSED 2026-05-27 (see acceptance section below).**
 
 - [x] Migration `0001_chunks_core` (table + `embedding` + HNSW index).
       → `internal/memory/migrations/0001_chunks_core.sql` + `internal/memory/migrations.go`.
@@ -56,11 +56,15 @@ Goal: an end-to-end pipeline you can query. Quality does not matter yet.
       handling, vector-count-mismatch error, and Query.K override.
 
 **Acceptance:**
-- [ ] Ingesting a small known corpus then asking a question returns a grounded answer
+- [x] Ingesting a small known corpus then asking a question returns a grounded answer
       with at least one correct citation.
-      → **Pending: blocked on the embedding server at `192.168.0.164:1090` (connection refused 2026-05-27).** The
-      `cmd/memory-demo` CLI is built (`bin/memory-demo ingest <id> <path>` / `bin/memory-demo ask "<q>"`) and tested
-      against fakes; the live run is a 30-second exercise once the embedding endpoint accepts connections.
+      → Live smoke test passed 2026-05-27 against Postgres+pgvector at `192.168.0.164:1091`, embedding server
+      `192.168.0.164:1089` (nomic-embed-text-v1.5, 768-dim), and brain `127.0.0.1:1090` (Qwen3.5-4B-Q4_K_M).
+      Ingested a 395-rune doc → 3 chunks; `ask "What is Ptolemy?"` returned a grounded multi-sentence answer
+      with 3 valid citations (`doc1#0`, `doc1#1`, `doc1#2`). **Tuning note found during the smoke run:** the
+      llama.cpp embedding server enforces a 64-token physical batch size, so the default
+      `RAG_CHUNK_SIZE_TOKENS=700` from `.env.example` is too aggressive for this deployment. Used `=50` for the
+      smoke run; either lower the default in `.env.example` or raise the server's `--batch-size`.
 - [x] Swapping the retriever implementation is a config change, not a code edit.
       → Demonstrated by construction: `Orchestrator.Retriever` is an interface field set by `NewModule`. Switching from
       `VectorRetriever` to a future `HybridRetriever` is a one-line change in `module.go` (planned for Phase 1).
