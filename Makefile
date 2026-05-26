@@ -9,6 +9,7 @@ build:
 	go build -o $(BIN_DIR)/workerd ./cmd/workerd
 	go build -o $(BIN_DIR)/ptolemy-mcp ./cmd/ptolemy-mcp
 	go build -o $(BIN_DIR)/policy-demo ./cmd/policy-demo
+	go build -o $(BIN_DIR)/memory-demo ./cmd/memory-demo
 
 test:
 	go test -p 1 ./...
