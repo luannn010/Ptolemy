@@ -46,8 +46,7 @@ type RunResult struct {
 }
 
 type GuardedRunner interface {
-	Run(ctx context.Context, sessionID string, command string, cwd string, timeoutSeconds int) (terminal.Result, error)
-	RunConfirmed(ctx context.Context, pendingID string, sessionID string, command string, cwd string, timeoutSeconds int) (terminal.Result, error)
+	Run(ctx context.Context, sessionID string, command string, cwd string, timeoutSeconds int, opts policy.CallOpts) (terminal.Result, error)
 }
 
 type Service struct {
@@ -60,11 +59,8 @@ func NewService(runner GuardedRunner, logs *Store) *Service {
 }
 
 func (s *Service) Run(ctx context.Context, sessionID string, req RunCommandRequest) (RunResult, error) {
-	if req.PendingID != "" {
-		return s.runConfirmed(ctx, sessionID, req)
-	}
-
-	runResult, err := s.runner.Run(ctx, sessionID, req.Command, req.CWD, req.Timeout)
+	opts := policy.CallOpts{ConfirmToken: req.PendingID}
+	runResult, err := s.runner.Run(ctx, sessionID, req.Command, req.CWD, req.Timeout, opts)
 	if err != nil {
 		var needs policy.ErrNeedsConfirmation
 		if errors.As(err, &needs) {
@@ -94,27 +90,5 @@ func (s *Service) Run(ctx context.Context, sessionID string, req RunCommandReque
 		return RunResult{}, err
 	}
 
-	return RunResult{Log: &logItem}, nil
-}
-
-func (s *Service) runConfirmed(ctx context.Context, sessionID string, req RunCommandRequest) (RunResult, error) {
-	runResult, err := s.runner.RunConfirmed(ctx, req.PendingID, sessionID, req.Command, req.CWD, req.Timeout)
-	if err != nil {
-		return RunResult{}, err
-	}
-	logItem, err := s.logs.Create(ctx, CommandLog{
-		ID:          uuid.NewString(),
-		SessionID:   sessionID,
-		Command:     req.Command,
-		CWD:         req.CWD,
-		ExitCode:    runResult.ExitCode,
-		Output:      runResult.Output,
-		ErrorOutput: runResult.ErrorOutput,
-		DurationMS:  runResult.DurationMS,
-		CreatedAt:   time.Now().UTC(),
-	})
-	if err != nil {
-		return RunResult{}, err
-	}
 	return RunResult{Log: &logItem}, nil
 }

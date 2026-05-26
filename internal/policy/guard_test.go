@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/luannn010/ptolemy/internal/store"
@@ -18,42 +19,66 @@ func (f *fakeRunner) Run(_ context.Context, _ string, _ string, _ int) terminal.
 	return f.res
 }
 
-func TestGuardedRunnerDenyDoesNotExecute(t *testing.T) {
+func openTestStore(t *testing.T) *store.Store {
+	t.Helper()
 	s, err := store.Open(t.TempDir() + "/db.sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
-	_, _ = s.DB.Exec(`INSERT INTO sessions(id,name,status,workspace,description,created_at,updated_at) VALUES('s1','n','open','.','','x','x')`)
+	t.Cleanup(func() { s.Close() })
+	if _, err := s.DB.Exec(`INSERT INTO sessions(id,name,status,workspace,description,created_at,updated_at)
+		VALUES('s1','n','open','.','','x','x')`); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
 
+func TestGuardedRunnerDenyDoesNotExecute(t *testing.T) {
+	s := openTestStore(t)
 	r := &fakeRunner{}
 	g := NewGuardedRunner(NewEngine(DefaultRuleset()), NewApprovals(), r, s.DB)
 
-	_, runErr := g.Run(context.Background(), "s1", "cat ./.env", ".", 5)
-	if runErr == nil {
-		t.Fatalf("expected deny error")
+	_, err := g.Run(context.Background(), "s1", "cat ./.env", ".", 5, CallOpts{})
+	var denied ErrDenied
+	if !errors.As(err, &denied) {
+		t.Fatalf("expected ErrDenied, got %v", err)
 	}
 	if r.calls != 0 {
-		t.Fatalf("expected no execution")
+		t.Fatalf("raw runner must not be called on deny, got %d", r.calls)
 	}
 }
 
 func TestGuardedRunnerAllowExecutes(t *testing.T) {
-	s, err := store.Open(t.TempDir() + "/db.sqlite")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	_, _ = s.DB.Exec(`INSERT INTO sessions(id,name,status,workspace,description,created_at,updated_at) VALUES('s1','n','open','.','','x','x')`)
-
+	s := openTestStore(t)
 	r := &fakeRunner{res: terminal.Result{ExitCode: 0}}
 	g := NewGuardedRunner(NewEngine(DefaultRuleset()), NewApprovals(), r, s.DB)
 
-	_, runErr := g.Run(context.Background(), "s1", "go test ./...", ".", 5)
-	if runErr != nil {
-		t.Fatalf("unexpected error: %v", runErr)
+	_, err := g.Run(context.Background(), "s1", "go test ./...", ".", 5, CallOpts{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if r.calls != 1 {
-		t.Fatalf("expected one execution")
+		t.Fatalf("expected one execution, got %d", r.calls)
+	}
+}
+
+func TestGuardedRunnerAskThenConfirm(t *testing.T) {
+	s := openTestStore(t)
+	r := &fakeRunner{res: terminal.Result{ExitCode: 0}}
+	g := NewGuardedRunner(NewEngine(DefaultRuleset()), NewApprovals(), r, s.DB)
+
+	_, err := g.Run(context.Background(), "s1", "git push origin main", ".", 5, CallOpts{})
+	var needs ErrNeedsConfirmation
+	if !errors.As(err, &needs) {
+		t.Fatalf("expected ErrNeedsConfirmation, got %v", err)
+	}
+	if !g.approvals.Approve(needs.PendingID) {
+		t.Fatalf("approve failed")
+	}
+	if _, err := g.Run(context.Background(), "s1", "git push origin main", ".", 5, CallOpts{ConfirmToken: needs.PendingID}); err != nil {
+		t.Fatalf("confirmed retry failed: %v", err)
+	}
+	if r.calls != 1 {
+		t.Fatalf("expected one execution after confirmation, got %d", r.calls)
 	}
 }
