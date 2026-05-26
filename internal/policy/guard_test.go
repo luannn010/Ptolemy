@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/luannn010/ptolemy/internal/fileops"
+	"github.com/luannn010/ptolemy/internal/gitops"
 	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/terminal"
 )
@@ -171,5 +172,72 @@ func TestGate_SwapIntentRejected(t *testing.T) {
 	}
 	if f.lists != 0 {
 		t.Fatalf("raw must not be called on swap-intent")
+	}
+}
+
+type fakeGitOps struct {
+	pushes   int
+	statuses int
+}
+
+func (f *fakeGitOps) Status(_ context.Context) gitops.Result                     { f.statuses++; return gitops.Result{} }
+func (f *fakeGitOps) Diff(_ context.Context) gitops.Result                       { return gitops.Result{} }
+func (f *fakeGitOps) Log(_ context.Context) gitops.Result                        { return gitops.Result{} }
+func (f *fakeGitOps) CurrentBranch(_ context.Context) gitops.Result              { return gitops.Result{} }
+func (f *fakeGitOps) CurrentCommitSHA(_ context.Context) gitops.Result           { return gitops.Result{} }
+func (f *fakeGitOps) ChangedFiles(_ context.Context) gitops.Result               { return gitops.Result{} }
+func (f *fakeGitOps) Checkout(_ context.Context, _ string) gitops.Result         { return gitops.Result{} }
+func (f *fakeGitOps) CreateBranch(_ context.Context, _ string) gitops.Result     { return gitops.Result{} }
+func (f *fakeGitOps) EnsureBranch(_ context.Context, _ string) gitops.Result     { return gitops.Result{} }
+func (f *fakeGitOps) CreateOrResetBranchFrom(_ context.Context, _, _ string) gitops.Result {
+	return gitops.Result{}
+}
+func (f *fakeGitOps) StageFiles(_ context.Context, _ []string) gitops.Result            { return gitops.Result{} }
+func (f *fakeGitOps) CommitConventional(_ context.Context, _ string) gitops.Result      { return gitops.Result{} }
+func (f *fakeGitOps) CommitStagedConventional(_ context.Context, _ string) gitops.Result { return gitops.Result{} }
+func (f *fakeGitOps) MergeNoFF(_ context.Context, _ string) gitops.Result               { return gitops.Result{} }
+func (f *fakeGitOps) Push(_ context.Context, _, _ string) gitops.Result {
+	f.pushes++
+	return gitops.Result{}
+}
+func (f *fakeGitOps) CreatePullRequest(_ context.Context, _, _, _, _ string) gitops.Result {
+	return gitops.Result{}
+}
+
+func TestGuardedGit_AskOnPush(t *testing.T) {
+	s := openTestStore(t)
+	gops := &fakeGitOps{}
+	g := NewGuardedGit(NewEngine(DefaultRuleset()), NewApprovals(), gops, "/repo", s.DB)
+
+	_, err := g.Push(context.Background(), "s1", "origin", "main", CallOpts{})
+	var needs ErrNeedsConfirmation
+	if !errors.As(err, &needs) {
+		t.Fatalf("expected ask, got %v", err)
+	}
+	if gops.pushes != 0 {
+		t.Fatalf("raw push must not run before approval")
+	}
+
+	g.core.approvals.Approve(needs.PendingID)
+	if _, err := g.Push(context.Background(), "s1", "origin", "main", CallOpts{ConfirmToken: needs.PendingID}); err != nil {
+		t.Fatalf("confirmed push failed: %v", err)
+	}
+	if gops.pushes != 1 {
+		t.Fatalf("expected one push after confirm, got %d", gops.pushes)
+	}
+}
+
+func TestGuardedGit_DefaultAskOnStatus(t *testing.T) {
+	s := openTestStore(t)
+	gops := &fakeGitOps{}
+	g := NewGuardedGit(NewEngine(DefaultRuleset()), NewApprovals(), gops, "/repo", s.DB)
+
+	_, err := g.Status(context.Background(), "s1", CallOpts{})
+	var needs ErrNeedsConfirmation
+	if !errors.As(err, &needs) {
+		t.Fatalf("expected default ask on git.read, got %v", err)
+	}
+	if gops.statuses != 0 {
+		t.Fatalf("raw status must not run before approval")
 	}
 }
