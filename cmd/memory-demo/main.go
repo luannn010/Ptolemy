@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	// autoload reads .env at startup so memory.LoadConfig() picks up
+	// DATABASE_URL, EMBEDDING_*, BRAIN_*, RAG_*, SMOKE_TEST_* without
+	// requiring the caller to export them.
+	_ "github.com/joho/godotenv/autoload"
+
 	"github.com/luannn010/ptolemy/internal/memory"
 )
 
