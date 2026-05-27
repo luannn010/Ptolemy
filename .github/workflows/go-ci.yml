@@ -15,6 +15,25 @@ jobs:
   unit-tests:
     name: Unit Tests + Coverage
     runs-on: ubuntu-latest
+    # ParadeDB = Postgres + pgvector + ParadeDB extensions; same image used in
+    # production (scripts/postgres-up.sh) so CI exercises the real SQL paths
+    # in internal/memory (Upsert/Get/MarkSuperseded, ApplyMigrations, Retrieve)
+    # instead of mocking them. Tests that need it read DATABASE_URL; the rest
+    # ignore it.
+    services:
+      postgres:
+        image: paradedb/paradedb:latest
+        env:
+          POSTGRES_USER: ptolemy
+          POSTGRES_PASSWORD: ptolemy
+          POSTGRES_DB: ptolemy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,6 +57,8 @@ jobs:
         # -coverpkg restricts the coverage denominator to library code under
         # internal/. cmd/ entry points are pure wiring and intentionally
         # excluded from the 80% threshold.
+        env:
+          DATABASE_URL: postgres://ptolemy:ptolemy@localhost:5432/ptolemy?sslmode=disable
         run: go test -covermode=atomic -coverpkg=./internal/... -coverprofile=coverage.out ./...
 
       - name: Validate coverage threshold (80%)
