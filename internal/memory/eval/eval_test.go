@@ -243,6 +243,104 @@ func abs(x float64) float64 {
 	return x
 }
 
+func TestLoadFixtureCorpus_ReadsMarkdown(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.md"),
+		[]byte("# A\nalpha"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.md"),
+		[]byte("# B\nbravo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	docs, err := LoadFixtureCorpus(dir)
+	if err != nil {
+		t.Fatalf("LoadFixtureCorpus: %v", err)
+	}
+	if len(docs) != 2 {
+		t.Fatalf("expected 2 docs, got %d", len(docs))
+	}
+	textByID := map[string]string{}
+	for _, d := range docs {
+		textByID[d.ID] = d.Text
+	}
+	var aText, bText string
+	for _, d := range docs {
+		if strings.Contains(d.Text, "alpha") {
+			aText = d.Text
+		}
+		if strings.Contains(d.Text, "bravo") {
+			bText = d.Text
+		}
+	}
+	if aText == "" || bText == "" {
+		t.Fatalf("expected one alpha and one bravo doc, got %+v", textByID)
+	}
+}
+
+func TestLoadFixtureCorpus_DeterministicIDs(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "x.md"),
+		[]byte("body"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d1, err := LoadFixtureCorpus(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d2, err := LoadFixtureCorpus(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d1[0].ID != d2[0].ID {
+		t.Fatalf("IDs not deterministic across calls: %q vs %q", d1[0].ID, d2[0].ID)
+	}
+	if d1[0].ID == "" {
+		t.Fatalf("ID should be non-empty")
+	}
+}
+
+func TestLoadFixtureCorpus_FrontmatterPublishedAt(t *testing.T) {
+	dir := t.TempDir()
+	body := "---\npublished_at: 2024-01-15T00:00:00Z\n---\nthe body"
+	if err := os.WriteFile(filepath.Join(dir, "p.md"),
+		[]byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	docs, err := LoadFixtureCorpus(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := docs[0]
+	if pa, ok := d.Metadata["published_at"].(string); !ok || pa != "2024-01-15T00:00:00Z" {
+		t.Fatalf("expected published_at metadata, got %+v", d.Metadata)
+	}
+	if d.Text != "the body" {
+		t.Fatalf("expected text to strip frontmatter, got %q", d.Text)
+	}
+}
+
+func TestLoadFixtureCorpus_NoFrontmatterFallback(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "p.md"),
+		[]byte("no frontmatter here"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	docs, err := LoadFixtureCorpus(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := docs[0]
+	// Fallback uses the package-level fixtureBaseTime constant, NOT time.Now()
+	// (which would re-introduce nondeterminism). The constant is a known past
+	// date so fresh-vs-stale fixtures that DO set frontmatter are unambiguously
+	// fresher than fallbacks. We assert the metadata is populated, not the
+	// exact value (which is locked by fixtureBaseTime).
+	if pa, ok := d.Metadata["published_at"].(string); !ok || pa == "" {
+		t.Fatalf("expected fallback published_at, got %+v", d.Metadata)
+	}
+}
+
 func TestLoadSeed_TagsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "seed.json")
