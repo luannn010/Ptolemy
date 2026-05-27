@@ -1446,7 +1446,215 @@ EOF
 
 ---
 
-## Task 9: Open the PR
+## Task 9: Post-Phase-1 unit-test sweep
+
+**Purpose:** Tasks 1–8 already follow TDD, but several short-circuit paths and pure-logic edge cases were only exercised indirectly. This task adds the explicit unit tests that lock those paths down so the 80% coverage gate is comfortable and regressions are caught without needing a live DB.
+
+**Files:**
+- Modify: `internal/memory/bm25_retriever_test.go`
+- Modify: `internal/memory/rrf_fusion_test.go`
+- Modify: `internal/memory/eval/eval_test.go`
+
+> **TDD reminder:** for each test added below, run it once expecting it to PASS (since the production code under test was already written and reviewed in earlier tasks). If a test FAILS, that is a real defect — fix the production code, do not weaken the test.
+
+- [ ] **Step 1: Coverage baseline**
+
+Run:
+
+```bash
+DATABASE_URL='postgres://ptolemy:ptolemy@192.168.0.164:1091/ptolemy?sslmode=disable' \
+  go test -coverpkg=./internal/... -coverprofile=/tmp/cov.out ./internal/memory/... && \
+  go tool cover -func=/tmp/cov.out | tail -30
+```
+
+Record the per-function coverage for `bm25_retriever.go`, `rrf_fusion.go`, and `internal/memory/eval/eval.go`. These are the targets.
+
+- [ ] **Step 2: Add `Bm25Retriever` whitespace-query test**
+
+Append to `internal/memory/bm25_retriever_test.go`:
+
+```go
+func TestBm25Retriever_WhitespaceQueryReturnsEmpty(t *testing.T) {
+	// A whitespace-only query must short-circuit before any SQL — passing
+	// nil conn would panic if the guard were missing.
+	r := NewBm25Retriever(nil)
+	got, err := r.Retrieve(context.Background(), Query{Text: "   \t\n", K: 5}, 5)
+	if err != nil {
+		t.Fatalf("expected nil err on whitespace query, got %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected empty result on whitespace query, got %d", len(got))
+	}
+}
+```
+
+- [ ] **Step 3: Add `RrfFusion` deterministic tie-break test**
+
+Append to `internal/memory/rrf_fusion_test.go`:
+
+```go
+func TestRrfFusion_DeterministicTieBreak(t *testing.T) {
+	// Two chunks that appear at the same rank in identical lists must come
+	// out in first-seen order — important so multiple calls with the same
+	// input produce identical outputs (eval-set comparisons rely on this).
+	list := []RetrievedChunk{
+		{Chunk: Chunk{ID: "first"}},
+		{Chunk: Chunk{ID: "second"}},
+	}
+	out := RrfFusion{}.Fuse([][]RetrievedChunk{list}, 2)
+	if len(out) != 2 || out[0].ID != "first" || out[1].ID != "second" {
+		t.Fatalf("expected stable first-seen order, got %+v", ids(out))
+	}
+}
+
+func TestRrfFusion_CustomConstantHonored(t *testing.T) {
+	// A non-default C must be used in the score, not silently replaced by 60.
+	list := []RetrievedChunk{{Chunk: Chunk{ID: "x"}}}
+	out := RrfFusion{C: 10}.Fuse([][]RetrievedChunk{list}, 1)
+	want := 1.0 / 11.0
+	if math.Abs(out[0].Score-want) > 1e-9 {
+		t.Fatalf("expected C=10 score %v, got %v", want, out[0].Score)
+	}
+}
+```
+
+(`math` is already imported by the file.)
+
+- [ ] **Step 4: Add `eval` package edge-case tests**
+
+Append to `internal/memory/eval/eval_test.go`:
+
+```go
+func TestHitsExpected_EmptyRetrievedReturnsNoHits(t *testing.T) {
+	hits := HitsExpected(nil, []string{"eval/doc1"})
+	if len(hits) != 0 {
+		t.Fatalf("expected zero hits on empty retrieved, got %v", hits)
+	}
+}
+
+func TestHitsExpected_EmptyExpectedReturnsNoHits(t *testing.T) {
+	retrieved := []memory.RetrievedChunk{
+		{Chunk: memory.Chunk{ID: "eval/doc1#0"}},
+	}
+	hits := HitsExpected(retrieved, nil)
+	if len(hits) != 0 {
+		t.Fatalf("expected zero hits with empty expected, got %v", hits)
+	}
+}
+
+func TestSummarize_EmptyResultsReturnsZero(t *testing.T) {
+	s := Summarize(nil)
+	if s.Total != 0 || s.MeanRecall != 0 {
+		t.Fatalf("expected zero Summary on empty results, got %+v", s)
+	}
+}
+
+func TestLoadSeed_DefaultsKToFive(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "seed.json")
+	// k omitted → defaults to 5.
+	if err := os.WriteFile(path, []byte(`{"corpus": [], "questions": []}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := LoadSeed(path)
+	if err != nil {
+		t.Fatalf("LoadSeed: %v", err)
+	}
+	if s.K != 5 {
+		t.Fatalf("expected K to default to 5, got %d", s.K)
+	}
+}
+
+func TestRunRetrieval_UsesFakeRetriever(t *testing.T) {
+	// End-to-end run of the eval loop without a DB. Proves that RunRetrieval
+	// (a) calls the retriever per question, (b) caps results at seed.K,
+	// (c) populates Hits via HitsExpected.
+	seed := Seed{
+		K: 2,
+		Questions: []Question{
+			{ID: "q1", Text: "alpha", ExpectedDocIDs: []string{"eval/doc1"}},
+			{ID: "q2", Text: "beta", ExpectedDocIDs: []string{"eval/doc2"}},
+		},
+	}
+	r := &fakeRetriever{
+		responses: map[string][]memory.RetrievedChunk{
+			"alpha": {
+				{Chunk: memory.Chunk{ID: "eval/doc1#0"}},
+				{Chunk: memory.Chunk{ID: "eval/doc1#1"}},
+				{Chunk: memory.Chunk{ID: "eval/other#0"}},
+			},
+			"beta": {
+				{Chunk: memory.Chunk{ID: "eval/other#0"}},
+			},
+		},
+	}
+	results, err := RunRetrieval(context.Background(), r, seed)
+	if err != nil {
+		t.Fatalf("RunRetrieval: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if len(results[0].Retrieved) != 2 {
+		t.Fatalf("expected K=2 cap on q1 retrieved, got %d", len(results[0].Retrieved))
+	}
+	if len(results[0].Hits) != 1 || results[0].Hits[0] != "eval/doc1" {
+		t.Fatalf("expected q1 to hit eval/doc1, got %v", results[0].Hits)
+	}
+	if len(results[1].Hits) != 0 {
+		t.Fatalf("expected q2 to miss, got %v", results[1].Hits)
+	}
+}
+
+type fakeRetriever struct {
+	responses map[string][]memory.RetrievedChunk
+}
+
+func (f *fakeRetriever) Retrieve(_ context.Context, q memory.Query, _ int) ([]memory.RetrievedChunk, error) {
+	return f.responses[q.Text], nil
+}
+```
+
+(Add the `"context"` import to the file if it isn't already pulled in by the prior tests.)
+
+- [ ] **Step 5: Run the new tests**
+
+```bash
+go test ./internal/memory ./internal/memory/eval -v -run 'TestBm25Retriever_WhitespaceQueryReturnsEmpty|TestRrfFusion_DeterministicTieBreak|TestRrfFusion_CustomConstantHonored|TestHitsExpected_EmptyRetrievedReturnsNoHits|TestHitsExpected_EmptyExpectedReturnsNoHits|TestSummarize_EmptyResultsReturnsZero|TestLoadSeed_DefaultsKToFive|TestRunRetrieval_UsesFakeRetriever'
+```
+
+Expected: all PASS without `DATABASE_URL`.
+
+- [ ] **Step 6: Run the full Phase 1 test suite + coverage**
+
+```bash
+DATABASE_URL='postgres://ptolemy:ptolemy@192.168.0.164:1091/ptolemy?sslmode=disable' \
+  go test -coverpkg=./internal/... -coverprofile=/tmp/cov.out ./... && \
+  go tool cover -func=/tmp/cov.out | tail -10
+```
+
+Expected: total coverage ≥ 80% (CI gate). Per-function coverage on the new Phase 1 files should improve over the Step 1 baseline; report the deltas.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add internal/memory/bm25_retriever_test.go internal/memory/rrf_fusion_test.go internal/memory/eval/eval_test.go
+git commit -m "$(cat <<'EOF'
+test(memory): post-Phase-1 unit-test sweep for short-circuit + edge paths
+
+Why: every Phase 1 task already had unit tests, but a few short-circuit
+paths (whitespace query, empty inputs) and the eval RunRetrieval loop were
+only exercised through integration tests. These pure-Go tests run without
+DATABASE_URL and lock the behavior down so refactors break loudly.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+## Task 10: Open the PR
 
 Per the user brief: no `gh` CLI. Use the GitHub plugin tooling (AGENTS.md §GitHub Tooling Policy).
 
