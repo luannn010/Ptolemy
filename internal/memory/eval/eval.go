@@ -5,9 +5,13 @@ package eval
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/luannn010/ptolemy/internal/memory"
@@ -184,4 +188,81 @@ func Summarize(results []QuestionResult) Summary {
 		}
 	}
 	return out
+}
+
+// fixtureBaseTime is the deterministic fallback published_at for fixture
+// files that omit the YAML frontmatter. Locked to a known past date so
+// fixture-mode eval is reproducible across runs. Fresh-vs-stale fixture
+// pairs MUST set explicit frontmatter dates; their relative ordering is
+// established by the dates they pick, not by this fallback.
+const fixtureBaseTime = "2024-01-01T00:00:00Z"
+
+// LoadFixtureCorpus reads byte-stable markdown fixtures from dir and returns
+// them as RawDocuments suitable for Orchestrator.Ingest. Each .md file becomes
+// one RawDocument.
+//
+// SNAPSHOT, NOT REFERENCE: the fixtures under internal/memory/eval/testdata/
+// are frozen copies — not symlinks — of representative real docs. Bump the
+// fixtureVersion constant whenever they are resynced to evolving real docs
+// so cross-PR sweep tables stay comparable.
+//
+// ID = sha256(rel_path)[:16] — stable across runs as long as the fixture
+// directory layout is stable. Returned slice is sorted by ID for determinism.
+func LoadFixtureCorpus(dir string) ([]memory.RawDocument, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read fixture dir: %w", err)
+	}
+	var docs []memory.RawDocument
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		rel := e.Name()
+		data, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", rel, err)
+		}
+		body, published, err := parseFrontmatter(data)
+		if err != nil {
+			return nil, fmt.Errorf("parse frontmatter in %s: %w", rel, err)
+		}
+		hash := sha256.Sum256([]byte(rel))
+		id := hex.EncodeToString(hash[:])[:16]
+		docs = append(docs, memory.RawDocument{
+			ID:     id,
+			Source: rel,
+			Text:   body,
+			Metadata: map[string]any{
+				"published_at": published,
+			},
+		})
+	}
+	sort.Slice(docs, func(i, j int) bool { return docs[i].ID < docs[j].ID })
+	return docs, nil
+}
+
+// parseFrontmatter extracts a YAML-ish "---\npublished_at: <rfc3339>\n---\n"
+// header. If no header is present, body is the whole input and published is
+// fixtureBaseTime. Only the published_at key is recognised — fixtures should
+// not depend on other frontmatter fields.
+func parseFrontmatter(data []byte) (body, published string, err error) {
+	text := string(data)
+	if !strings.HasPrefix(text, "---\n") {
+		return text, fixtureBaseTime, nil
+	}
+	end := strings.Index(text[4:], "\n---\n")
+	if end < 0 {
+		return "", "", fmt.Errorf("frontmatter opened with --- but never closed")
+	}
+	header := text[4 : 4+end]
+	body = text[4+end+5:]
+	published = fixtureBaseTime
+	for _, line := range strings.Split(header, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "published_at:") {
+			published = strings.TrimSpace(strings.TrimPrefix(line, "published_at:"))
+		}
+	}
+	return body, published, nil
 }
