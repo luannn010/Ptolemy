@@ -10,6 +10,7 @@ build:
 	go build -o $(BIN_DIR)/ptolemy-mcp ./cmd/ptolemy-mcp
 	go build -o $(BIN_DIR)/policy-demo ./cmd/policy-demo
 	go build -o $(BIN_DIR)/memory-demo ./cmd/memory-demo
+	go build -o $(BIN_DIR)/memory-eval ./cmd/memory-eval
 
 test:
 	go test -p 1 ./...
@@ -43,3 +44,13 @@ smoke-memory: build
 	@echo "--- ask ($(SMOKE_TEST_QUESTION)) ---"
 	RAG_CHUNK_SIZE_TOKENS=$(SMOKE_TEST_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
 	  $(BIN_DIR)/memory-demo ask "$(SMOKE_TEST_QUESTION)"
+
+# Phase 1 memory retrieval eval. Runs the seed (docs/memory/eval/seed.json)
+# end-to-end against the live retriever and prints recall@k. Same env autoload
+# as smoke-memory (.env via godotenv in cmd/memory-eval).
+EVAL_SEED ?= docs/memory/eval/seed.json
+EVAL_CHUNK_SIZE ?= 50
+
+eval-memory: build
+	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
+	  $(BIN_DIR)/memory-eval -seed $(EVAL_SEED)
