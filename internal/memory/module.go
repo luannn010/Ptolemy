@@ -3,7 +3,6 @@ package memory
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -35,7 +34,7 @@ func NewModule(ctx context.Context, cfg MemoryConfig) (*Orchestrator, *pgx.Conn,
 		},
 		Embedder:       embedder,
 		Store:          NewPgStore(conn),
-		Retriever:      NewHybridRetriever(conn, embedder, 0.1, 30*24*time.Hour),
+		Retriever:      NewHybridRetriever(conn, embedder, cfg.RecencyWeight, cfg.RecencyHalfLife),
 		Fusion:         PassthroughFusion{},
 		ContextBuilder: BudgetContextBuilder{MaxRunes: 6000},
 		Generator:      generator,
