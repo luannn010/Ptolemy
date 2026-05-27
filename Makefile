@@ -49,7 +49,14 @@ smoke-memory: build
 # end-to-end against the live retriever and prints recall@k. Same env autoload
 # as smoke-memory (.env via godotenv in cmd/memory-eval).
 EVAL_SEED ?= docs/memory/eval/seed.json
-EVAL_CHUNK_SIZE ?= 50
+# The chunker's 4-runes-per-token heuristic undercounts on dense markdown
+# (code identifiers, SQL blocks, short tokens) — empirically actual tokens
+# per rune is ~0.6 on docs/memory/RETRIEVAL.md, so 30 ticks (=120 runes)
+# still produces 71-token chunks that breach a llama.cpp embedding server's
+# --batch-size 64. 20 ticks (=80 runes, ~47 actual tokens) stays safely
+# under that ceiling on every doc in the seed. Smoke target keeps 50
+# (its narrative text tokenizes more evenly and never breaches the limit).
+EVAL_CHUNK_SIZE ?= 20
 
 eval-memory: build
 	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
