@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewModule_FailsOnUnreachableDatabaseURL(t *testing.T) {
@@ -41,6 +42,8 @@ func TestNewModule_DefaultRetrieverIsHybrid(t *testing.T) {
 		TopK:               5,
 		ChunkSizeTokens:    50,
 		ChunkOverlapTokens: 10,
+		RecencyWeight:      0.1,
+		RecencyHalfLife:    30 * 24 * time.Hour,
 	}
 	orch, conn, err := NewModule(context.Background(), cfg)
 	if err != nil {
