@@ -72,6 +72,26 @@ func TestFixedSizeChunker_PreservesMetadataAndSource(t *testing.T) {
 	}
 }
 
+func TestFixedSizeChunker_OverlapGteMaxRunesFallsBackToFullStep(t *testing.T) {
+	// Overlap >= MaxRunes would make step <= 0; the chunker must fall back to
+	// step = MaxRunes (non-overlapping windows) instead of looping forever.
+	doc := ParsedDocument{
+		ID:          "doc-bad",
+		Text:        strings.Repeat("a", 30),
+		PublishedAt: time.Now(),
+	}
+	c := FixedSizeChunker{MaxRunes: 10, Overlap: 10}
+	chunks := c.Chunk(doc)
+	if len(chunks) != 3 {
+		t.Fatalf("expected 3 non-overlapping chunks, got %d", len(chunks))
+	}
+	for i, ch := range chunks {
+		if len([]rune(ch.Content)) != 10 {
+			t.Fatalf("chunk %d: expected 10 runes, got %d", i, len([]rune(ch.Content)))
+		}
+	}
+}
+
 func TestFixedSizeChunker_HandlesMultibyteRunes(t *testing.T) {
 	doc := ParsedDocument{
 		ID:          "doc-mb",

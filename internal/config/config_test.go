@@ -158,6 +158,22 @@ func TestLoadConfigCarriesMemoryVars(t *testing.T) {
 	}
 }
 
+func TestGetEnvIntFallsBackOnNonIntegerOrNegative(t *testing.T) {
+	t.Setenv("STATE_DIR", t.TempDir())
+	t.Setenv("HEALTH_TIMEOUT_MS", "not-a-number")
+	t.Setenv("RAG_TOP_K", "-7")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.HealthTimeoutMS != 1500 {
+		t.Fatalf("expected non-integer HEALTH_TIMEOUT_MS to fall back to 1500, got %d", cfg.HealthTimeoutMS)
+	}
+	if cfg.RagTopK != 8 {
+		t.Fatalf("expected negative RAG_TOP_K to fall back to 8, got %d", cfg.RagTopK)
+	}
+}
+
 func TestLoadConfigMemoryDefaults(t *testing.T) {
 	t.Setenv("STATE_DIR", t.TempDir())
 	t.Setenv("DATABASE_URL", "")

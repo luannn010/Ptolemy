@@ -86,6 +86,25 @@ func TestOpenAIEmbedder_ServerError(t *testing.T) {
 	}
 }
 
+func TestOpenAIEmbedder_MalformedJSONErrors(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("not json"))
+	}))
+	defer srv.Close()
+	e := NewOpenAIEmbedder(srv.URL, "m", "")
+	if _, err := e.Embed(context.Background(), []string{"x"}); err == nil {
+		t.Fatalf("expected JSON decode error")
+	}
+}
+
+func TestOpenAIEmbedder_TransportErrorSurfaces(t *testing.T) {
+	// Point at a non-routable address so Client.Do fails fast.
+	e := NewOpenAIEmbedder("http://127.0.0.1:1", "m", "")
+	if _, err := e.Embed(context.Background(), []string{"x"}); err == nil {
+		t.Fatalf("expected transport error against closed port")
+	}
+}
+
 func TestOpenAIEmbedder_TrailingSlashStripped(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
