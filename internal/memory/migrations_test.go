@@ -84,3 +84,45 @@ func TestMigrationsFS_SubstitutesEmbeddingDim(t *testing.T) {
 		t.Fatalf("expected VECTOR(1536) after substitution, got: %s", substituted)
 	}
 }
+
+func TestApplyMigrations_CreatesBm25Index(t *testing.T) {
+	url := requirePG(t)
+	conn, err := pgx.Connect(context.Background(), url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(context.Background())
+
+	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, memory_schema_migrations CASCADE`)
+
+	if err := ApplyMigrations(context.Background(), conn, 1024); err != nil {
+		t.Fatalf("ApplyMigrations: %v", err)
+	}
+
+	var n int
+	if err := conn.QueryRow(context.Background(),
+		`SELECT count(*) FROM pg_indexes WHERE tablename='chunks' AND indexname='chunks_content_bm25'`,
+	).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("expected chunks_content_bm25 BM25 index to exist after migrations (got count=%d)", n)
+	}
+}
+
+func TestMigrationsFS_Contains0002(t *testing.T) {
+	entries, err := migrationFS.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "0002_chunks_bm25.sql"
+	found := false
+	for _, e := range entries {
+		if e.Name() == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected %s in embedded migrations", want)
+	}
+}
