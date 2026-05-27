@@ -28,3 +28,27 @@ func TestNewModule_FailsOnUnreachableDatabaseURL(t *testing.T) {
 		t.Fatalf("expected wrapped 'connect postgres' error, got %v", err)
 	}
 }
+
+func TestNewModule_DefaultRetrieverIsHybrid(t *testing.T) {
+	url := requirePG(t)
+	cfg := MemoryConfig{
+		DatabaseURL:        url,
+		EmbeddingBaseURL:   "http://example.invalid",
+		EmbeddingModel:     "fake",
+		EmbeddingDim:       4,
+		LLMBaseURL:         "http://example.invalid",
+		LLMModel:           "fake",
+		TopK:               5,
+		ChunkSizeTokens:    50,
+		ChunkOverlapTokens: 10,
+	}
+	orch, conn, err := NewModule(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("NewModule: %v", err)
+	}
+	defer conn.Close(context.Background())
+
+	if _, ok := orch.Retriever.(*HybridRetriever); !ok {
+		t.Fatalf("expected default Retriever to be *HybridRetriever, got %T", orch.Retriever)
+	}
+}
