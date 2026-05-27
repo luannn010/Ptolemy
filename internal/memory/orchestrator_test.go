@@ -8,7 +8,13 @@ import (
 )
 
 type fakeStore struct {
-	upserted []Chunk
+	upserted       []Chunk
+	supersedeCalls []supersedeCall
+}
+
+type supersedeCall struct {
+	OldDocID  string
+	NewChunks []Chunk
 }
 
 func (f *fakeStore) Upsert(_ context.Context, chunks []Chunk) error {
@@ -17,6 +23,11 @@ func (f *fakeStore) Upsert(_ context.Context, chunks []Chunk) error {
 }
 func (f *fakeStore) Get(_ context.Context, _ []string) ([]Chunk, error) { return nil, nil }
 func (f *fakeStore) MarkSuperseded(_ context.Context, _, _ string) error {
+	return nil
+}
+func (f *fakeStore) SupersedeOnUpsert(_ context.Context, chunks []Chunk, oldDocID string) error {
+	f.upserted = append(f.upserted, chunks...)
+	f.supersedeCalls = append(f.supersedeCalls, supersedeCall{OldDocID: oldDocID, NewChunks: chunks})
 	return nil
 }
 
