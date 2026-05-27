@@ -46,7 +46,7 @@
     },
     {
       "id": "p08-purpose-paraphrase",
-      "text": "what is ptolemy's goal as a project?",
+      "text": "what is the goal of the ptolemy project?",
       "expected_doc_ids": ["6cc9118670b199da"],
       "question_type": "paraphrase"
     },
