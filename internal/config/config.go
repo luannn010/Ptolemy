@@ -22,6 +22,14 @@ type Config struct {
 	AgentBinaryPath string
 	MCPBaseURL      string
 	HealthTimeoutMS int
+	DatabaseURL     string
+	EmbeddingBaseURL string
+	EmbeddingModel  string
+	EmbeddingDim    int
+	EmbeddingAPIKey string
+	RagTopK         int
+	RagChunkSize    int
+	RagChunkOverlap int
 }
 
 const (
@@ -49,6 +57,15 @@ func Load() (Config, error) {
 		MCPBaseURL:      getEnv("MCP_BASE_URL", DefaultMCPBaseURL),
 		HealthTimeoutMS: getEnvInt("HEALTH_TIMEOUT_MS", 1500),
 	}
+
+	cfg.DatabaseURL = getEnv("DATABASE_URL", "")
+	cfg.EmbeddingBaseURL = getEnv("EMBEDDING_BASE_URL", "")
+	cfg.EmbeddingModel = getEnv("EMBEDDING_MODEL", "")
+	cfg.EmbeddingDim = getEnvInt("EMBEDDING_DIM", 0)
+	cfg.EmbeddingAPIKey = getEnv("EMBEDDING_API_KEY", "")
+	cfg.RagTopK = getEnvInt("RAG_TOP_K", 8)
+	cfg.RagChunkSize = getEnvInt("RAG_CHUNK_SIZE_TOKENS", 700)
+	cfg.RagChunkOverlap = getEnvInt("RAG_CHUNK_OVERLAP_TOKENS", 100)
 
 	if cfg.HTTPPort == "" {
 		return Config{}, fmt.Errorf("HTTP_PORT cannot be empty")
