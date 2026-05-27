@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // MemoryConfig is loaded entirely from environment variables, reusing the
@@ -27,6 +28,11 @@ type MemoryConfig struct {
 	TopK               int
 	ChunkSizeTokens    int
 	ChunkOverlapTokens int
+
+	// Recency tuning knobs (Phase 3). Spec defaults are 0.1 and 30 days;
+	// production behavior is preserved when RAG_RECENCY_* are unset.
+	RecencyWeight   float64       // env: RAG_RECENCY_WEIGHT
+	RecencyHalfLife time.Duration // env: RAG_RECENCY_HALFLIFE_DAYS (parsed as float days)
 }
 
 func LoadConfig() (MemoryConfig, error) {
@@ -60,6 +66,16 @@ func LoadConfig() (MemoryConfig, error) {
 	cfg.ChunkSizeTokens = intEnv("RAG_CHUNK_SIZE_TOKENS", 700)
 	cfg.ChunkOverlapTokens = intEnv("RAG_CHUNK_OVERLAP_TOKENS", 100)
 
+	cfg.RecencyWeight = floatEnv("RAG_RECENCY_WEIGHT", 0.1)
+	if cfg.RecencyWeight < 0 {
+		return MemoryConfig{}, fmt.Errorf("RAG_RECENCY_WEIGHT must be >= 0, got %v", cfg.RecencyWeight)
+	}
+	halflifeDays := floatEnv("RAG_RECENCY_HALFLIFE_DAYS", 30)
+	cfg.RecencyHalfLife = time.Duration(halflifeDays * float64(24*time.Hour))
+	if cfg.RecencyHalfLife < time.Hour {
+		return MemoryConfig{}, fmt.Errorf("RAG_RECENCY_HALFLIFE_DAYS resolves to %v, must be >= 1h", cfg.RecencyHalfLife)
+	}
+
 	return cfg, nil
 }
 
@@ -70,6 +86,18 @@ func intEnv(key string, fallback int) int {
 	}
 	v, err := strconv.Atoi(raw)
 	if err != nil || v <= 0 {
+		return fallback
+	}
+	return v
+}
+
+func floatEnv(key string, fallback float64) float64 {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
 		return fallback
 	}
 	return v
