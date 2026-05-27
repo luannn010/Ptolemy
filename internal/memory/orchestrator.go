@@ -65,7 +65,16 @@ func (o *Orchestrator) Answer(ctx context.Context, q Query) (Answer, error) {
 	if depth <= 0 {
 		depth = 20
 	}
-	candidates, err := o.Retriever.Retrieve(ctx, q, depth)
+	// Resolve AsOf default once; downstream retrievers can rely on it being
+	// non-nil so they don't each have to default it on their own.
+	asOf := time.Now().UTC()
+	if q.AsOf != nil {
+		asOf = *q.AsOf
+	}
+	local := q
+	local.AsOf = &asOf
+
+	candidates, err := o.Retriever.Retrieve(ctx, local, depth)
 	if err != nil {
 		return Answer{}, fmt.Errorf("retrieve: %w", err)
 	}

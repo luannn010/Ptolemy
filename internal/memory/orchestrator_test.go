@@ -307,3 +307,57 @@ func TestOrchestrator_Ingest_NonStringSupersedesIsIgnored(t *testing.T) {
 		t.Fatalf("expected 1 plain upsert, got %d", len(store.upserted))
 	}
 }
+
+// capturingRetriever records the last Query it received so tests can assert
+// the orchestrator's resolution of optional fields (AsOf, K, etc).
+type capturingRetriever struct {
+	lastQuery Query
+}
+
+func (c *capturingRetriever) Retrieve(_ context.Context, q Query, _ int) ([]RetrievedChunk, error) {
+	c.lastQuery = q
+	return []RetrievedChunk{
+		{Chunk: Chunk{ID: "c1", Content: "anything"}, Score: 0.5},
+	}, nil
+}
+
+func TestOrchestrator_Answer_AsOfNilDefaultsToNow(t *testing.T) {
+	r := &capturingRetriever{}
+	o := &Orchestrator{
+		Retriever:      r,
+		Fusion:         PassthroughFusion{},
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 1000},
+		Generator:      fakeGenerator{},
+		Depth:          5,
+		FinalK:         3,
+	}
+	before := time.Now().UTC().Add(-time.Second)
+	if _, err := o.Answer(context.Background(), Query{Text: "q", K: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if r.lastQuery.AsOf == nil {
+		t.Fatalf("retriever received Query with AsOf=nil; expected populated default")
+	}
+	if r.lastQuery.AsOf.Before(before) {
+		t.Fatalf("AsOf default %v should be ~now, before=%v", *r.lastQuery.AsOf, before)
+	}
+}
+
+func TestOrchestrator_Answer_AsOfRespected(t *testing.T) {
+	r := &capturingRetriever{}
+	o := &Orchestrator{
+		Retriever:      r,
+		Fusion:         PassthroughFusion{},
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 1000},
+		Generator:      fakeGenerator{},
+		Depth:          5,
+		FinalK:         3,
+	}
+	pin := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+	if _, err := o.Answer(context.Background(), Query{Text: "q", K: 1, AsOf: &pin}); err != nil {
+		t.Fatal(err)
+	}
+	if r.lastQuery.AsOf == nil || !r.lastQuery.AsOf.Equal(pin) {
+		t.Fatalf("expected AsOf=%v, got %v", pin, r.lastQuery.AsOf)
+	}
+}
