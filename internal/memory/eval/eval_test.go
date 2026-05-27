@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/luannn010/ptolemy/internal/memory"
@@ -202,4 +203,47 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
+}
+
+func TestLoadSeed_TagsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "seed.json")
+	if err := os.WriteFile(path, []byte(`{
+	  "k": 5,
+	  "questions": [
+	    {"id": "q1", "text": "x", "expected_doc_ids": ["d"], "question_type": "paraphrase"},
+	    {"id": "q2", "text": "y", "expected_doc_ids": ["d"], "question_type": "exact_token"},
+	    {"id": "q3", "text": "z", "expected_doc_ids": ["d"], "question_type": "fresh_vs_stale"},
+	    {"id": "q4", "text": "w", "expected_doc_ids": ["d"], "question_type": "negative"}
+	  ]
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := LoadSeed(path)
+	if err != nil {
+		t.Fatalf("LoadSeed: %v", err)
+	}
+	want := []QuestionType{QuestionParaphrase, QuestionExactToken, QuestionFreshVsStale, QuestionNegative}
+	for i, q := range s.Questions {
+		if q.QuestionType != want[i] {
+			t.Fatalf("q[%d].QuestionType: got %q want %q", i, q.QuestionType, want[i])
+		}
+	}
+}
+
+func TestLoadSeed_UnknownTypeIsError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "seed.json")
+	if err := os.WriteFile(path, []byte(`{
+	  "questions": [{"id": "qX", "text": "x", "expected_doc_ids": ["d"], "question_type": "bogus"}]
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadSeed(path)
+	if err == nil {
+		t.Fatal("expected error for unknown question_type")
+	}
+	if !strings.Contains(err.Error(), "qX") || !strings.Contains(err.Error(), "bogus") {
+		t.Fatalf("error should name the bad id and value, got %v", err)
+	}
 }

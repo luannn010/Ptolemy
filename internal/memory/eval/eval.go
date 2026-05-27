@@ -13,6 +13,29 @@ import (
 	"github.com/luannn010/ptolemy/internal/memory"
 )
 
+// QuestionType tags a seed question so the harness can report per-type recall.
+// Phase 3 introduces four buckets; only these literal strings are accepted.
+type QuestionType string
+
+const (
+	QuestionParaphrase   QuestionType = "paraphrase"
+	QuestionExactToken   QuestionType = "exact_token"
+	QuestionFreshVsStale QuestionType = "fresh_vs_stale"
+	QuestionNegative     QuestionType = "negative"
+)
+
+// fixtureVersion is stamped into Summary.FixtureVer and into the sweep table
+// footer. Bump whenever the byte-stable fixtures under testdata/corpus/ are
+// resynced to evolving real docs, so cross-PR sweep tables stay comparable.
+const fixtureVersion = 1
+
+var validQuestionTypes = map[QuestionType]bool{
+	QuestionParaphrase:   true,
+	QuestionExactToken:   true,
+	QuestionFreshVsStale: true,
+	QuestionNegative:     true,
+}
+
 // Seed mirrors the on-disk eval JSON.
 type Seed struct {
 	K         int          `json:"k"`
@@ -30,10 +53,11 @@ type CorpusItem struct {
 }
 
 type Question struct {
-	ID             string   `json:"id"`
-	Text           string   `json:"text"`
-	ExpectedDocIDs []string `json:"expected_doc_ids"`
-	Rationale      string   `json:"rationale,omitempty"`
+	ID             string       `json:"id"`
+	Text           string       `json:"text"`
+	ExpectedDocIDs []string     `json:"expected_doc_ids"`
+	QuestionType   QuestionType `json:"question_type,omitempty"`
+	Rationale      string       `json:"rationale,omitempty"`
 }
 
 type QuestionResult struct {
@@ -56,6 +80,17 @@ func LoadSeed(path string) (Seed, error) {
 	var s Seed
 	if err := json.Unmarshal(data, &s); err != nil {
 		return Seed{}, fmt.Errorf("parse seed: %w", err)
+	}
+	for _, q := range s.Questions {
+		if q.QuestionType == "" {
+			// Backwards-compat: untagged questions are allowed (the old 8-question
+			// seed had no tags). They are reported under the empty bucket by
+			// Summarize. The Phase 3 seed populates the tag for every question.
+			continue
+		}
+		if !validQuestionTypes[q.QuestionType] {
+			return Seed{}, fmt.Errorf("seed question %q: unknown question_type %q", q.ID, q.QuestionType)
+		}
 	}
 	if s.K <= 0 {
 		s.K = 5
