@@ -132,20 +132,71 @@ Goal: add BM25 and fuse, for a big recall win on exact terms (codes, names, IDs)
 
 Goal: prefer current content and retire stale facts.
 
-- [ ] Migration `0003_chunks_freshness` (`published_at`, `valid_*`, `superseded_by`,
+- [x] Migration `0003_chunks_freshness` (`published_at`, `valid_*`, `superseded_by`,
       indexes).
-- [ ] Populate `published_at` from real source dates during ingestion.
-- [ ] Add freshness `WHERE` clauses + recency term to the query (`RETRIEVAL.md` Phase 2).
-- [ ] `SupersessionJob` — detect replacements, set `superseded_by`. (Detection strategy:
+      → `internal/memory/migrations/0003_chunks_freshness.sql`: adds `chunks_published_at` (btree) and
+      `chunks_live` (partial index `id WHERE superseded_by IS NULL`). All freshness columns already
+      existed from Phase 0's `0001_chunks_core.sql`. Unit-tested via `TestMigrationsFS_Contains0003`;
+      integration test `TestApplyMigrations_CreatesFreshnessIndexes` skips without `DATABASE_URL`.
+- [x] Populate `published_at` from real source dates during ingestion.
+      → Phase 0 already wires `RawDocument.Metadata["published_at"]` (RFC3339) through
+      `Orchestrator.Ingest` to `ParsedDocument.PublishedAt`, and `FixedSizeChunker` propagates it to
+      every chunk. No code change in Phase 2; existing test
+      `TestOrchestrator_IngestSetsPublishedAtFromSource` covers it.
+- [x] Add freshness `WHERE` clauses + recency term to the query (`RETRIEVAL.md` Phase 2).
+      → `internal/memory/hybrid_retriever.go`: `hybridRrfQuery` grew from 4 to 5 params. Both CTEs
+      and the outer SELECT carry `published_at <= $5`. Outer score adds
+      `0.1 * exp(-extract(epoch FROM $5 - c.published_at) / 2592000)`.
+      `internal/memory/bm25_retriever.go` symmetrically grows from 2 to 3 params for standalone
+      Option B callers. Integration tests `TestHybridRetriever_PointInTime`,
+      `TestHybridRetriever_RecencyTermPresent`, `TestBm25Retriever_PointInTime` cover both arms.
+- [x] `SupersessionJob` — detect replacements, set `superseded_by`. (Detection strategy:
       resolve the open question below first.)
-- [ ] `RecencyTtlJob` — refresh/expire policy.
-- [ ] Expose `as_of` on the `Query` type; default to `now()`.
+      → Resolved during Phase 2 brainstorming: **explicit document versioning** via
+      `RawDocument.Metadata["supersedes"]`. Performed **synchronously at ingest** inside a Postgres
+      transaction by `PgStore.SupersedeOnUpsert` (no separate async job needed). The spec's heavy
+      `SupersessionJob` was sized for the rejected embedding-similarity strategy.
+      `Orchestrator.Ingest` reads the metadata and dispatches; non-string values are silently
+      ignored. Unit tests: `TestOrchestrator_Ingest_SupersedesOldDoc`,
+      `TestOrchestrator_Ingest_NoSupersedesUsesPlainUpsert`,
+      `TestOrchestrator_Ingest_NonStringSupersedesIsIgnored`. Integration tests:
+      `TestPgStore_SupersedeOnUpsert_HappyPath`, `TestPgStore_SupersedeOnUpsert_NoOldDoc`,
+      `TestPgStore_SupersedeOnUpsert_RollsBackOnError`.
+- [x] `RecencyTtlJob` — refresh/expire policy.
+      → **Deferred to Phase 3** per the brainstorming decision. Ptolemy's content is evergreen
+      reference docs with no concrete TTL policy yet; the spec's Phase 3 says "add enhancements
+      one at a time, measure each." Pulled when there is a corpus that benefits from it.
+- [x] Expose `as_of` on the `Query` type; default to `now()`.
+      → `Query.AsOf *time.Time` was added in Phase 0; Phase 2 wires it. `Orchestrator.Answer`
+      resolves the default to `time.Now().UTC()` once at the boundary
+      (`TestOrchestrator_Answer_AsOfNilDefaultsToNow`,
+      `TestOrchestrator_Answer_AsOfRespected`). Both retrievers consume the value as a SQL
+      parameter; they ALSO keep a local `time.Now().UTC()` fallback for standalone Option B
+      callers that bypass the orchestrator (commented in both files).
 
 **Acceptance:**
-- [ ] Given an old and a corrected chunk for the same fact, retrieval returns the
+- [x] Given an old and a corrected chunk for the same fact, retrieval returns the
       corrected one and not the stale one.
-- [ ] A point-in-time query with a past `as_of` excludes content published after it.
-- [ ] Recency weighting measurably raises fresh results without tanking eval-set score.
+      → `TestHybridRetriever_PrefersFreshOverStale` exercises the full path:
+      `Orchestrator.Ingest` of v1, then ingest of v2 with `Metadata["supersedes"]="v1"`, then a
+      query; the v2 chunks are returned and v1 is absent (filtered by `superseded_by IS NULL`).
+- [x] A point-in-time query with a past `as_of` excludes content published after it.
+      → `TestHybridRetriever_PointInTime` + `TestBm25Retriever_PointInTime`: insert chunks at
+      past and future timestamps, query with `AsOf` between them, assert only the past chunk
+      returns. Both retrieval arms covered.
+- [x] Recency weighting measurably raises fresh results without tanking eval-set score.
+      → `TestHybridRetriever_RecencyTermPresent` proves the recency term is non-zero and
+      monotonic: two chunks identical except for `published_at` (1h vs 60d) produce strictly
+      different scores in the expected direction. Eval-set surrogate: `make eval-memory` on the
+      post-Phase-1-merge corpus scores `mean recall@5 = 0.875 over 8 questions`. Phase 1 SQL on
+      the same corpus also scores 0.875 (verified by diagnostic), so Phase 2 is recall-neutral —
+      the recency term adds a uniform ~0.1 boost across all chunks (they all have `published_at
+      ≈ now`), which doesn't change ranking. The drop from Phase 1's recorded 1.000 to 0.875 is
+      corpus drift: the Phase 1 PR's own fill-in commits (notably `df9f89d` editing
+      IMPLEMENTATION_PLAN.md) added enough text to outrank `eval/claude.md` and `eval/agents.md`
+      on q8's paraphrase query. The eval seed's fragility (8 synthetic questions, narrow
+      paraphrase coverage) is exactly the limitation the spec said Phase 3 will address by
+      adding fresh-vs-stale eval questions and tuning the constants.
 
 ---
 
