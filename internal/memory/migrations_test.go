@@ -126,3 +126,50 @@ func TestMigrationsFS_Contains0002(t *testing.T) {
 		t.Fatalf("expected %s in embedded migrations", want)
 	}
 }
+
+func TestApplyMigrations_CreatesFreshnessIndexes(t *testing.T) {
+	url := requirePG(t)
+	conn, err := pgx.Connect(context.Background(), url)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(context.Background())
+
+	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, memory_schema_migrations CASCADE`)
+
+	if err := ApplyMigrations(context.Background(), conn, 1024); err != nil {
+		t.Fatalf("ApplyMigrations: %v", err)
+	}
+
+	var nPub, nLive int
+	if err := conn.QueryRow(context.Background(),
+		`SELECT count(*) FROM pg_indexes WHERE tablename='chunks' AND indexname='chunks_published_at'`,
+	).Scan(&nPub); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(context.Background(),
+		`SELECT count(*) FROM pg_indexes WHERE tablename='chunks' AND indexname='chunks_live'`,
+	).Scan(&nLive); err != nil {
+		t.Fatal(err)
+	}
+	if nPub != 1 {
+		t.Fatalf("expected chunks_published_at index, got count=%d", nPub)
+	}
+	if nLive != 1 {
+		t.Fatalf("expected chunks_live partial index, got count=%d", nLive)
+	}
+}
+
+func TestMigrationsFS_Contains0003(t *testing.T) {
+	entries, err := migrationFS.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "0003_chunks_freshness.sql"
+	for _, e := range entries {
+		if e.Name() == want {
+			return
+		}
+	}
+	t.Fatalf("expected %s in embedded migrations", want)
+}
