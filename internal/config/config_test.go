@@ -129,3 +129,68 @@ func TestLoadConfigTrimsBlankEnvValues(t *testing.T) {
 		t.Fatalf("expected default BrainBaseURL for blank env, got %s", cfg.BrainBaseURL)
 	}
 }
+
+func TestLoadConfigCarriesMemoryVars(t *testing.T) {
+	t.Setenv("STATE_DIR", t.TempDir())
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("EMBEDDING_API_KEY", "ek")
+	t.Setenv("RAG_TOP_K", "12")
+	t.Setenv("RAG_CHUNK_SIZE_TOKENS", "600")
+	t.Setenv("RAG_CHUNK_OVERLAP_TOKENS", "80")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DatabaseURL != "postgres://x" {
+		t.Fatalf("DatabaseURL: %q", cfg.DatabaseURL)
+	}
+	if cfg.EmbeddingBaseURL != "http://e" || cfg.EmbeddingModel != "m" {
+		t.Fatalf("embedding endpoint: %+v", cfg)
+	}
+	if cfg.EmbeddingDim != 768 || cfg.EmbeddingAPIKey != "ek" {
+		t.Fatalf("embedding dim/key: %+v", cfg)
+	}
+	if cfg.RagTopK != 12 || cfg.RagChunkSize != 600 || cfg.RagChunkOverlap != 80 {
+		t.Fatalf("RAG knobs: %+v", cfg)
+	}
+}
+
+func TestGetEnvIntFallsBackOnNonIntegerOrNegative(t *testing.T) {
+	t.Setenv("STATE_DIR", t.TempDir())
+	t.Setenv("HEALTH_TIMEOUT_MS", "not-a-number")
+	t.Setenv("RAG_TOP_K", "-7")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.HealthTimeoutMS != 1500 {
+		t.Fatalf("expected non-integer HEALTH_TIMEOUT_MS to fall back to 1500, got %d", cfg.HealthTimeoutMS)
+	}
+	if cfg.RagTopK != 8 {
+		t.Fatalf("expected negative RAG_TOP_K to fall back to 8, got %d", cfg.RagTopK)
+	}
+}
+
+func TestLoadConfigMemoryDefaults(t *testing.T) {
+	t.Setenv("STATE_DIR", t.TempDir())
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("EMBEDDING_BASE_URL", "")
+	t.Setenv("EMBEDDING_MODEL", "")
+	t.Setenv("EMBEDDING_DIM", "")
+	t.Setenv("RAG_TOP_K", "")
+	t.Setenv("RAG_CHUNK_SIZE_TOKENS", "")
+	t.Setenv("RAG_CHUNK_OVERLAP_TOKENS", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DatabaseURL != "" || cfg.EmbeddingBaseURL != "" {
+		t.Fatalf("endpoint fields must default to empty (memory.LoadConfig owns the strict validation)")
+	}
+	if cfg.RagTopK != 8 || cfg.RagChunkSize != 700 || cfg.RagChunkOverlap != 100 {
+		t.Fatalf("RAG defaults wrong: %d/%d/%d", cfg.RagTopK, cfg.RagChunkSize, cfg.RagChunkOverlap)
+	}
+}
