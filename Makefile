@@ -45,19 +45,21 @@ smoke-memory: build
 	RAG_CHUNK_SIZE_TOKENS=$(SMOKE_TEST_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
 	  $(BIN_DIR)/memory-demo ask "$(SMOKE_TEST_QUESTION)"
 
-# Phase 1 memory retrieval eval. Runs the seed (docs/memory/eval/seed.json)
-# end-to-end against the live retriever and prints recall@k. Same env autoload
-# as smoke-memory (.env via godotenv in cmd/memory-eval).
-EVAL_SEED ?= docs/memory/eval/seed.json
-# The chunker's 4-runes-per-token heuristic undercounts on dense markdown
-# (code identifiers, SQL blocks, short tokens) — empirically actual tokens
-# per rune is ~0.6 on docs/memory/RETRIEVAL.md, so 30 ticks (=120 runes)
-# still produces 71-token chunks that breach a llama.cpp embedding server's
-# --batch-size 64. 20 ticks (=80 runes, ~47 actual tokens) stays safely
-# under that ceiling on every doc in the seed. Smoke target keeps 50
-# (its narrative text tokenizes more evenly and never breaches the limit).
-EVAL_CHUNK_SIZE ?= 20
+# Phase 3 memory eval. RAG_FIXTURE_DIR points the binary at the frozen
+# fixture corpus under internal/memory/eval/testdata/corpus/; eval.LoadFixtureCorpus
+# enumerates the dir and the orchestrator's ingest path chunks/embeds/upserts.
+# EVAL_CHUNK_SIZE=20 keeps chunked output under the llama.cpp embedding server's
+# 64-token batch ceiling on dense markdown fixtures.
+EVAL_SEED         ?= internal/memory/eval/testdata/seed.json
+EVAL_FIXTURE_DIR  ?= internal/memory/eval/testdata/corpus
+EVAL_CHUNK_SIZE   ?= 20
 
 eval-memory: build
+	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
 	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
 	  $(BIN_DIR)/memory-eval -seed $(EVAL_SEED)
+
+eval-memory-sweep: build
+	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
+	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
+	  $(BIN_DIR)/memory-eval -seed $(EVAL_SEED) -sweep
