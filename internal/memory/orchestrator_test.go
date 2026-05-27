@@ -229,3 +229,81 @@ func TestOrchestrator_AnswerHonorsQueryK(t *testing.T) {
 		t.Fatalf("expected non-empty answer")
 	}
 }
+
+func TestOrchestrator_Ingest_SupersedesOldDoc(t *testing.T) {
+	store := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1, 0}}},
+		Store:    store,
+	}
+	err := o.Ingest(context.Background(), RawDocument{
+		ID:   "v2",
+		Text: "new content",
+		Metadata: map[string]any{
+			"supersedes": "v1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	if len(store.supersedeCalls) != 1 {
+		t.Fatalf("expected 1 SupersedeOnUpsert call, got %d", len(store.supersedeCalls))
+	}
+	if store.supersedeCalls[0].OldDocID != "v1" {
+		t.Fatalf("expected OldDocID=v1, got %q", store.supersedeCalls[0].OldDocID)
+	}
+	if len(store.supersedeCalls[0].NewChunks) != 1 || store.supersedeCalls[0].NewChunks[0].ID != "v2#0" {
+		t.Fatalf("expected NewChunks=[v2#0], got %+v", store.supersedeCalls[0].NewChunks)
+	}
+}
+
+func TestOrchestrator_Ingest_NoSupersedesUsesPlainUpsert(t *testing.T) {
+	store := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1, 0}}},
+		Store:    store,
+	}
+	err := o.Ingest(context.Background(), RawDocument{
+		ID:   "d",
+		Text: "first ingest",
+		// No "supersedes" key.
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.supersedeCalls) != 0 {
+		t.Fatalf("expected 0 SupersedeOnUpsert calls, got %d", len(store.supersedeCalls))
+	}
+	if len(store.upserted) != 1 {
+		t.Fatalf("expected 1 upsert, got %d", len(store.upserted))
+	}
+}
+
+func TestOrchestrator_Ingest_NonStringSupersedesIsIgnored(t *testing.T) {
+	// A malformed metadata value (e.g. a number) MUST NOT crash and MUST fall
+	// back to plain Upsert. This protects the orchestrator from caller bugs.
+	store := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1, 0}}},
+		Store:    store,
+	}
+	err := o.Ingest(context.Background(), RawDocument{
+		ID:   "d",
+		Text: "anything",
+		Metadata: map[string]any{
+			"supersedes": 42, // not a string
+		},
+	})
+	if err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	if len(store.supersedeCalls) != 0 {
+		t.Fatalf("non-string supersedes must be ignored; got %d calls", len(store.supersedeCalls))
+	}
+	if len(store.upserted) != 1 {
+		t.Fatalf("expected 1 plain upsert, got %d", len(store.upserted))
+	}
+}
