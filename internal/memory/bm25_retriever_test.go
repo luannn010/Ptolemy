@@ -53,3 +53,18 @@ func TestBm25Retriever_FindsExactToken(t *testing.T) {
 		t.Fatalf("expected 'hit' to be top BM25 result, got %+v", got)
 	}
 }
+
+func TestBm25Retriever_WhitespaceQueryReturnsEmpty(t *testing.T) {
+	// A whitespace-only query must short-circuit before any SQL — passing
+	// nil conn would panic if the guard were missing. This pins the
+	// strings.TrimSpace guard separately from the empty-string case so a
+	// refactor that replaces TrimSpace with `q.Text == ""` breaks loudly.
+	r := NewBm25Retriever(nil)
+	got, err := r.Retrieve(context.Background(), Query{Text: "   \t\n", K: 5}, 5)
+	if err != nil {
+		t.Fatalf("expected nil err on whitespace query, got %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected empty result on whitespace query, got %d", len(got))
+	}
+}

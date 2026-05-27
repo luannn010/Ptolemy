@@ -78,6 +78,31 @@ func TestRrfFusion_EmptyInputReturnsNil(t *testing.T) {
 	}
 }
 
+func TestRrfFusion_DeterministicTieBreak(t *testing.T) {
+	// Two chunks at the same rank in the same single list must come out in
+	// first-seen order. Important so multiple calls with the same input
+	// produce byte-identical outputs (eval-set deltas rely on this).
+	list := []RetrievedChunk{
+		{Chunk: Chunk{ID: "first"}},
+		{Chunk: Chunk{ID: "second"}},
+	}
+	out := (RrfFusion{}).Fuse([][]RetrievedChunk{list}, 2)
+	if len(out) != 2 || out[0].ID != "first" || out[1].ID != "second" {
+		t.Fatalf("expected stable first-seen order, got %+v", ids(out))
+	}
+}
+
+func TestRrfFusion_CustomConstantHonored(t *testing.T) {
+	// A non-default C must be used in the score, not silently replaced by 60.
+	// Locks the constant() contract: 0 → 60, >0 → as-is.
+	list := []RetrievedChunk{{Chunk: Chunk{ID: "x"}}}
+	out := (RrfFusion{C: 10}).Fuse([][]RetrievedChunk{list}, 1)
+	want := 1.0 / 11.0
+	if math.Abs(out[0].Score-want) > 1e-9 {
+		t.Fatalf("expected C=10 score %v, got %v", want, out[0].Score)
+	}
+}
+
 func ids(rs []RetrievedChunk) []string {
 	out := make([]string, len(rs))
 	for i, r := range rs {
