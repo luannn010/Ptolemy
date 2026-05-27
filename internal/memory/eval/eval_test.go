@@ -198,6 +198,44 @@ func (erroringRetriever) Retrieve(_ context.Context, _ memory.Query, _ int) ([]m
 	return nil, fmt.Errorf("retriever boom")
 }
 
+func TestSummarize_PerTypeRecall(t *testing.T) {
+	results := []QuestionResult{
+		// paraphrase: 1.0 + 0.0 = 0.5 mean
+		{Question: Question{QuestionType: QuestionParaphrase}, Hits: []string{"a"}, Expected: []string{"a"}},
+		{Question: Question{QuestionType: QuestionParaphrase}, Hits: nil, Expected: []string{"a"}},
+		// exact_token: 1.0
+		{Question: Question{QuestionType: QuestionExactToken}, Hits: []string{"a"}, Expected: []string{"a"}},
+		// fresh_vs_stale: 0.5
+		{Question: Question{QuestionType: QuestionFreshVsStale}, Hits: []string{"a"}, Expected: []string{"a", "b"}},
+	}
+	s := Summarize(results)
+	if abs(s.PerType[QuestionParaphrase]-0.5) > 1e-9 {
+		t.Fatalf("paraphrase mean: got %v want 0.5", s.PerType[QuestionParaphrase])
+	}
+	if abs(s.PerType[QuestionExactToken]-1.0) > 1e-9 {
+		t.Fatalf("exact_token mean: got %v want 1.0", s.PerType[QuestionExactToken])
+	}
+	if abs(s.PerType[QuestionFreshVsStale]-0.5) > 1e-9 {
+		t.Fatalf("fresh_vs_stale mean: got %v want 0.5", s.PerType[QuestionFreshVsStale])
+	}
+	if s.NPerType[QuestionParaphrase] != 2 {
+		t.Fatalf("paraphrase N: got %d want 2", s.NPerType[QuestionParaphrase])
+	}
+	// Overall: (1+0+1+0.5)/4 = 0.625
+	if abs(s.MeanRecall-0.625) > 1e-9 {
+		t.Fatalf("overall mean: got %v want 0.625", s.MeanRecall)
+	}
+}
+
+func TestSummarize_StampsFixtureVersion(t *testing.T) {
+	s := Summarize([]QuestionResult{
+		{Question: Question{QuestionType: QuestionParaphrase}, Hits: []string{"a"}, Expected: []string{"a"}},
+	})
+	if s.FixtureVer != fixtureVersion {
+		t.Fatalf("FixtureVer: got %d want %d", s.FixtureVer, fixtureVersion)
+	}
+}
+
 func abs(x float64) float64 {
 	if x < 0 {
 		return -x
