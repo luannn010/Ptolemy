@@ -13,16 +13,23 @@ import (
 // HybridRetriever runs the spec's Option A: a single SQL query with both
 // retrieval arms as CTEs (vector via pgvector <=>, lexical via pg_search @@@),
 // fused inside Postgres with RRF (C=60). Phase 2 adds the freshness CTE
-// filters (published_at <= $5) and the recency term in the outer SELECT
-// (0.1 * exp(-Δt/30d)); the constants are spec defaults and become tuning
-// knobs in Phase 3.
+// filters (published_at <= $5) and the recency term in the outer SELECT;
+// Phase 3 promotes the recency weight ($6) and halflife seconds ($7) to
+// constructor parameters so callers can tune them from MemoryConfig.
 type HybridRetriever struct {
-	conn     *pgx.Conn
-	embedder Embedder
+	conn            *pgx.Conn
+	embedder        Embedder
+	recencyWeight   float64
+	recencyHalfLife time.Duration
 }
 
-func NewHybridRetriever(conn *pgx.Conn, e Embedder) *HybridRetriever {
-	return &HybridRetriever{conn: conn, embedder: e}
+func NewHybridRetriever(conn *pgx.Conn, e Embedder, recencyWeight float64, recencyHalfLife time.Duration) *HybridRetriever {
+	return &HybridRetriever{
+		conn:            conn,
+		embedder:        e,
+		recencyWeight:   recencyWeight,
+		recencyHalfLife: recencyHalfLife,
+	}
 }
 
 const hybridRrfQuery = `
@@ -46,7 +53,7 @@ vec AS (
 SELECT c.id, c.content, c.metadata, COALESCE(c.source,''), c.published_at,
        COALESCE(1.0 / (60 + b.rank), 0)
      + COALESCE(1.0 / (60 + v.rank), 0)
-     + 0.1 * exp(-extract(epoch FROM $5 - c.published_at) / 2592000) AS score
+     + $6 * exp(-extract(epoch FROM $5 - c.published_at) / $7) AS score
 FROM chunks c
 LEFT JOIN bm25 b ON b.id = c.id
 LEFT JOIN vec  v ON v.id = c.id
@@ -81,7 +88,15 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	if q.AsOf != nil {
 		asOf = *q.AsOf
 	}
-	rows, err := r.conn.Query(ctx, hybridRrfQuery, q.Text, pgvector.NewVector(vecs[0]), depth, finalK, asOf)
+	rows, err := r.conn.Query(ctx, hybridRrfQuery,
+		q.Text,
+		pgvector.NewVector(vecs[0]),
+		depth,
+		finalK,
+		asOf,
+		r.recencyWeight,
+		r.recencyHalfLife.Seconds(),
+	)
 	if err != nil {
 		return nil, err
 	}
