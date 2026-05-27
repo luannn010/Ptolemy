@@ -60,6 +60,53 @@ func TestLoadConfig_RejectsZeroEmbeddingDim(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_RequiresEmbeddingEndpoint(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "1024")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatalf("expected error when EMBEDDING_BASE_URL is missing")
+	}
+}
+
+func TestLoadConfig_RequiresBrainEndpoint(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "1024")
+	t.Setenv("BRAIN_BASE_URL", "")
+	t.Setenv("BRAIN_MODEL", "lm")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatalf("expected error when BRAIN_BASE_URL is missing")
+	}
+}
+
+func TestLoadConfig_RejectsNonIntegerEmbeddingDim(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "not-a-number")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatalf("expected error when EMBEDDING_DIM is non-integer")
+	}
+}
+
+func TestIntEnv_FallsBackOnInvalidValue(t *testing.T) {
+	t.Setenv("PTOLEMY_TEST_INT", "not-an-int")
+	if got := intEnv("PTOLEMY_TEST_INT", 42); got != 42 {
+		t.Fatalf("expected fallback 42 on non-integer, got %d", got)
+	}
+	t.Setenv("PTOLEMY_TEST_INT", "-5")
+	if got := intEnv("PTOLEMY_TEST_INT", 42); got != 42 {
+		t.Fatalf("expected fallback 42 on non-positive int, got %d", got)
+	}
+}
+
 func TestLoadConfig_RAGKnobsDefault(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
 	t.Setenv("EMBEDDING_BASE_URL", "http://e")

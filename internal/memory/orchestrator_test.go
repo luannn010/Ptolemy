@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -112,6 +113,91 @@ func TestOrchestrator_IngestEmptyTextSkipsStore(t *testing.T) {
 	}
 	if len(store.upserted) != 0 {
 		t.Fatalf("nothing should be stored on embedder mismatch")
+	}
+}
+
+type erroringRetriever struct{}
+
+func (erroringRetriever) Retrieve(_ context.Context, _ Query, _ int) ([]RetrievedChunk, error) {
+	return nil, fmt.Errorf("backend down")
+}
+
+func TestOrchestrator_AnswerPropagatesRetrieverError(t *testing.T) {
+	o := &Orchestrator{
+		Retriever:      erroringRetriever{},
+		Fusion:         PassthroughFusion{},
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 1000},
+		Generator:      fakeGenerator{},
+		Depth:          5,
+		FinalK:         3,
+	}
+	if _, err := o.Answer(context.Background(), Query{Text: "q", K: 1}); err == nil {
+		t.Fatalf("expected retriever error to surface")
+	}
+}
+
+func TestOrchestrator_AnswerDefaultsDepthAndFinalK(t *testing.T) {
+	// Depth=0 and Query.K=0 + FinalK=0 should all use the built-in defaults
+	// instead of returning early or panicking.
+	o := &Orchestrator{
+		Retriever:      fakeRetriever{},
+		Fusion:         PassthroughFusion{},
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 1000},
+		Generator:      fakeGenerator{},
+		// Depth and FinalK intentionally zero.
+	}
+	ans, err := o.Answer(context.Background(), Query{Text: "q"}) // Query.K=0
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if ans.Text == "" {
+		t.Fatalf("expected non-empty answer when depth/finalK default")
+	}
+}
+
+type erroringEmbedder struct{}
+
+func (erroringEmbedder) Embed(_ context.Context, _ []string) ([][]float32, error) {
+	return nil, fmt.Errorf("embed down")
+}
+
+func TestOrchestrator_IngestPropagatesEmbedError(t *testing.T) {
+	store := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: erroringEmbedder{},
+		Store:    store,
+	}
+	if err := o.Ingest(context.Background(), RawDocument{ID: "d", Text: "hello"}); err == nil {
+		t.Fatalf("expected embed error to surface")
+	}
+	if len(store.upserted) != 0 {
+		t.Fatalf("nothing should be stored when embedder errors")
+	}
+}
+
+func TestOrchestrator_IngestIgnoresUnparseablePublishedAt(t *testing.T) {
+	// A malformed published_at metadata value must fall back to time.Now(),
+	// not abort the ingest or surface as an error.
+	store := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1}}},
+		Store:    store,
+	}
+	before := time.Now().Add(-time.Second)
+	err := o.Ingest(context.Background(), RawDocument{
+		ID: "d", Text: "hi",
+		Metadata: map[string]any{"published_at": "not-a-timestamp"},
+	})
+	if err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	if len(store.upserted) != 1 {
+		t.Fatalf("expected 1 chunk stored, got %d", len(store.upserted))
+	}
+	if store.upserted[0].PublishedAt.Before(before) {
+		t.Fatalf("expected fallback to time.Now(), got %v", store.upserted[0].PublishedAt)
 	}
 }
 

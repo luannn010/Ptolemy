@@ -89,6 +89,24 @@ func TestOpenAIGenerator_NoChoicesReturnsError(t *testing.T) {
 	}
 }
 
+func TestOpenAIGenerator_MalformedJSONErrors(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("not json"))
+	}))
+	defer srv.Close()
+	g := NewOpenAIGenerator(srv.URL, "m", "")
+	if _, err := g.Generate(context.Background(), Query{Text: "q"}, PromptContext{}); err == nil {
+		t.Fatalf("expected JSON decode error")
+	}
+}
+
+func TestOpenAIGenerator_TransportErrorSurfaces(t *testing.T) {
+	g := NewOpenAIGenerator("http://127.0.0.1:1", "m", "")
+	if _, err := g.Generate(context.Background(), Query{Text: "q"}, PromptContext{}); err == nil {
+		t.Fatalf("expected transport error against closed port")
+	}
+}
+
 func TestOpenAIGenerator_AuthHeader(t *testing.T) {
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
