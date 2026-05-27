@@ -54,6 +54,9 @@ func (o *Orchestrator) Ingest(ctx context.Context, doc RawDocument) error {
 	for i := range chunks {
 		chunks[i].Embedding = vecs[i]
 	}
+	if old, ok := doc.Metadata["supersedes"].(string); ok && old != "" {
+		return o.Store.SupersedeOnUpsert(ctx, chunks, old)
+	}
 	return o.Store.Upsert(ctx, chunks)
 }
 
