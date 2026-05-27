@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -27,15 +28,25 @@ func (r *Bm25Retriever) Retrieve(ctx context.Context, q Query, depth int) ([]Ret
 	if strings.TrimSpace(q.Text) == "" {
 		return nil, nil
 	}
+	// Orchestrator.Answer always passes a non-nil AsOf, but standalone callers
+	// (ARCHITECTURE.md "Option B" — Bm25Retriever used directly without the
+	// hybrid orchestrator) may pass Query.AsOf == nil. The local fallback keeps
+	// the published_at <= $2 parameter always bound; do not remove as duplicate
+	// of Orchestrator.Answer's defaulting.
+	asOf := time.Now().UTC()
+	if q.AsOf != nil {
+		asOf = *q.AsOf
+	}
 	rows, err := r.conn.Query(ctx, `
 		SELECT id, content, metadata, COALESCE(source,''), published_at,
 		       paradedb.score(id) AS score
 		FROM chunks
 		WHERE content @@@ $1
 		  AND superseded_by IS NULL
+		  AND published_at <= $2
 		ORDER BY paradedb.score(id) DESC
-		LIMIT $2
-	`, q.Text, depth)
+		LIMIT $3
+	`, q.Text, asOf, depth)
 	if err != nil {
 		return nil, err
 	}

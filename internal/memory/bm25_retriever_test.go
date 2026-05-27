@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -67,4 +68,40 @@ func TestBm25Retriever_WhitespaceQueryReturnsEmpty(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("expected empty result on whitespace query, got %d", len(got))
 	}
+}
+
+func TestBm25Retriever_PointInTime(t *testing.T) {
+	// Two chunks containing the same rare token, one published before the
+	// AsOf and one after. BM25 must surface only the past one.
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	zero := make([]float32, 4)
+	past := time.Now().UTC().Add(-48 * time.Hour)
+	future := time.Now().UTC().Add(48 * time.Hour)
+
+	chunks := []Chunk{
+		{ID: "past", Content: "RAREXYZ123 appears here", Embedding: zero, PublishedAt: past},
+		{ID: "future", Content: "RAREXYZ123 also lives here", Embedding: zero, PublishedAt: future},
+	}
+	if err := s.Upsert(context.Background(), chunks); err != nil {
+		t.Fatal(err)
+	}
+
+	asOf := time.Now().UTC() // between past and future
+	r := NewBm25Retriever(conn)
+	got, err := r.Retrieve(context.Background(), Query{Text: "RAREXYZ123", K: 5, AsOf: &asOf}, 5)
+	if err != nil {
+		t.Fatalf("Retrieve: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "past" {
+		t.Fatalf("expected only 'past' (published_at <= AsOf), got %+v", idsAndScores(got))
+	}
+}
+
+func idsAndScores(rs []RetrievedChunk) []string {
+	out := make([]string, len(rs))
+	for i, r := range rs {
+		out[i] = fmt.Sprintf("%s:%.4f", r.ID, r.Score)
+	}
+	return out
 }
