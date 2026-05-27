@@ -8,7 +8,13 @@ import (
 )
 
 type fakeStore struct {
-	upserted []Chunk
+	upserted       []Chunk
+	supersedeCalls []supersedeCall
+}
+
+type supersedeCall struct {
+	OldDocID  string
+	NewChunks []Chunk
 }
 
 func (f *fakeStore) Upsert(_ context.Context, chunks []Chunk) error {
@@ -17,6 +23,11 @@ func (f *fakeStore) Upsert(_ context.Context, chunks []Chunk) error {
 }
 func (f *fakeStore) Get(_ context.Context, _ []string) ([]Chunk, error) { return nil, nil }
 func (f *fakeStore) MarkSuperseded(_ context.Context, _, _ string) error {
+	return nil
+}
+func (f *fakeStore) SupersedeOnUpsert(_ context.Context, chunks []Chunk, oldDocID string) error {
+	f.upserted = append(f.upserted, chunks...)
+	f.supersedeCalls = append(f.supersedeCalls, supersedeCall{OldDocID: oldDocID, NewChunks: chunks})
 	return nil
 }
 
@@ -216,5 +227,137 @@ func TestOrchestrator_AnswerHonorsQueryK(t *testing.T) {
 	}
 	if ans.Text == "" {
 		t.Fatalf("expected non-empty answer")
+	}
+}
+
+func TestOrchestrator_Ingest_SupersedesOldDoc(t *testing.T) {
+	store := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1, 0}}},
+		Store:    store,
+	}
+	err := o.Ingest(context.Background(), RawDocument{
+		ID:   "v2",
+		Text: "new content",
+		Metadata: map[string]any{
+			"supersedes": "v1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	if len(store.supersedeCalls) != 1 {
+		t.Fatalf("expected 1 SupersedeOnUpsert call, got %d", len(store.supersedeCalls))
+	}
+	if store.supersedeCalls[0].OldDocID != "v1" {
+		t.Fatalf("expected OldDocID=v1, got %q", store.supersedeCalls[0].OldDocID)
+	}
+	if len(store.supersedeCalls[0].NewChunks) != 1 || store.supersedeCalls[0].NewChunks[0].ID != "v2#0" {
+		t.Fatalf("expected NewChunks=[v2#0], got %+v", store.supersedeCalls[0].NewChunks)
+	}
+}
+
+func TestOrchestrator_Ingest_NoSupersedesUsesPlainUpsert(t *testing.T) {
+	store := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1, 0}}},
+		Store:    store,
+	}
+	err := o.Ingest(context.Background(), RawDocument{
+		ID:   "d",
+		Text: "first ingest",
+		// No "supersedes" key.
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.supersedeCalls) != 0 {
+		t.Fatalf("expected 0 SupersedeOnUpsert calls, got %d", len(store.supersedeCalls))
+	}
+	if len(store.upserted) != 1 {
+		t.Fatalf("expected 1 upsert, got %d", len(store.upserted))
+	}
+}
+
+func TestOrchestrator_Ingest_NonStringSupersedesIsIgnored(t *testing.T) {
+	// A malformed metadata value (e.g. a number) MUST NOT crash and MUST fall
+	// back to plain Upsert. This protects the orchestrator from caller bugs.
+	store := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1, 0}}},
+		Store:    store,
+	}
+	err := o.Ingest(context.Background(), RawDocument{
+		ID:   "d",
+		Text: "anything",
+		Metadata: map[string]any{
+			"supersedes": 42, // not a string
+		},
+	})
+	if err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	if len(store.supersedeCalls) != 0 {
+		t.Fatalf("non-string supersedes must be ignored; got %d calls", len(store.supersedeCalls))
+	}
+	if len(store.upserted) != 1 {
+		t.Fatalf("expected 1 plain upsert, got %d", len(store.upserted))
+	}
+}
+
+// capturingRetriever records the last Query it received so tests can assert
+// the orchestrator's resolution of optional fields (AsOf, K, etc).
+type capturingRetriever struct {
+	lastQuery Query
+}
+
+func (c *capturingRetriever) Retrieve(_ context.Context, q Query, _ int) ([]RetrievedChunk, error) {
+	c.lastQuery = q
+	return []RetrievedChunk{
+		{Chunk: Chunk{ID: "c1", Content: "anything"}, Score: 0.5},
+	}, nil
+}
+
+func TestOrchestrator_Answer_AsOfNilDefaultsToNow(t *testing.T) {
+	r := &capturingRetriever{}
+	o := &Orchestrator{
+		Retriever:      r,
+		Fusion:         PassthroughFusion{},
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 1000},
+		Generator:      fakeGenerator{},
+		Depth:          5,
+		FinalK:         3,
+	}
+	before := time.Now().UTC().Add(-time.Second)
+	if _, err := o.Answer(context.Background(), Query{Text: "q", K: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if r.lastQuery.AsOf == nil {
+		t.Fatalf("retriever received Query with AsOf=nil; expected populated default")
+	}
+	if r.lastQuery.AsOf.Before(before) {
+		t.Fatalf("AsOf default %v should be ~now, before=%v", *r.lastQuery.AsOf, before)
+	}
+}
+
+func TestOrchestrator_Answer_AsOfRespected(t *testing.T) {
+	r := &capturingRetriever{}
+	o := &Orchestrator{
+		Retriever:      r,
+		Fusion:         PassthroughFusion{},
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 1000},
+		Generator:      fakeGenerator{},
+		Depth:          5,
+		FinalK:         3,
+	}
+	pin := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+	if _, err := o.Answer(context.Background(), Query{Text: "q", K: 1, AsOf: &pin}); err != nil {
+		t.Fatal(err)
+	}
+	if r.lastQuery.AsOf == nil || !r.lastQuery.AsOf.Equal(pin) {
+		t.Fatalf("expected AsOf=%v, got %v", pin, r.lastQuery.AsOf)
 	}
 }
