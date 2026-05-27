@@ -70,6 +70,9 @@ type QuestionResult struct {
 type Summary struct {
 	Total      int
 	MeanRecall float64
+	PerType    map[QuestionType]float64
+	NPerType   map[QuestionType]int
+	FixtureVer int
 }
 
 func LoadSeed(path string) (Seed, error) {
@@ -142,28 +145,43 @@ func RunRetrieval(ctx context.Context, r memory.Retriever, s Seed) ([]QuestionRe
 	return results, nil
 }
 
-// Summarize computes mean recall@k over results. Questions with empty
-// Expected are excluded from BOTH numerator and denominator — a malformed
-// seed entry shouldn't silently drag the mean down. Total still counts all
-// results so the caller can see how many entries were evaluated.
+// Summarize computes mean recall@k overall and per QuestionType. Questions
+// with empty Expected are excluded from BOTH numerator and denominator — a
+// malformed seed entry shouldn't silently drag the mean down. Untagged
+// questions contribute to MeanRecall but NOT to any PerType bucket.
 func Summarize(results []QuestionResult) Summary {
+	out := Summary{
+		Total:      len(results),
+		PerType:    map[QuestionType]float64{},
+		NPerType:   map[QuestionType]int{},
+		FixtureVer: fixtureVersion,
+	}
 	if len(results) == 0 {
-		return Summary{}
+		return out
 	}
 	var sum float64
 	var counted int
+	perTypeSum := map[QuestionType]float64{}
 	for _, r := range results {
 		if len(r.Expected) == 0 {
 			continue
 		}
-		sum += float64(len(r.Hits)) / float64(len(r.Expected))
+		recall := float64(len(r.Hits)) / float64(len(r.Expected))
+		sum += recall
 		counted++
+		qt := r.Question.QuestionType
+		if qt != "" {
+			perTypeSum[qt] += recall
+			out.NPerType[qt]++
+		}
 	}
-	if counted == 0 {
-		return Summary{Total: len(results), MeanRecall: 0}
+	if counted > 0 {
+		out.MeanRecall = sum / float64(counted)
 	}
-	return Summary{
-		Total:      len(results),
-		MeanRecall: sum / float64(counted),
+	for qt, s := range perTypeSum {
+		if n := out.NPerType[qt]; n > 0 {
+			out.PerType[qt] = s / float64(n)
+		}
 	}
+	return out
 }
