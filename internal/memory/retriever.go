@@ -37,7 +37,7 @@ func (r *VectorRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 		SELECT id, content, embedding, metadata, COALESCE(source,''),
 		       published_at, 1.0 - (embedding <=> $1) AS score
 		FROM chunks
-		WHERE superseded_by IS NULL
+		WHERE status = 'active'
 		ORDER BY embedding <=> $1
 		LIMIT $2
 	`, pgvector.NewVector(vecs[0]), depth)

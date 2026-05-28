@@ -37,7 +37,6 @@ WITH bm25 AS (
     SELECT id, ROW_NUMBER() OVER (ORDER BY paradedb.score(id) DESC) AS rank
     FROM chunks
     WHERE content @@@ $1
-      AND superseded_by IS NULL
       AND status = 'active'
       AND published_at <= $5
     ORDER BY paradedb.score(id) DESC
@@ -46,8 +45,7 @@ WITH bm25 AS (
 vec AS (
     SELECT id, ROW_NUMBER() OVER (ORDER BY embedding <=> $2) AS rank
     FROM chunks
-    WHERE superseded_by IS NULL
-      AND status = 'active'
+    WHERE status = 'active'
       AND published_at <= $5
     ORDER BY embedding <=> $2
     LIMIT $3
@@ -60,7 +58,6 @@ FROM chunks c
 LEFT JOIN bm25 b ON b.id = c.id
 LEFT JOIN vec  v ON v.id = c.id
 WHERE (b.id IS NOT NULL OR v.id IS NOT NULL)
-  AND c.superseded_by IS NULL
   AND c.status = 'active'
   AND c.published_at <= $5
 ORDER BY score DESC

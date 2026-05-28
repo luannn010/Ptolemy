@@ -219,6 +219,32 @@ func TestHybridRetriever_ExcludesNonActive(t *testing.T) {
 	}
 }
 
+func TestHybridRetriever_ExcludesSupersededByStatusAlone(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	// Two rows: one active, one superseded. Deliberately leave superseded_by NULL on the
+	// superseded row so the test proves status='active' (NOT superseded_by IS NULL) excludes it.
+	_ = s.Upsert(ctx, []Chunk{
+		{ID: "live", Content: "alpha bravo keyword", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now, Scope: "global"},
+		{ID: "stale", Content: "alpha bravo keyword", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now, Scope: "global"},
+	})
+	if _, err := conn.Exec(ctx, `UPDATE chunks SET status='superseded' WHERE id='stale'`); err != nil {
+		t.Fatal(err)
+	}
+	r := NewHybridRetriever(conn, fakeEmbedder{vecs: [][]float32{{1, 0, 0, 0}}}, 0.1, 30*24*time.Hour)
+	got, err := r.Retrieve(ctx, Query{Text: "keyword", K: 10}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range got {
+		if c.ID == "stale" {
+			t.Fatalf("retrieval returned superseded row 'stale'")
+		}
+	}
+}
+
 func TestHybridRetriever_RecencyParamsRespected(t *testing.T) {
 	// Two chunks identical except for published_at (10 days apart).
 	// Run with two different recency configs and assert the score
