@@ -93,8 +93,12 @@ ALTER TABLE chunks ADD COLUMN fact_subject TEXT;                            -- P
 ALTER TABLE chunks ADD COLUMN fact_predicate TEXT;                          -- Phase 5 structured-fact dedup
 
 -- Indexes for GC:
-CREATE INDEX chunks_scope_status ON chunks (scope, status);                 -- decay query filtering
-CREATE INDEX chunks_dead_at ON chunks (dead_at) WHERE status='dead';        -- purge sweep
+CREATE INDEX chunks_status_active ON chunks (id)        WHERE status = 'active';  -- retrieval filtering
+CREATE INDEX chunks_scope_status  ON chunks (scope, status);                 -- decay query filtering
+CREATE INDEX chunk_audit_chunk_id ON chunk_audit (chunk_id);                 -- audit trail lookups
+
+-- Future (Phase 5): a partial index on dead_at WHERE status='dead' may be added
+-- when dedup starts producing many dead rows in need of efficient purge sweeps.
 ```
 
 **Column notes**
