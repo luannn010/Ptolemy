@@ -185,6 +185,19 @@ func TestMigrationsFS_Contains0004(t *testing.T) {
 	}
 }
 
+func TestMigrationsFS_Contains0005(t *testing.T) {
+	data, err := migrationFS.ReadFile("migrations/0005_chunks_dedup_supersession.sql")
+	if err != nil {
+		t.Fatalf("0005 migration missing from embedded FS: %v", err)
+	}
+	sql := string(data)
+	for _, want := range []string{"pg_trgm", "chunks_content_trgm", "chunks_fact", "status = 'superseded'"} {
+		if !strings.Contains(sql, want) {
+			t.Errorf("0005 migration missing %q", want)
+		}
+	}
+}
+
 func TestApplyMigrations_GCLifecycleColumns(t *testing.T) {
 	url := requirePG(t)
 	conn, err := pgx.Connect(context.Background(), url)
@@ -255,5 +268,51 @@ func TestApplyMigrations_GCLifecycleColumns(t *testing.T) {
 	}
 	if time.Since(lastAccessed) > 5*time.Second {
 		t.Fatalf("last_accessed_at should default to ~now(), got %v ago", time.Since(lastAccessed))
+	}
+}
+
+func TestApplyMigrations_0005DedupSupersession(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+
+	var hasExt bool
+	if err := conn.QueryRow(ctx,
+		`SELECT exists(SELECT 1 FROM pg_extension WHERE extname='pg_trgm')`).Scan(&hasExt); err != nil {
+		t.Fatal(err)
+	}
+	if !hasExt {
+		t.Fatal("pg_trgm not installed after 0005")
+	}
+	for _, idx := range []string{"chunks_content_trgm", "chunks_fact"} {
+		var ok bool
+		if err := conn.QueryRow(ctx,
+			`SELECT exists(SELECT 1 FROM pg_indexes WHERE indexname=$1)`, idx).Scan(&ok); err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			t.Errorf("index %s missing after 0005", idx)
+		}
+	}
+
+	// Backfill: a row with superseded_by set but status='active' must become 'superseded'.
+	// Insert two rows, point one at the other, force status back to 'active', re-run the backfill.
+	if _, err := conn.Exec(ctx,
+		`INSERT INTO chunks (id, content, scope, status) VALUES ('new','n','global','active'),('old','o','global','active')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx,
+		`UPDATE chunks SET superseded_by='new' WHERE id='old'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx,
+		`UPDATE chunks SET status='superseded' WHERE superseded_by IS NOT NULL AND status='active'`); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	if err := conn.QueryRow(ctx, `SELECT status FROM chunks WHERE id='old'`).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "superseded" {
+		t.Fatalf("backfill: old row status=%q, want 'superseded'", status)
 	}
 }
