@@ -55,3 +55,19 @@ func TestNewModule_DefaultRetrieverIsHybrid(t *testing.T) {
 		t.Fatalf("expected default Retriever to be *HybridRetriever, got %T", orch.Retriever)
 	}
 }
+
+func TestMaybeStartSweep_DisabledWhenUnset(t *testing.T) {
+	// No GC_SWEEP_ENABLED → disabled, regardless of DATABASE_URL.
+	t.Setenv("GC_SWEEP_ENABLED", "false")
+	t.Setenv("DATABASE_URL", "")
+	cleanup, enabled, err := MaybeStartSweep(context.Background())
+	if err != nil {
+		t.Fatalf("disabled path should not error, got %v", err)
+	}
+	if enabled {
+		t.Fatal("expected enabled=false")
+	}
+	if cleanup != nil {
+		t.Fatal("expected nil cleanup when disabled")
+	}
+}
