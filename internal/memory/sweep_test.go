@@ -217,6 +217,62 @@ func TestSweeper_Dedup_GatedOffIsNoOp(t *testing.T) {
 	}
 }
 
+func TestSweeper_Dedup_SurvivorByAccessCount(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	older := time.Now().UTC().Add(-time.Hour)
+	newer := time.Now().UTC()
+	// Normalized-equal content; the NEWER row has the higher access_count and must win
+	// (proves the access_count branch, not just the created_at tie-break).
+	if _, err := conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, status, created_at, access_count)
+	  VALUES ('old','user prefers spaces','project','active',$1,0),
+	         ('new','user prefers spaces','project','active',$2,5)`, older, newer); err != nil {
+		t.Fatal(err)
+	}
+	sw := NewSweeper(conn, dedupCfg(true))
+	if err := sw.dedupRecent(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var oldStatus, newStatus string
+	var newAC int
+	_ = conn.QueryRow(ctx, `SELECT status FROM chunks WHERE id='old'`).Scan(&oldStatus)
+	_ = conn.QueryRow(ctx, `SELECT status, access_count FROM chunks WHERE id='new'`).Scan(&newStatus, &newAC)
+	if newStatus != "active" {
+		t.Errorf("higher-access_count row 'new' should survive, got %q", newStatus)
+	}
+	if oldStatus != "dead" {
+		t.Errorf("lower-access_count row 'old' should die, got %q", oldStatus)
+	}
+	if newAC < 6 {
+		t.Errorf("survivor access_count=%d, want reinforced to >=6", newAC)
+	}
+}
+
+func TestSweeper_CollapseDuplicate_LoserAlreadyDeadIsNoOp(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if _, err := conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, status, created_at, access_count)
+	  VALUES ('surv','x','project','active',$1,0),
+	         ('los','x','project','dead',$1,0)`, now); err != nil {
+		t.Fatal(err)
+	}
+	sw := NewSweeper(conn, dedupCfg(true))
+	if err := sw.collapseDuplicate(ctx, "surv", "los"); err != nil {
+		t.Fatal(err)
+	}
+	var survAC int
+	_ = conn.QueryRow(ctx, `SELECT access_count FROM chunks WHERE id='surv'`).Scan(&survAC)
+	if survAC != 0 {
+		t.Errorf("survivor must NOT be reinforced when loser already dead, got access_count=%d", survAC)
+	}
+	var auditN int
+	_ = conn.QueryRow(ctx, `SELECT count(*) FROM chunk_audit WHERE chunk_id='los' AND reason='duplicate'`).Scan(&auditN)
+	if auditN != 0 {
+		t.Errorf("no false audit row should be written when loser already dead, got %d", auditN)
+	}
+}
+
 func TestSweeper_PurgeDead_GatedAndGraced(t *testing.T) {
 	conn := freshDB(t)
 	old := time.Now().UTC().Add(-40 * 24 * time.Hour)

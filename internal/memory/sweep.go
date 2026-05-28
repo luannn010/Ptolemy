@@ -121,7 +121,7 @@ func (s *Sweeper) dedupRecent(ctx context.Context) error {
 		if dead[r.id] {
 			continue
 		}
-		// Trigram candidates in the same scope (set similarity threshold per-statement).
+		// Trigram candidates in the same scope (explicit similarity() comparison; independent of pg_trgm.similarity_threshold).
 		crows, err := s.conn.Query(ctx, `
 			SELECT id, content, access_count, created_at
 			FROM chunks
@@ -158,17 +158,16 @@ func (s *Sweeper) dedupRecent(ctx context.Context) error {
 				continue // similar but not identical → keep both (safe fallback / contradiction)
 			}
 			// Survivor: higher access_count; tie-break older created_at.
-			survID, survAC := r.id, r.accessCount
+			survID := r.id
 			loseID := c.id
 			if c.accessCount > r.accessCount || (c.accessCount == r.accessCount && c.createdAt.Before(r.createdAt)) {
-				survID, survAC = c.id, c.accessCount
+				survID = c.id
 				loseID = r.id
 			}
 			if err := s.collapseDuplicate(ctx, survID, loseID); err != nil {
 				return err
 			}
 			dead[loseID] = true
-			_ = survAC
 			if loseID == r.id {
 				break // r itself is gone; stop pairing it
 			}
@@ -185,13 +184,21 @@ func (s *Sweeper) collapseDuplicate(ctx context.Context, survivorID, loserID str
 		return fmt.Errorf("begin dedup tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Kill the loser first. If it's no longer active (a concurrent supersede/archive
+	// raced us between the candidate scan and now), skip the survivor reinforce + audit
+	// so we never record a transition that didn't happen.
+	ct, err := tx.Exec(ctx,
+		`UPDATE chunks SET status='dead', dead_at=now() WHERE id=$1 AND status='active'`, loserID)
+	if err != nil {
+		return fmt.Errorf("kill loser: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return nil // loser already gone; nothing to collapse (deferred Rollback is a no-op)
+	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE chunks SET access_count=access_count+1, last_accessed_at=now() WHERE id=$1`, survivorID); err != nil {
 		return fmt.Errorf("reinforce survivor: %w", err)
-	}
-	if _, err := tx.Exec(ctx,
-		`UPDATE chunks SET status='dead', dead_at=now() WHERE id=$1 AND status='active'`, loserID); err != nil {
-		return fmt.Errorf("kill loser: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO chunk_audit(chunk_id, old_status, new_status, reason) VALUES ($1,'active','dead','duplicate')`, loserID); err != nil {
