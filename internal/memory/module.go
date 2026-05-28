@@ -57,8 +57,11 @@ func MaybeStartSweep(ctx context.Context) (cleanup func(), enabled bool, err err
 	if !boolEnv("GC_SWEEP_ENABLED", false) {
 		return nil, false, nil
 	}
+	// Sweep is explicitly enabled, so a missing DATABASE_URL is a
+	// misconfiguration — surface it as an error (enabled=true) so the operator
+	// sees "enabled but failed to start" rather than a silent "disabled".
 	if strings.TrimSpace(os.Getenv("DATABASE_URL")) == "" {
-		return nil, false, nil
+		return nil, true, fmt.Errorf("GC_SWEEP_ENABLED=true but DATABASE_URL is not set")
 	}
 	cfg, err := LoadConfig()
 	if err != nil {

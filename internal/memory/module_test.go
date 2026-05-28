@@ -71,3 +71,20 @@ func TestMaybeStartSweep_DisabledWhenUnset(t *testing.T) {
 		t.Fatal("expected nil cleanup when disabled")
 	}
 }
+
+func TestMaybeStartSweep_EnabledWithoutDatabaseURLErrors(t *testing.T) {
+	// Explicitly enabled but no DATABASE_URL → enabled=true + error, so the
+	// operator sees a failure rather than a silent disable.
+	t.Setenv("GC_SWEEP_ENABLED", "true")
+	t.Setenv("DATABASE_URL", "")
+	cleanup, enabled, err := MaybeStartSweep(context.Background())
+	if err == nil {
+		t.Fatal("expected an error when enabled without DATABASE_URL")
+	}
+	if !enabled {
+		t.Fatal("expected enabled=true (operator opted in)")
+	}
+	if cleanup != nil {
+		t.Fatal("expected nil cleanup on the error path")
+	}
+}
