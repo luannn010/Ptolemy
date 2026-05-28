@@ -2,6 +2,7 @@ package memory
 
 import (
 	"testing"
+	"time"
 )
 
 func TestLoadConfig_RequiresDatabaseURL(t *testing.T) {
@@ -123,5 +124,88 @@ func TestLoadConfig_RAGKnobsDefault(t *testing.T) {
 	}
 	if cfg.TopK != 8 || cfg.ChunkSizeTokens != 700 || cfg.ChunkOverlapTokens != 100 {
 		t.Fatalf("expected defaults 8/700/100, got %d/%d/%d", cfg.TopK, cfg.ChunkSizeTokens, cfg.ChunkOverlapTokens)
+	}
+}
+
+func TestLoadConfig_RecencyDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "1024")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("RAG_RECENCY_WEIGHT", "")
+	t.Setenv("RAG_RECENCY_HALFLIFE_DAYS", "")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.RecencyWeight != 0.1 {
+		t.Fatalf("default weight: got %v want 0.1", cfg.RecencyWeight)
+	}
+	wantHL := 30 * 24 * time.Hour
+	if cfg.RecencyHalfLife != wantHL {
+		t.Fatalf("default halflife: got %v want %v", cfg.RecencyHalfLife, wantHL)
+	}
+}
+
+func TestLoadConfig_RecencyEnvParsed(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "1024")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("RAG_RECENCY_WEIGHT", "0.2")
+	t.Setenv("RAG_RECENCY_HALFLIFE_DAYS", "7")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.RecencyWeight != 0.2 {
+		t.Fatalf("weight: got %v want 0.2", cfg.RecencyWeight)
+	}
+	if cfg.RecencyHalfLife != 7*24*time.Hour {
+		t.Fatalf("halflife: got %v want %v", cfg.RecencyHalfLife, 7*24*time.Hour)
+	}
+}
+
+func TestLoadConfig_RejectsNegativeRecencyWeight(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "1024")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("RAG_RECENCY_WEIGHT", "-0.1")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatalf("expected negative weight to be rejected")
+	}
+}
+
+func TestLoadConfig_RejectsHalfLifeBelow1Hour(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "1024")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	// 0.01 days = 14.4 minutes
+	t.Setenv("RAG_RECENCY_HALFLIFE_DAYS", "0.01")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatalf("expected sub-1h halflife to be rejected")
+	}
+}
+
+func TestLoadConfig_RejectsZeroHalfLife(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "1024")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("RAG_RECENCY_HALFLIFE_DAYS", "0")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatalf("expected zero halflife to be rejected")
 	}
 }
