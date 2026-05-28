@@ -37,6 +37,10 @@ type MemoryConfig struct {
 	// GC knobs (Phase 4). Defaults are placeholders to be tuned against real
 	// chat volume once Phase 6 lands.
 	GC GCConfig
+
+	// Phase 6a capture/recall knobs.
+	CaptureBufferSize int     // CAPTURE_BUFFER_SIZE (default 256; 0/garbage → default)
+	MMRLambda         float64 // RAG_MMR_LAMBDA (default 0.7; must be in [0,1])
 }
 
 // GCConfig holds the garbage-collection knobs loaded from env vars.
@@ -123,6 +127,12 @@ func LoadConfig() (MemoryConfig, error) {
 	}
 	if cfg.GC.DedupLookback < time.Minute {
 		return MemoryConfig{}, fmt.Errorf("GC_DEDUP_LOOKBACK must be >= 1m, got %v", cfg.GC.DedupLookback)
+	}
+
+	cfg.CaptureBufferSize = intEnv("CAPTURE_BUFFER_SIZE", 256)
+	cfg.MMRLambda = floatEnv("RAG_MMR_LAMBDA", 0.7)
+	if cfg.MMRLambda < 0 || cfg.MMRLambda > 1 {
+		return MemoryConfig{}, fmt.Errorf("RAG_MMR_LAMBDA must be in [0,1], got %v", cfg.MMRLambda)
 	}
 
 	return cfg, nil

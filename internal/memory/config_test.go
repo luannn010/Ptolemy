@@ -317,6 +317,27 @@ func TestGCConfig_RejectsBadDedup(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_CaptureAndMMRDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("CAPTURE_BUFFER_SIZE", "")
+	t.Setenv("RAG_MMR_LAMBDA", "")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.CaptureBufferSize != 256 {
+		t.Errorf("CaptureBufferSize default = %d, want 256", cfg.CaptureBufferSize)
+	}
+	if cfg.MMRLambda != 0.7 {
+		t.Errorf("MMRLambda default = %v, want 0.7", cfg.MMRLambda)
+	}
+}
+
 func TestLoadConfig_GCRejectsBadValues(t *testing.T) {
 	base := func() {
 		t.Setenv("DATABASE_URL", "postgres://x")
@@ -341,6 +362,37 @@ func TestLoadConfig_GCRejectsBadValues(t *testing.T) {
 			}
 			if _, err := LoadConfig(); err == nil {
 				t.Fatalf("%s: expected error", name)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_MMRLambdaRange(t *testing.T) {
+	base := func() {
+		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("EMBEDDING_BASE_URL", "http://e")
+		t.Setenv("EMBEDDING_MODEL", "m")
+		t.Setenv("EMBEDDING_DIM", "1024")
+		t.Setenv("BRAIN_BASE_URL", "http://l")
+		t.Setenv("BRAIN_MODEL", "lm")
+	}
+	reject := []string{"-0.1", "1.5"}
+	for _, v := range reject {
+		t.Run("reject "+v, func(t *testing.T) {
+			base()
+			t.Setenv("RAG_MMR_LAMBDA", v)
+			if _, err := LoadConfig(); err == nil {
+				t.Fatalf("RAG_MMR_LAMBDA=%s: expected error", v)
+			}
+		})
+	}
+	accept := []string{"0", "1"}
+	for _, v := range accept {
+		t.Run("accept "+v, func(t *testing.T) {
+			base()
+			t.Setenv("RAG_MMR_LAMBDA", v)
+			if _, err := LoadConfig(); err != nil {
+				t.Fatalf("RAG_MMR_LAMBDA=%s: unexpected error %v", v, err)
 			}
 		})
 	}

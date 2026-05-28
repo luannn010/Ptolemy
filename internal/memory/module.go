@@ -40,7 +40,7 @@ func NewModule(ctx context.Context, cfg MemoryConfig) (*Orchestrator, *pgx.Conn,
 		Store:          NewPgStore(conn),
 		Retriever:      NewHybridRetriever(conn, embedder, cfg.RecencyWeight, cfg.RecencyHalfLife),
 		Fusion:         PassthroughFusion{},
-		ContextBuilder: BudgetContextBuilder{MaxRunes: 6000},
+		ContextBuilder: MMRContextBuilder{Lambda: cfg.MMRLambda, K: cfg.TopK, MaxRunes: 6000},
 		Generator:      generator,
 		Depth:          20,
 		FinalK:         cfg.TopK,
@@ -91,4 +91,13 @@ func MaybeStartSweep(ctx context.Context) (cleanup func(), enabled bool, err err
 		_ = conn.Close(context.Background())
 	}
 	return cleanup, true, nil
+}
+
+// NewCaptureHookFromConfig builds (but does not start) the per-turn capture hook,
+// constructing the BRAIN_* extractor from config. The caller starts it with
+// hook.Start(ctx) and feeds it via hook.Enqueue. Wiring into the agent loop is
+// out of 6a scope.
+func NewCaptureHookFromConfig(cfg MemoryConfig, store Store, embedder Embedder) *PerTurnCaptureHook {
+	chat := NewOpenAIGenerator(cfg.LLMBaseURL, cfg.LLMModel, "")
+	return NewCaptureHook(NewExtractor(chat), embedder, store, cfg.CaptureBufferSize)
 }
