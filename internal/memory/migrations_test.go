@@ -283,6 +283,15 @@ func TestApplyMigrations_0005DedupSupersession(t *testing.T) {
 	if !hasExt {
 		t.Fatal("pg_trgm not installed after 0005")
 	}
+
+	// The runner itself must have recorded 0005 (guards against a rename/skip regression).
+	var recorded string
+	_ = conn.QueryRow(ctx,
+		`SELECT version FROM memory_schema_migrations WHERE version='0005_chunks_dedup_supersession'`).Scan(&recorded)
+	if recorded == "" {
+		t.Fatal("0005 not recorded in memory_schema_migrations")
+	}
+
 	for _, idx := range []string{"chunks_content_trgm", "chunks_fact"} {
 		var ok bool
 		if err := conn.QueryRow(ctx,
@@ -294,10 +303,10 @@ func TestApplyMigrations_0005DedupSupersession(t *testing.T) {
 		}
 	}
 
-	// Backfill: a row with superseded_by set but status='active' must become 'superseded'.
-	// Insert two rows, point one at the other, force status back to 'active', re-run the backfill.
+	// Simulate the backfill on a post-migration row: insert a would-be-stale row
+	// (superseded_by set, status still 'active'), run the backfill UPDATE, verify the flip.
 	if _, err := conn.Exec(ctx,
-		`INSERT INTO chunks (id, content, scope, status) VALUES ('new','n','global','active'),('old','o','global','active')`); err != nil {
+		`INSERT INTO chunks (id, content, scope, status, published_at) VALUES ('new','n','global','active',now()),('old','o','global','active',now())`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec(ctx,
