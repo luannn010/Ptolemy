@@ -39,6 +39,7 @@ WITH bm25 AS (
     WHERE content @@@ $1
       AND status = 'active'
       AND published_at <= $5
+      AND (subject_id IS NULL OR subject_id = $8)
     ORDER BY paradedb.score(id) DESC
     LIMIT $3
 ),
@@ -47,6 +48,7 @@ vec AS (
     FROM chunks
     WHERE status = 'active'
       AND published_at <= $5
+      AND (subject_id IS NULL OR subject_id = $8)
     ORDER BY embedding <=> $2
     LIMIT $3
 )
@@ -60,7 +62,11 @@ LEFT JOIN vec  v ON v.id = c.id
 WHERE (b.id IS NOT NULL OR v.id IS NOT NULL)
   AND c.status = 'active'
   AND c.published_at <= $5
-ORDER BY score DESC
+  AND (c.subject_id IS NULL OR c.subject_id = $8)
+ORDER BY score DESC,
+         -- project-only recency tiebreak; NULL for every non-project row, so it is
+         -- a constant (no-op) on the all-global eval baseline and cannot reorder it.
+         CASE WHEN c.scope = 'project' THEN c.last_accessed_at END DESC NULLS LAST
 LIMIT $4
 `
 
@@ -88,6 +94,10 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	if q.AsOf != nil {
 		asOf = *q.AsOf
 	}
+	var subj any
+	if q.SubjectID != nil {
+		subj = *q.SubjectID
+	}
 	rows, err := r.conn.Query(ctx, hybridRrfQuery,
 		q.Text,
 		pgvector.NewVector(vecs[0]),
@@ -96,6 +106,7 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 		asOf,
 		r.recencyWeight,
 		r.recencyHalfLife.Seconds(),
+		subj,
 	)
 	if err != nil {
 		return nil, err
