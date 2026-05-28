@@ -182,6 +182,43 @@ func TestHybridRetriever_RecencyTermPresent(t *testing.T) {
 	}
 }
 
+func TestHybridRetriever_ExcludesNonActive(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	chunks := []Chunk{
+		{ID: "act", Content: "alpha bravo", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now},
+		{ID: "arc", Content: "alpha bravo", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now},
+	}
+	if err := s.Upsert(context.Background(), chunks); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(context.Background(),
+		`UPDATE chunks SET status='archived' WHERE id='arc'`); err != nil {
+		t.Fatal(err)
+	}
+	asOf := now
+	r := NewHybridRetriever(conn, fakeEmbedder{vecs: [][]float32{{1, 0, 0, 0}}}, 0.1, 30*24*time.Hour)
+	got, err := r.Retrieve(context.Background(), Query{Text: "alpha", K: 5, AsOf: &asOf}, 5)
+	if err != nil {
+		t.Fatalf("Retrieve: %v", err)
+	}
+	for _, rc := range got {
+		if rc.ID == "arc" {
+			t.Fatalf("archived chunk must not be retrieved, got %v", idsHybrid(got))
+		}
+	}
+	seenActive := false
+	for _, rc := range got {
+		if rc.ID == "act" {
+			seenActive = true
+		}
+	}
+	if !seenActive {
+		t.Fatalf("active chunk should be retrieved, got %v", idsHybrid(got))
+	}
+}
+
 func TestHybridRetriever_RecencyParamsRespected(t *testing.T) {
 	// Two chunks identical except for published_at (10 days apart).
 	// Run with two different recency configs and assert the score
