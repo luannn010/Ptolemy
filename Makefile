@@ -45,6 +45,12 @@ smoke-memory: build
 	RAG_CHUNK_SIZE_TOKENS=$(SMOKE_TEST_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
 	  $(BIN_DIR)/memory-demo ask "$(SMOKE_TEST_QUESTION)"
 
+# Phase 6a capture smoke: runs the REAL BRAIN_* extractor against a sample
+# exchange and logs the extracted entries. Requires .env (BRAIN_*).
+smoke-capture:
+	@set -a; . ./.env; set +a; \
+	  go test -p 1 -tags=smoke -run TestExtractorSmoke ./internal/memory/ -v
+
 # Phase 3 memory eval. RAG_FIXTURE_DIR points the binary at the frozen
 # fixture corpus under internal/memory/eval/testdata/corpus/; eval.LoadFixtureCorpus
 # enumerates the dir and the orchestrator's ingest path chunks/embeds/upserts.

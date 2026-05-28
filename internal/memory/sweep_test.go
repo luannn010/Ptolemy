@@ -68,6 +68,50 @@ func TestSweeper_ArchivesDecayedProjectRow_LeavesGlobalUntouched(t *testing.T) {
 	}
 }
 
+func TestSweep_ArchivesOldProjectRow_KeepsPinned(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	subj := "userT"
+	old := time.Now().Add(-90 * 24 * time.Hour).UTC()
+	mk := func(id string, pinned bool, imp float64) Chunk {
+		sess, proj, persp := "s", "ptolemy", "factual"
+		return Chunk{ID: id, Content: id + " content", Embedding: []float32{1, 0, 0, 0}, PublishedAt: old,
+			Scope: "project", Importance: imp, Pinned: pinned, SubjectID: &subj, SessionID: &sess, ProjectID: &proj, Perspective: &persp}
+	}
+	if err := s.Upsert(context.Background(), []Chunk{mk("decayme", false, 0.2), mk("keepme", true, 0.2)}); err != nil {
+		t.Fatal(err)
+	}
+	// Backdate last_accessed_at so the decay score falls below threshold. Set
+	// pinned=true on keepme directly: Upsert does not persist the pinned column
+	// (it's a GC-managed lifecycle flag), so the Chunk.Pinned seed above is not
+	// written — same reason existing sweep tests set scope/subject_id via raw UPDATE.
+	if _, err := conn.Exec(context.Background(), `UPDATE chunks SET last_accessed_at=$1 WHERE id IN ('decayme','keepme')`, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(context.Background(), `UPDATE chunks SET pinned=true WHERE id='keepme'`); err != nil {
+		t.Fatal(err)
+	}
+	sw := NewSweeper(conn, GCConfig{DecayLambda: 0.05, ArchiveThreshold: 0.1})
+	if err := sw.archiveDecayed(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(context.Background(), []string{"decayme", "keepme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected both rows back, got %d", len(got))
+	}
+	for _, c := range got {
+		if c.ID == "decayme" && c.Status != "archived" {
+			t.Errorf("decayme should be archived, got %s", c.Status)
+		}
+		if c.ID == "keepme" && c.Status != "active" {
+			t.Errorf("pinned keepme should stay active, got %s", c.Status)
+		}
+	}
+}
+
 func TestSweeper_ArchiveIsReversible(t *testing.T) {
 	conn := freshDB(t)
 	_, err := conn.Exec(context.Background(), `
