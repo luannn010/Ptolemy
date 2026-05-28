@@ -131,6 +131,92 @@ func TestRunLoop_StopsOnCancel(t *testing.T) {
 	}
 }
 
+func dedupCfg(enabled bool) GCConfig {
+	return GCConfig{
+		DedupEnabled:     enabled,
+		DedupThreshold:   0.5,
+		DedupLookback:    24 * time.Hour,
+		DecayLambda:      0.05,
+		ArchiveThreshold: 0.1,
+	}
+}
+
+func TestSweeper_Dedup_ContradictionPairBothSurvive(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	// High trigram similarity but NOT normalized-equal: a contradiction.
+	_ = s.Upsert(ctx, []Chunk{
+		{ID: "c8088", Content: "the service runs on port 8088", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now, Scope: "project"},
+		{ID: "c1089", Content: "the service runs on port 1089", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now, Scope: "project"},
+	})
+	sw := NewSweeper(conn, dedupCfg(true))
+	if err := sw.dedupRecent(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Get(ctx, []string{"c8088", "c1089"})
+	for _, c := range got {
+		if c.Status != "active" {
+			t.Errorf("contradiction row %s status=%q, want active (never collapsed)", c.ID, c.Status)
+		}
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected both contradiction rows to survive, got %d", len(got))
+	}
+}
+
+func TestSweeper_Dedup_NearIdenticalCollapses(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	old := time.Now().UTC().Add(-time.Hour)
+	newer := time.Now().UTC()
+	// Normalized-equal (differ only by whitespace). Older = survivor.
+	_, _ = conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, status, created_at, access_count)
+	  VALUES ('keep','user prefers tabs','project','active',$1,3),
+	         ('drop','user   prefers   tabs','project','active',$2,0)`, old, newer)
+	sw := NewSweeper(conn, dedupCfg(true))
+	if err := sw.dedupRecent(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var keepStatus, dropStatus string
+	_ = conn.QueryRow(ctx, `SELECT status FROM chunks WHERE id='keep'`).Scan(&keepStatus)
+	_ = conn.QueryRow(ctx, `SELECT status FROM chunks WHERE id='drop'`).Scan(&dropStatus)
+	if keepStatus != "active" {
+		t.Errorf("survivor keep status=%q, want active", keepStatus)
+	}
+	if dropStatus != "dead" {
+		t.Errorf("loser drop status=%q, want dead", dropStatus)
+	}
+	var ac int
+	_ = conn.QueryRow(ctx, `SELECT access_count FROM chunks WHERE id='keep'`).Scan(&ac)
+	if ac < 4 {
+		t.Errorf("survivor access_count=%d, want reinforced (>3)", ac)
+	}
+	var auditN int
+	_ = conn.QueryRow(ctx, `SELECT count(*) FROM chunk_audit WHERE chunk_id='drop' AND new_status='dead' AND reason='duplicate'`).Scan(&auditN)
+	if auditN != 1 {
+		t.Errorf("expected 1 dead/duplicate audit row for drop, got %d", auditN)
+	}
+}
+
+func TestSweeper_Dedup_GatedOffIsNoOp(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	_, _ = conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, status, created_at)
+	  VALUES ('a','same text','project','active',$1),('b','same text','project','active',$1)`, now)
+	sw := NewSweeper(conn, dedupCfg(false)) // gated OFF
+	if err := sw.dedupRecent(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	_ = conn.QueryRow(ctx, `SELECT count(*) FROM chunks WHERE status='active'`).Scan(&n)
+	if n != 2 {
+		t.Errorf("gated-off dedup changed rows: active=%d, want 2", n)
+	}
+}
+
 func TestSweeper_PurgeDead_GatedAndGraced(t *testing.T) {
 	conn := freshDB(t)
 	old := time.Now().UTC().Add(-40 * 24 * time.Hour)
