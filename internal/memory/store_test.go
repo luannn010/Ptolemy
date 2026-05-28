@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/pgvector/pgvector-go"
 )
 
 func freshDB(t *testing.T) *pgx.Conn {
@@ -334,7 +335,7 @@ func TestPgStore_Stats_CountsByScopeStatus(t *testing.T) {
 	}
 	// Force a project+archived row directly.
 	_, err := conn.Exec(context.Background(),
-		`UPDATE chunks SET scope='project', status='archived' WHERE id='g2'`)
+		`UPDATE chunks SET scope='project', subject_id='userT', status='archived' WHERE id='g2'`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,3 +399,38 @@ func TestOrchestrator_Confidence_NewsFlow(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+func TestPgStore_SubjectColumnsRoundTrip(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	subj, sess, proj, persp := "userA", "sess1", "ptolemy", "factual"
+	in := Chunk{
+		ID: "p1", Content: "the GC sweep archives stale rows",
+		Embedding: []float32{1, 0, 0, 0}, PublishedAt: time.Now().UTC(),
+		Scope: "project", Importance: 0.7,
+		SubjectID: &subj, SessionID: &sess, ProjectID: &proj, Perspective: &persp,
+	}
+	if err := s.Upsert(context.Background(), []Chunk{in}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	got, err := s.Get(context.Background(), []string{"p1"})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("Get: %v len=%d", err, len(got))
+	}
+	if got[0].SubjectID == nil || *got[0].SubjectID != "userA" ||
+		got[0].SessionID == nil || *got[0].SessionID != "sess1" ||
+		got[0].ProjectID == nil || *got[0].ProjectID != "ptolemy" ||
+		got[0].Perspective == nil || *got[0].Perspective != "factual" {
+		t.Fatalf("scoping columns not round-tripped: %+v", got[0])
+	}
+}
+
+func TestPgStore_ProjectRowRequiresSubject(t *testing.T) {
+	conn := freshDB(t)
+	_, err := conn.Exec(context.Background(),
+		`INSERT INTO chunks (id, content, embedding, published_at, scope) VALUES ($1,$2,$3,$4,'project')`,
+		"leak", "x", pgvector.NewVector([]float32{1, 0, 0, 0}), time.Now().UTC())
+	if err == nil {
+		t.Fatal("expected chunks_project_owned_chk to reject scope=project with subject_id=NULL")
+	}
+}

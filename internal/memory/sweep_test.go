@@ -29,7 +29,7 @@ func TestSweeper_ArchivesDecayedProjectRow_LeavesGlobalUntouched(t *testing.T) {
 	}
 	// proj → project, both last_accessed long ago, access_count 0.
 	if _, err := conn.Exec(context.Background(), `
-		UPDATE chunks SET scope='project', last_accessed_at=$1 WHERE id='proj'`, old); err != nil {
+		UPDATE chunks SET scope='project', subject_id='userT', last_accessed_at=$1 WHERE id='proj'`, old); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec(context.Background(), `
@@ -71,8 +71,8 @@ func TestSweeper_ArchivesDecayedProjectRow_LeavesGlobalUntouched(t *testing.T) {
 func TestSweeper_ArchiveIsReversible(t *testing.T) {
 	conn := freshDB(t)
 	_, err := conn.Exec(context.Background(), `
-		INSERT INTO chunks (id, content, embedding, metadata, published_at, scope, status, archived_at)
-		VALUES ('a', 'x', NULL, '{}', now(), 'project', 'archived', now())`)
+		INSERT INTO chunks (id, content, embedding, metadata, published_at, scope, subject_id, status, archived_at)
+		VALUES ('a', 'x', NULL, '{}', now(), 'project', 'userT', 'archived', now())`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,9 +147,10 @@ func TestSweeper_Dedup_ContradictionPairBothSurvive(t *testing.T) {
 	s := NewPgStore(conn)
 	now := time.Now().UTC()
 	// High trigram similarity but NOT normalized-equal: a contradiction.
+	subj := "userT"
 	_ = s.Upsert(ctx, []Chunk{
-		{ID: "c8088", Content: "the service runs on port 8088", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now, Scope: "project"},
-		{ID: "c1089", Content: "the service runs on port 1089", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now, Scope: "project"},
+		{ID: "c8088", Content: "the service runs on port 8088", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now, Scope: "project", SubjectID: &subj},
+		{ID: "c1089", Content: "the service runs on port 1089", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now, Scope: "project", SubjectID: &subj},
 	})
 	sw := NewSweeper(conn, dedupCfg(true))
 	if err := sw.dedupRecent(ctx); err != nil {
@@ -172,9 +173,9 @@ func TestSweeper_Dedup_NearIdenticalCollapses(t *testing.T) {
 	old := time.Now().UTC().Add(-time.Hour)
 	newer := time.Now().UTC()
 	// Normalized-equal (differ only by whitespace). Older = survivor.
-	_, _ = conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, status, created_at, access_count)
-	  VALUES ('keep','user prefers tabs','project','active',$1,3),
-	         ('drop','user   prefers   tabs','project','active',$2,0)`, old, newer)
+	_, _ = conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, subject_id, status, created_at, access_count)
+	  VALUES ('keep','user prefers tabs','project','userT','active',$1,3),
+	         ('drop','user   prefers   tabs','project','userT','active',$2,0)`, old, newer)
 	sw := NewSweeper(conn, dedupCfg(true))
 	if err := sw.dedupRecent(ctx); err != nil {
 		t.Fatal(err)
@@ -204,8 +205,8 @@ func TestSweeper_Dedup_GatedOffIsNoOp(t *testing.T) {
 	conn := freshDB(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	_, _ = conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, status, created_at)
-	  VALUES ('a','same text','project','active',$1),('b','same text','project','active',$1)`, now)
+	_, _ = conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, subject_id, status, created_at)
+	  VALUES ('a','same text','project','userT','active',$1),('b','same text','project','userT','active',$1)`, now)
 	sw := NewSweeper(conn, dedupCfg(false)) // gated OFF
 	if err := sw.dedupRecent(ctx); err != nil {
 		t.Fatal(err)
@@ -224,9 +225,9 @@ func TestSweeper_Dedup_SurvivorByAccessCount(t *testing.T) {
 	newer := time.Now().UTC()
 	// Normalized-equal content; the NEWER row has the higher access_count and must win
 	// (proves the access_count branch, not just the created_at tie-break).
-	if _, err := conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, status, created_at, access_count)
-	  VALUES ('old','user prefers spaces','project','active',$1,0),
-	         ('new','user prefers spaces','project','active',$2,5)`, older, newer); err != nil {
+	if _, err := conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, subject_id, status, created_at, access_count)
+	  VALUES ('old','user prefers spaces','project','userT','active',$1,0),
+	         ('new','user prefers spaces','project','userT','active',$2,5)`, older, newer); err != nil {
 		t.Fatal(err)
 	}
 	sw := NewSweeper(conn, dedupCfg(true))
@@ -252,9 +253,9 @@ func TestSweeper_CollapseDuplicate_LoserAlreadyDeadIsNoOp(t *testing.T) {
 	conn := freshDB(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	if _, err := conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, status, created_at, access_count)
-	  VALUES ('surv','x','project','active',$1,0),
-	         ('los','x','project','dead',$1,0)`, now); err != nil {
+	if _, err := conn.Exec(ctx, `INSERT INTO chunks (id, content, scope, subject_id, status, created_at, access_count)
+	  VALUES ('surv','x','project','userT','active',$1,0),
+	         ('los','x','project','userT','dead',$1,0)`, now); err != nil {
 		t.Fatal(err)
 	}
 	sw := NewSweeper(conn, dedupCfg(true))
@@ -279,8 +280,8 @@ func TestSweeper_PurgeDead_GatedAndGraced(t *testing.T) {
 	recent := time.Now().UTC().Add(-1 * 24 * time.Hour)
 	mustInsertDead := func(id string, deadAt time.Time) {
 		if _, err := conn.Exec(context.Background(), `
-			INSERT INTO chunks (id, content, embedding, metadata, published_at, scope, status, dead_at)
-			VALUES ($1, 'x', NULL, '{}', now(), 'project', 'dead', $2)`, id, deadAt); err != nil {
+			INSERT INTO chunks (id, content, embedding, metadata, published_at, scope, subject_id, status, dead_at)
+			VALUES ($1, 'x', NULL, '{}', now(), 'project', 'userT', 'dead', $2)`, id, deadAt); err != nil {
 			t.Fatal(err)
 		}
 	}

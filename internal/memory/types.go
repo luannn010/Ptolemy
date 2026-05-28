@@ -33,6 +33,12 @@ type Chunk struct {
 	DeadAt         *time.Time
 	FactSubject    *string
 	FactPredicate  *string
+
+	// Phase 6a (conversational capture scoping). Nullable; global KB rows leave NULL.
+	SubjectID   *string
+	SessionID   *string
+	ProjectID   *string
+	Perspective *string // 'factual' | 'relational'
 }
 
 type RetrievedChunk struct {
@@ -41,10 +47,12 @@ type RetrievedChunk struct {
 }
 
 type Query struct {
-	Text    string
-	K       int
-	AsOf    *time.Time
-	Filters map[string]any
+	Text      string
+	K         int
+	AsOf      *time.Time
+	Filters   map[string]any
+	SubjectID *string // recall isolation; nil = global KB only
+	ProjectID *string // reserved for 6b project filtering; populated, not filtered in 6a
 }
 
 type RawDocument struct {
@@ -71,4 +79,15 @@ type PromptContext struct {
 type Answer struct {
 	Text      string
 	Citations []string
+}
+
+// Exchange is one full user+assistant turn, the unit of conversational capture.
+// A turn is the exchange (user message + assistant reply), not the user message
+// alone — the "how" of an implementation lives in the assistant's text.
+type Exchange struct {
+	UserText      string
+	AssistantText string
+	SubjectID     string
+	SessionID     string
+	ProjectID     string
 }

@@ -62,8 +62,9 @@ func (s *PgStore) Upsert(ctx context.Context, chunks []Chunk) error {
 		}
 		_, err = s.conn.Exec(ctx, `
 			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at, scope,
-			                    confidence, fact_subject, fact_predicate)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			                    confidence, fact_subject, fact_predicate, importance,
+			                    subject_id, session_id, project_id, perspective)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 			ON CONFLICT (id) DO UPDATE SET
 				content = EXCLUDED.content,
 				embedding = EXCLUDED.embedding,
@@ -74,11 +75,20 @@ func (s *PgStore) Upsert(ctx context.Context, chunks []Chunk) error {
 				scope = EXCLUDED.scope,
 				confidence = EXCLUDED.confidence,
 				fact_subject = EXCLUDED.fact_subject,
-				fact_predicate = EXCLUDED.fact_predicate
+				fact_predicate = EXCLUDED.fact_predicate,
+				-- importance is re-asserted (not preserved) on re-upsert. Callers re-upsert
+				-- whole chunks, so EXCLUDED carries the intended importance; the GC mutates
+				-- decay via access_count/last_accessed_at, never via Upsert.
+				importance = EXCLUDED.importance,
+				subject_id = EXCLUDED.subject_id,
+				session_id = EXCLUDED.session_id,
+				project_id = EXCLUDED.project_id,
+				perspective = EXCLUDED.perspective
 		`,
 			c.ID, c.Content, pgvector.NewVector(c.Embedding), meta,
 			nullableStr(c.Source), nullableStr(c.Tenant), c.PublishedAt, scopeOrDefault(c.Scope),
-			confidenceOrDefault(c.Confidence), c.FactSubject, c.FactPredicate,
+			confidenceOrDefault(c.Confidence), c.FactSubject, c.FactPredicate, importanceOrDefault(c.Importance),
+			c.SubjectID, c.SessionID, c.ProjectID, c.Perspective,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert %s: %w", c.ID, err)
@@ -91,7 +101,8 @@ func (s *PgStore) Get(ctx context.Context, ids []string) ([]Chunk, error) {
 	rows, err := s.conn.Query(ctx, `
 		SELECT id, content, embedding, metadata, COALESCE(source,''), COALESCE(tenant_id,''),
 		       published_at, valid_from, valid_to, superseded_by, created_at,
-		       scope, status, version, supersedes
+		       scope, status, version, supersedes,
+		       subject_id, session_id, project_id, perspective
 		FROM chunks WHERE id = ANY($1)
 	`, ids)
 	if err != nil {
@@ -106,7 +117,8 @@ func (s *PgStore) Get(ctx context.Context, ids []string) ([]Chunk, error) {
 		var metaJSON []byte
 		if err := rows.Scan(&c.ID, &c.Content, &emb, &metaJSON, &c.Source, &c.Tenant,
 			&c.PublishedAt, &c.ValidFrom, &c.ValidTo, &c.SupersededBy, &c.CreatedAt,
-			&c.Scope, &c.Status, &c.Version, &c.Supersedes); err != nil {
+			&c.Scope, &c.Status, &c.Version, &c.Supersedes,
+			&c.SubjectID, &c.SessionID, &c.ProjectID, &c.Perspective); err != nil {
 			return nil, err
 		}
 		c.Embedding = emb.Slice()
@@ -137,6 +149,15 @@ func confidenceOrDefault(c string) string {
 		return "normal"
 	}
 	return c
+}
+
+// importanceOrDefault preserves the schema DEFAULT 1.0 for zero-value (document KB)
+// chunks while letting capture set explicit project-row importance.
+func importanceOrDefault(v float64) float64 {
+	if v == 0 {
+		return 1.0
+	}
+	return v
 }
 
 // normalizeContent trims and collapses internal whitespace, case-sensitive
