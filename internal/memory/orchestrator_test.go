@@ -12,8 +12,9 @@ type fakeStore struct {
 	supersedeCalls    []supersedeCall
 	reinforced        [][]string // records each Reinforce call's ids
 	statsCalls        int
-	rowSupersedeCalls []string // records each Supersede(newChunks, oldID) call's oldID
-	factHit           *Chunk   // when non-nil, LookupFact returns it as found
+	rowSupersedeCalls []string    // records each Supersede(newChunks, oldID) call's oldID
+	factHit           *Chunk      // when non-nil, LookupFact returns it as found
+	lookupArgs        [][2]string // records each LookupFact (subject, predicate) call
 }
 
 type supersedeCall struct {
@@ -38,7 +39,8 @@ func (f *fakeStore) Supersede(_ context.Context, newChunks []Chunk, oldID string
 	return nil
 }
 func (f *fakeStore) History(_ context.Context, _ string) ([]Chunk, error) { return nil, nil }
-func (f *fakeStore) LookupFact(_ context.Context, _, _ string) (Chunk, bool, error) {
+func (f *fakeStore) LookupFact(_ context.Context, subject, predicate string) (Chunk, bool, error) {
+	f.lookupArgs = append(f.lookupArgs, [2]string{subject, predicate})
 	if f.factHit != nil {
 		return *f.factHit, true, nil
 	}
@@ -462,6 +464,9 @@ func TestOrchestrator_Ingest_FactDuplicate_Reinforces(t *testing.T) {
 	if len(fs.upserted) != 0 || len(fs.rowSupersedeCalls) != 0 {
 		t.Error("duplicate fact must not Upsert or Supersede")
 	}
+	if len(fs.lookupArgs) != 1 || fs.lookupArgs[0] != [2]string{"deploy", "target"} {
+		t.Errorf("LookupFact called with %v, want one call (deploy, target)", fs.lookupArgs)
+	}
 }
 
 func TestOrchestrator_Ingest_FactContradiction_Supersedes(t *testing.T) {
@@ -476,6 +481,35 @@ func TestOrchestrator_Ingest_FactContradiction_Supersedes(t *testing.T) {
 	}
 	if len(fs.rowSupersedeCalls) != 1 || fs.rowSupersedeCalls[0] != "old" {
 		t.Errorf("expected Supersede(old), got %v", fs.rowSupersedeCalls)
+	}
+	if len(fs.upserted) == 0 {
+		t.Error("contradiction path must still store the new chunks (via Supersede)")
+	}
+	if len(fs.lookupArgs) != 1 || fs.lookupArgs[0] != [2]string{"deploy", "target"} {
+		t.Errorf("LookupFact called with %v, want one call (deploy, target)", fs.lookupArgs)
+	}
+}
+
+func TestOrchestrator_Ingest_NewFact_Upserts(t *testing.T) {
+	fs := &fakeStore{} // factHit nil → LookupFact returns found=false
+	err := newFactOrch(fs).Ingest(context.Background(), RawDocument{
+		ID:       "d4",
+		Text:     "deploy target is Azure",
+		Metadata: map[string]any{"fact_subject": "deploy", "fact_predicate": "target"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.upserted) == 0 {
+		t.Error("expected Upsert for a new (not-yet-seen) fact")
+	}
+	if len(fs.reinforced) != 0 || len(fs.rowSupersedeCalls) != 0 {
+		t.Error("new fact must not Reinforce or Supersede")
+	}
+	if fs.upserted[0].FactSubject == nil || *fs.upserted[0].FactSubject != "deploy" ||
+		fs.upserted[0].FactPredicate == nil || *fs.upserted[0].FactPredicate != "target" {
+		t.Errorf("new-fact chunk must carry fact_subject/predicate, got subj=%v pred=%v",
+			fs.upserted[0].FactSubject, fs.upserted[0].FactPredicate)
 	}
 }
 

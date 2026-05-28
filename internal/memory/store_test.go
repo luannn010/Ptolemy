@@ -371,11 +371,15 @@ func TestOrchestrator_Confidence_NewsFlow(t *testing.T) {
 	s := NewPgStore(conn)
 	now := time.Now().UTC()
 	// low-confidence first report
-	_ = s.Upsert(ctx, []Chunk{{ID: "n1", Content: "quake magnitude 5.0", Embedding: []float32{1, 0, 0, 0},
-		PublishedAt: now, Scope: "global", Confidence: "low", FactSubject: ptr("quake"), FactPredicate: ptr("magnitude")}})
+	if err := s.Upsert(ctx, []Chunk{{ID: "n1", Content: "quake magnitude 5.0", Embedding: []float32{1, 0, 0, 0},
+		PublishedAt: now, Scope: "global", Confidence: "low", FactSubject: ptr("quake"), FactPredicate: ptr("magnitude")}}); err != nil {
+		t.Fatal(err)
+	}
 	// high-confidence verified correction supersedes it
-	_ = s.Supersede(ctx, []Chunk{{ID: "n2", Content: "quake magnitude 5.4", Embedding: []float32{0, 1, 0, 0},
-		PublishedAt: now, Scope: "global", Confidence: "high", FactSubject: ptr("quake"), FactPredicate: ptr("magnitude")}}, "n1")
+	if err := s.Supersede(ctx, []Chunk{{ID: "n2", Content: "quake magnitude 5.4", Embedding: []float32{0, 1, 0, 0},
+		PublishedAt: now, Scope: "global", Confidence: "high", FactSubject: ptr("quake"), FactPredicate: ptr("magnitude")}}, "n1"); err != nil {
+		t.Fatal(err)
+	}
 
 	hist, err := s.History(ctx, "n2")
 	if err != nil || len(hist) != 2 {
