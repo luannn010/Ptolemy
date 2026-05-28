@@ -264,6 +264,49 @@ func TestLoadConfig_GCEnvParsed(t *testing.T) {
 	}
 }
 
+func TestGCConfig_DedupDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://x")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://x")
+	t.Setenv("BRAIN_MODEL", "m")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.GC.DedupEnabled {
+		t.Errorf("DedupEnabled default = true, want false")
+	}
+	if cfg.GC.DedupThreshold != 0.7 {
+		t.Errorf("DedupThreshold default = %v, want 0.7", cfg.GC.DedupThreshold)
+	}
+	if cfg.GC.DedupLookback != 24*time.Hour {
+		t.Errorf("DedupLookback default = %v, want 24h", cfg.GC.DedupLookback)
+	}
+}
+
+func TestGCConfig_RejectsBadDedup(t *testing.T) {
+	base := func() {
+		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("EMBEDDING_BASE_URL", "http://x")
+		t.Setenv("EMBEDDING_MODEL", "m")
+		t.Setenv("EMBEDDING_DIM", "768")
+		t.Setenv("BRAIN_BASE_URL", "http://x")
+		t.Setenv("BRAIN_MODEL", "m")
+	}
+	base()
+	t.Setenv("GC_DEDUP_THRESHOLD", "1.5")
+	if _, err := LoadConfig(); err == nil {
+		t.Error("expected error for GC_DEDUP_THRESHOLD > 1")
+	}
+	t.Setenv("GC_DEDUP_THRESHOLD", "0.7")
+	t.Setenv("GC_DEDUP_LOOKBACK", "30s")
+	if _, err := LoadConfig(); err == nil {
+		t.Error("expected error for GC_DEDUP_LOOKBACK < 1m")
+	}
+}
+
 func TestLoadConfig_GCRejectsBadValues(t *testing.T) {
 	base := func() {
 		t.Setenv("DATABASE_URL", "postgres://x")

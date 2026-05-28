@@ -47,6 +47,11 @@ type GCConfig struct {
 	ArchiveThreshold float64       // GC_ARCHIVE_THRESHOLD (default 0.1)
 	PurgeEnabled     bool          // GC_PURGE_ENABLED (default false)
 	PurgeGraceDays   float64       // GC_PURGE_GRACE_DAYS (default 30)
+
+	// Phase 5 dedup knobs (placeholders — tune against real volume).
+	DedupEnabled   bool          // GC_DEDUP_ENABLED (default false)
+	DedupThreshold float64       // GC_DEDUP_THRESHOLD trigram candidate prefilter (default 0.7)
+	DedupLookback  time.Duration // GC_DEDUP_LOOKBACK recent-row window (default 24h)
 }
 
 func LoadConfig() (MemoryConfig, error) {
@@ -97,6 +102,9 @@ func LoadConfig() (MemoryConfig, error) {
 		ArchiveThreshold: floatEnv("GC_ARCHIVE_THRESHOLD", 0.1),
 		PurgeEnabled:     boolEnv("GC_PURGE_ENABLED", false),
 		PurgeGraceDays:   floatEnv("GC_PURGE_GRACE_DAYS", 30),
+		DedupEnabled:     boolEnv("GC_DEDUP_ENABLED", false),
+		DedupThreshold:   floatEnv("GC_DEDUP_THRESHOLD", 0.7),
+		DedupLookback:    durationEnv("GC_DEDUP_LOOKBACK", 24*time.Hour),
 	}
 	if cfg.GC.DecayLambda < 0 {
 		return MemoryConfig{}, fmt.Errorf("GC_DECAY_LAMBDA must be >= 0, got %v", cfg.GC.DecayLambda)
@@ -109,6 +117,12 @@ func LoadConfig() (MemoryConfig, error) {
 	}
 	if cfg.GC.PurgeGraceDays < 1 {
 		return MemoryConfig{}, fmt.Errorf("GC_PURGE_GRACE_DAYS must be >= 1, got %v", cfg.GC.PurgeGraceDays)
+	}
+	if cfg.GC.DedupThreshold <= 0 || cfg.GC.DedupThreshold > 1 {
+		return MemoryConfig{}, fmt.Errorf("GC_DEDUP_THRESHOLD must be in (0,1], got %v", cfg.GC.DedupThreshold)
+	}
+	if cfg.GC.DedupLookback < time.Minute {
+		return MemoryConfig{}, fmt.Errorf("GC_DEDUP_LOOKBACK must be >= 1m, got %v", cfg.GC.DedupLookback)
 	}
 
 	return cfg, nil
