@@ -27,7 +27,7 @@ func TestApplyMigrations_CreatesChunksTable(t *testing.T) {
 	}
 	defer conn.Close(context.Background())
 
-	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, memory_schema_migrations CASCADE`)
+	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, chunk_audit, memory_schema_migrations CASCADE`)
 
 	if err := ApplyMigrations(context.Background(), conn, 1024); err != nil {
 		t.Fatalf("ApplyMigrations: %v", err)
@@ -94,7 +94,7 @@ func TestApplyMigrations_CreatesBm25Index(t *testing.T) {
 	}
 	defer conn.Close(context.Background())
 
-	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, memory_schema_migrations CASCADE`)
+	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, chunk_audit, memory_schema_migrations CASCADE`)
 
 	if err := ApplyMigrations(context.Background(), conn, 1024); err != nil {
 		t.Fatalf("ApplyMigrations: %v", err)
@@ -136,7 +136,7 @@ func TestApplyMigrations_CreatesFreshnessIndexes(t *testing.T) {
 	}
 	defer conn.Close(context.Background())
 
-	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, memory_schema_migrations CASCADE`)
+	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, chunk_audit, memory_schema_migrations CASCADE`)
 
 	if err := ApplyMigrations(context.Background(), conn, 1024); err != nil {
 		t.Fatalf("ApplyMigrations: %v", err)

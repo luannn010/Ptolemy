@@ -16,7 +16,7 @@ func freshDB(t *testing.T) *pgx.Conn {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close(context.Background()) })
-	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, memory_schema_migrations CASCADE`)
+	_, _ = conn.Exec(context.Background(), `DROP TABLE IF EXISTS chunks, chunk_audit, memory_schema_migrations CASCADE`)
 	if err := ApplyMigrations(context.Background(), conn, 4); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
