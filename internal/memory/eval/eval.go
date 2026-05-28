@@ -242,6 +242,16 @@ func LoadFixtureCorpus(dir string) ([]memory.RawDocument, error) {
 	return docs, nil
 }
 
+// MeasureDedup loads the fixture corpus and reports how many docs the dedup pass
+// would collapse (normalized-content equality), plus the corpus size. DB-free.
+func MeasureDedup(fixtureDir string) (corpusSize, wouldCollapse int, err error) {
+	docs, err := LoadFixtureCorpus(fixtureDir)
+	if err != nil {
+		return 0, 0, err
+	}
+	return len(docs), memory.MeasureDedupCollapses(docs), nil
+}
+
 // parseFrontmatter extracts a YAML-ish "---\npublished_at: <rfc3339>\n---\n"
 // header. If no header is present, body is the whole input and published is
 // fixtureBaseTime. Only the published_at key is recognised — fixtures should

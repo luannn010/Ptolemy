@@ -220,6 +220,23 @@ func (s *Sweeper) Run(ctx context.Context, done chan<- struct{}) {
 	log.Info().Msg("memory sweep loop stopped")
 }
 
+// MeasureDedupCollapses returns how many documents would be collapsed as duplicates
+// (normalized-content equal to an earlier doc). Pure + DB-free, for the eval harness's
+// dedup-redundancy report. Mirrors dedupRecent's collapse bar (content equality).
+func MeasureDedupCollapses(docs []RawDocument) int {
+	seen := map[string]bool{}
+	collapses := 0
+	for _, d := range docs {
+		key := normalizeContent(d.Text)
+		if seen[key] {
+			collapses++
+			continue
+		}
+		seen[key] = true
+	}
+	return collapses
+}
+
 // runLoop is the testable core: tick on the interval, tolerate per-tick errors,
 // stop on ctx cancellation. Extracted so the loop can be unit-tested without a DB.
 func runLoop(ctx context.Context, interval time.Duration, tick func(context.Context) error) {

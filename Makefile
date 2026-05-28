@@ -63,3 +63,7 @@ eval-memory-sweep: build
 	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
 	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
 	  $(BIN_DIR)/memory-eval -seed $(EVAL_SEED) -sweep
+
+eval-memory-dedup: build
+	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
+	  $(BIN_DIR)/memory-eval -seed $(EVAL_SEED) -dedup

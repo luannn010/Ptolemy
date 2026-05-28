@@ -35,8 +35,24 @@ func run(args []string, stdout, stderr io.Writer) error {
 	skipIngest := fs.Bool("skip-ingest", false, "skip the corpus ingest step (use existing chunks)")
 	questionType := fs.String("question-type", "", "filter to a single QuestionType (paraphrase|exact_token|fresh_vs_stale|negative); empty = all")
 	sweep := fs.Bool("sweep", false, "3x3 recency sweep mode: ingest once, query nine times")
+	dedupFlag := fs.Bool("dedup", false, "dedup measurement mode: report would-collapse count over the fixture corpus (DB-free)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if *dedupFlag {
+		fixtureDir := os.Getenv("RAG_FIXTURE_DIR")
+		size, collapses, err := eval.MeasureDedup(fixtureDir)
+		if err != nil {
+			return fmt.Errorf("measure dedup: %w", err)
+		}
+		verdict := "no redundancy in corpus"
+		if collapses > 0 {
+			verdict = "SAFE to leave gated; collapses>0 means review"
+		}
+		fmt.Fprintf(stdout, "dedup-redundancy: corpus=%d would_collapse=%d (verdict: %s)\n",
+			size, collapses, verdict)
+		return nil
 	}
 
 	cfg, err := memory.LoadConfig()
