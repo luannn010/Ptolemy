@@ -396,3 +396,20 @@ func TestMeasureDedup_CountsNormalizedEqualPairs(t *testing.T) {
 		t.Fatalf("would-collapse count = %d, want 1", n)
 	}
 }
+
+func TestMeasureDedupCollapses_EdgeCases(t *testing.T) {
+	if got := memory.MeasureDedupCollapses(nil); got != 0 {
+		t.Errorf("nil slice: got %d, want 0", got)
+	}
+	if got := memory.MeasureDedupCollapses([]memory.RawDocument{}); got != 0 {
+		t.Errorf("empty slice: got %d, want 0", got)
+	}
+	all := []memory.RawDocument{
+		{ID: "a", Text: "same fact"},
+		{ID: "b", Text: "same   fact"},
+		{ID: "c", Text: "same fact "},
+	}
+	if got := memory.MeasureDedupCollapses(all); got != 2 {
+		t.Errorf("three normalized-equal docs: got %d, want 2 (one survivor, two collapses)", got)
+	}
+}

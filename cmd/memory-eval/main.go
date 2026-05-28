@@ -42,13 +42,18 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	if *dedupFlag {
 		fixtureDir := os.Getenv("RAG_FIXTURE_DIR")
+		if fixtureDir == "" {
+			return fmt.Errorf("-dedup requires RAG_FIXTURE_DIR to be set")
+		}
 		size, collapses, err := eval.MeasureDedup(fixtureDir)
 		if err != nil {
 			return fmt.Errorf("measure dedup: %w", err)
 		}
-		verdict := "no redundancy in corpus"
+		// Measured over the curated recall corpus: collapses>0 means dedup would
+		// merge docs the corpus treats as distinct — a recall risk, so keep it gated.
+		verdict := "no redundancy in the curated corpus; dedup is a no-op here (safe)"
 		if collapses > 0 {
-			verdict = "SAFE to leave gated; collapses>0 means review"
+			verdict = "dedup would collapse curated rows; review before enabling (recall risk)"
 		}
 		fmt.Fprintf(stdout, "dedup-redundancy: corpus=%d would_collapse=%d (verdict: %s)\n",
 			size, collapses, verdict)
