@@ -1,0 +1,194 @@
+{
+  "k": 5,
+  "questions": [
+    {
+      "id": "p01-rrf-paraphrase",
+      "text": "how does the retriever combine vector and keyword search results?",
+      "expected_doc_ids": ["1acd666aa1e79f96"],
+      "question_type": "paraphrase",
+      "rationale": "Paraphrase of 'RRF combines ranks instead of raw scores'."
+    },
+    {
+      "id": "p02-bm25-paraphrase",
+      "text": "which operator does the lexical arm use to match keywords?",
+      "expected_doc_ids": ["c28e7ff95b190345"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p03-fileops-paraphrase",
+      "text": "what wraps the raw fileops adapter for services?",
+      "expected_doc_ids": ["46e2974d1c369b9e"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p04-denypolicy-paraphrase",
+      "text": "what rule prevents the policy file from being modified?",
+      "expected_doc_ids": ["0ebe1beda4a86886"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p05-supersession-paraphrase",
+      "text": "how are stale facts retired without being deleted?",
+      "expected_doc_ids": ["8936138949c2f383"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p06-hnsw-paraphrase",
+      "text": "what dense index does the vector arm use?",
+      "expected_doc_ids": ["e8d78b135b17d4de"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p07-recency-paraphrase",
+      "text": "how does the ranking bias toward newer content?",
+      "expected_doc_ids": ["aa26298a8b9008e8"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p08-purpose-paraphrase",
+      "text": "what is the goal of the ptolemy project?",
+      "expected_doc_ids": ["6cc9118670b199da"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p09-rrf-paraphrase-2",
+      "text": "why are raw scores from different retrievers not directly comparable?",
+      "expected_doc_ids": ["1acd666aa1e79f96"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p10-supersession-paraphrase-2",
+      "text": "what mechanism marks a chunk as replaced by another?",
+      "expected_doc_ids": ["8936138949c2f383"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p11-hnsw-paraphrase-2",
+      "text": "what is the distance metric used by the vector index?",
+      "expected_doc_ids": ["e8d78b135b17d4de"],
+      "question_type": "paraphrase"
+    },
+    {
+      "id": "p12-policy-paraphrase",
+      "text": "what approval surface does the agent use for high-risk commands?",
+      "expected_doc_ids": ["d2d0eb77c314b604", "207c5ab089b42b80"],
+      "question_type": "paraphrase",
+      "rationale": "Both v1 and v2 mention worker console — paraphrase tolerant."
+    },
+
+    {
+      "id": "e01-rrf-constant",
+      "text": "RRF C=60",
+      "expected_doc_ids": ["1acd666aa1e79f96"],
+      "question_type": "exact_token"
+    },
+    {
+      "id": "e02-bm25-operator",
+      "text": "@@@",
+      "expected_doc_ids": ["c28e7ff95b190345"],
+      "question_type": "exact_token"
+    },
+    {
+      "id": "e03-guarded-fileops",
+      "text": "GuardedFileOps",
+      "expected_doc_ids": ["46e2974d1c369b9e"],
+      "question_type": "exact_token"
+    },
+    {
+      "id": "e04-deny-policy-write",
+      "text": "deny-policy-write",
+      "expected_doc_ids": ["0ebe1beda4a86886"],
+      "question_type": "exact_token"
+    },
+    {
+      "id": "e05-superseded-by",
+      "text": "superseded_by",
+      "expected_doc_ids": ["8936138949c2f383"],
+      "question_type": "exact_token"
+    },
+    {
+      "id": "e06-hnsw",
+      "text": "HNSW",
+      "expected_doc_ids": ["e8d78b135b17d4de"],
+      "question_type": "exact_token"
+    },
+    {
+      "id": "e07-cosine-ops",
+      "text": "vector_cosine_ops",
+      "expected_doc_ids": ["e8d78b135b17d4de"],
+      "question_type": "exact_token"
+    },
+    {
+      "id": "e08-half-life",
+      "text": "2592000",
+      "expected_doc_ids": ["aa26298a8b9008e8"],
+      "question_type": "exact_token"
+    },
+
+    {
+      "id": "f01-policy-ttl-current",
+      "text": "what is the current token TTL for the approval policy?",
+      "expected_doc_ids": ["d2d0eb77c314b604"],
+      "question_type": "fresh_vs_stale",
+      "rationale": "v2 says 15 min, v1 says 5 min. Recency boost should rank v2 above v1."
+    },
+    {
+      "id": "f02-policy-ttl-history",
+      "text": "what was the original token TTL before being extended?",
+      "expected_doc_ids": ["207c5ab089b42b80"],
+      "question_type": "fresh_vs_stale",
+      "rationale": "Asks for the historical value — v1 should still be retrievable (not superseded, just older)."
+    },
+    {
+      "id": "f03-topk-default-current",
+      "text": "what is the current default for RAG_TOP_K?",
+      "expected_doc_ids": ["c097e2958e2b736d"],
+      "question_type": "fresh_vs_stale",
+      "rationale": "v2 says 8, v1 says 5. Recency boost should rank v2 above v1."
+    },
+    {
+      "id": "f04-topk-default-history",
+      "text": "what was the original RAG_TOP_K default before being revised?",
+      "expected_doc_ids": ["4c840ab166ace6a0"],
+      "question_type": "fresh_vs_stale"
+    },
+    {
+      "id": "f05-policy-paraphrase-fresh",
+      "text": "how long are approval tokens valid for at present?",
+      "expected_doc_ids": ["d2d0eb77c314b604"],
+      "question_type": "fresh_vs_stale"
+    },
+    {
+      "id": "f06-policy-paraphrase-stale",
+      "text": "how long were approval tokens originally valid for?",
+      "expected_doc_ids": ["207c5ab089b42b80"],
+      "question_type": "fresh_vs_stale"
+    },
+    {
+      "id": "f07-topk-paraphrase-fresh",
+      "text": "how many chunks does the retriever now return by default?",
+      "expected_doc_ids": ["c097e2958e2b736d"],
+      "question_type": "fresh_vs_stale"
+    },
+    {
+      "id": "f08-topk-paraphrase-stale",
+      "text": "how many chunks did the retriever return by default in the first phase?",
+      "expected_doc_ids": ["4c840ab166ace6a0"],
+      "question_type": "fresh_vs_stale"
+    },
+
+    {
+      "id": "n01-no-grpc",
+      "text": "how is the gRPC reflection service exposed?",
+      "expected_doc_ids": [],
+      "question_type": "negative",
+      "rationale": "No fixture mentions gRPC. Retrieval may return chunks, but Expected=[] means recall is excluded from the mean (Summarize behaviour)."
+    },
+    {
+      "id": "n02-no-billing",
+      "text": "what billing provider does ptolemy use?",
+      "expected_doc_ids": [],
+      "question_type": "negative"
+    }
+  ]
+}

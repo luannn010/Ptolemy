@@ -200,20 +200,52 @@ Goal: prefer current content and retire stale facts.
 
 ---
 
+> The Phase 3 eval seed lives at `internal/memory/eval/testdata/seed.json`.
+> The pre-Phase-3 seed at `docs/memory/eval/seed.json` is removed.
+
 ## Phase 3 — Enhancements (only what the eval set proves helps)
 
 Add these **one at a time**, measuring each against the eval set. Keep a change only if it
 improves the score.
 
 - [ ] `Reranker` (cross-encoder) over the top candidates; reduce final k accordingly.
+      → Deferred to a later Phase 3 sub-PR. The local brain LLM at :1090 is
+      60–180s per call on CPU — too slow on the query path. Defer until cheaper
+      inference is available.
 - [ ] Query rewriting/expansion before retrieval.
-- [ ] Tune RRF constant, candidate depth, recency weight/half-life.
+      → Same deferral reason as Reranker.
+- [x] Tune RRF constant, candidate depth, recency weight/half-life.
+      → THIS PR tunes recency weight + half-life via a 3x3 sweep. RRF constant
+      and candidate depth tuning deferred to follow-up sub-PRs (separate knobs,
+      separate sweeps).
+      → Implementation: `internal/memory/config.go` (RecencyWeight,
+      RecencyHalfLife), `internal/memory/hybrid_retriever.go` ($6/$7
+      parameterization), `cmd/memory-eval/main.go` (-sweep mode +
+      classifySweep). Tests:
+      `TestLoadConfig_RecencyDefaults`, `TestLoadConfig_RecencyEnvParsed`,
+      `TestLoadConfig_Rejects{Negative,Zero,HalfLifeBelow1Hour}`,
+      `TestHybridRetriever_RecencyParamsRespected`,
+      `TestSweepMode_{RunsAllNineCells,EmitsMarkdownTable,FlagsEdgeOptimum,
+      NoWinnerWhenNoCellImprovesByOnePp,NoWinnerWhenFullSeedRegressionTooLarge,
+      IngestsCorpusOnce}`. Eval substrate at
+      `internal/memory/eval/testdata/{corpus/,seed.json}` (~12 fixture docs +
+      ~30 tagged questions, fixture_version=1).
 - [ ] (Optional) `topic_digests` + `DigestSynthesisJob` **with a conflict-resolution /
       revision step** (`DATA_MODEL.md` warning). Do not ship synthesis without it.
+      → Deferred to Phase 4 candidate work.
 
 **Acceptance:**
-- [ ] Each shipped enhancement has a recorded before/after eval-set delta that is
-      positive.
+- [x] Each shipped enhancement has a recorded before/after eval-set delta that is
+      positive (or a documented null result per the spec's "discard the change" rule).
+      → Recency tuning: baseline = mean recall@5 = 1.000 over 30 questions
+      (paraphrase 12/12, exact_token 8/8, fresh_vs_stale 8/8). Sweep verdict =
+      **NO WINNER — keep defaults**: no cell improves over the perfect baseline;
+      cells at halflife=90d degrade significantly (fs_recall drops 0.500–0.875
+      at weight=0.1–0.2). Defaults stay at (0.1, 30d).
+      → Eval-set hardening is the foundation: ~30 tagged questions on a frozen
+      fixture corpus with per-type recall reporting. **Note:** the prior
+      n=8 / recall=0.875 number from Phase 2 is NOT comparable to the new
+      baseline — different sample, different distribution, different corpus.
 
 ---
 

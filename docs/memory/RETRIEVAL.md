@@ -90,12 +90,14 @@ phased design; do not rewrite it each phase.
 
 - `<=>` is pgvector cosine distance (smaller = closer). Match it to the index opclass in
   `DATA_MODEL.md` (`vector_cosine_ops`).
-- `2592000` = 30 days in seconds; it sets the recency half-life. `0.1` is the recency
-  weight. **Both are tuning knobs** — start here, adjust against the eval set per how
-  fast your content goes stale (news = aggressive, reference docs = gentle).
+- **Phase 3:** the `0.1` recency weight and `2592000` half-life seconds are no
+  longer SQL constants — they are bound as `$6` and `$7` from `MemoryConfig.RecencyWeight`
+  and `MemoryConfig.RecencyHalfLife`, with env overrides `RAG_RECENCY_WEIGHT` and
+  `RAG_RECENCY_HALFLIFE_DAYS`. Defaults preserve Phase 2 behavior. The `cmd/memory-eval
+  -sweep` mode runs a 3x3 grid over these two knobs and prints the recommended values.
 - Keep **candidate depth (`$3`) generous** (20–40) even though **final k (`$4`)** is
   small. The extra candidates are what a Phase 3 reranker consumes.
-- If multi-tenant, add `AND tenant_id = $6` to **both** CTEs.
+- If multi-tenant, add `AND tenant_id = $8` to **both** CTEs.
 
 ---
 
