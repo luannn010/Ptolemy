@@ -425,6 +425,60 @@ func TestOrchestrator_Ingest_ScopeFromMetadata(t *testing.T) {
 	}
 }
 
+func newFactOrch(fs *fakeStore) *Orchestrator {
+	return &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1}}}, // one chunk → one vec
+		Store:    fs,
+	}
+}
+
+func TestOrchestrator_Ingest_NoFact_Upserts(t *testing.T) {
+	fs := &fakeStore{}
+	if err := newFactOrch(fs).Ingest(context.Background(), RawDocument{ID: "d1", Text: "hello world"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.upserted) == 0 {
+		t.Error("expected Upsert for non-fact doc")
+	}
+	if len(fs.rowSupersedeCalls) != 0 || len(fs.reinforced) != 0 {
+		t.Error("non-fact doc must not Supersede or Reinforce")
+	}
+}
+
+func TestOrchestrator_Ingest_FactDuplicate_Reinforces(t *testing.T) {
+	fs := &fakeStore{factHit: &Chunk{ID: "old", Content: "deploy target is AWS"}}
+	err := newFactOrch(fs).Ingest(context.Background(), RawDocument{
+		ID:       "d2",
+		Text:     "deploy target is AWS",
+		Metadata: map[string]any{"fact_subject": "deploy", "fact_predicate": "target"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.reinforced) != 1 || len(fs.reinforced[0]) != 1 || fs.reinforced[0][0] != "old" {
+		t.Errorf("expected Reinforce([old]) for duplicate fact, got %v", fs.reinforced)
+	}
+	if len(fs.upserted) != 0 || len(fs.rowSupersedeCalls) != 0 {
+		t.Error("duplicate fact must not Upsert or Supersede")
+	}
+}
+
+func TestOrchestrator_Ingest_FactContradiction_Supersedes(t *testing.T) {
+	fs := &fakeStore{factHit: &Chunk{ID: "old", Content: "deploy target is AWS"}}
+	err := newFactOrch(fs).Ingest(context.Background(), RawDocument{
+		ID:       "d3",
+		Text:     "deploy target is GCP",
+		Metadata: map[string]any{"fact_subject": "deploy", "fact_predicate": "target"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.rowSupersedeCalls) != 1 || fs.rowSupersedeCalls[0] != "old" {
+		t.Errorf("expected Supersede(old), got %v", fs.rowSupersedeCalls)
+	}
+}
+
 func TestOrchestrator_Answer_Reinforces(t *testing.T) {
 	fs := &fakeStore{}
 	o := &Orchestrator{

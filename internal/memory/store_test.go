@@ -365,4 +365,32 @@ func TestPgStore_Supersede_UnknownOldIDErrors(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_Confidence_NewsFlow(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	// low-confidence first report
+	_ = s.Upsert(ctx, []Chunk{{ID: "n1", Content: "quake magnitude 5.0", Embedding: []float32{1, 0, 0, 0},
+		PublishedAt: now, Scope: "global", Confidence: "low", FactSubject: ptr("quake"), FactPredicate: ptr("magnitude")}})
+	// high-confidence verified correction supersedes it
+	_ = s.Supersede(ctx, []Chunk{{ID: "n2", Content: "quake magnitude 5.4", Embedding: []float32{0, 1, 0, 0},
+		PublishedAt: now, Scope: "global", Confidence: "high", FactSubject: ptr("quake"), FactPredicate: ptr("magnitude")}}, "n1")
+
+	hist, err := s.History(ctx, "n2")
+	if err != nil || len(hist) != 2 {
+		t.Fatalf("History len=%d err=%v, want 2", len(hist), err)
+	}
+	// original kept + linked, only the high-confidence row is active
+	got, _ := s.Get(ctx, []string{"n1", "n2"})
+	for _, c := range got {
+		if c.ID == "n1" && c.Status != "superseded" {
+			t.Errorf("low report n1 status=%q, want superseded", c.Status)
+		}
+		if c.ID == "n2" && c.Status != "active" {
+			t.Errorf("high correction n2 status=%q, want active", c.Status)
+		}
+	}
+}
+
 func ptr(s string) *string { return &s }

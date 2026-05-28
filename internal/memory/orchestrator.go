@@ -60,11 +60,38 @@ func (o *Orchestrator) Ingest(ctx context.Context, doc RawDocument) error {
 	if raw, ok := doc.Metadata["scope"].(string); ok && raw != "" {
 		scope = raw
 	}
+	confidence := "normal"
+	if raw, ok := doc.Metadata["confidence"].(string); ok && raw != "" {
+		confidence = raw
+	}
+	factSubject, _ := doc.Metadata["fact_subject"].(string)
+	factPredicate, _ := doc.Metadata["fact_predicate"].(string)
 	for i := range chunks {
 		chunks[i].Scope = scope
+		chunks[i].Confidence = confidence
+		if factSubject != "" && factPredicate != "" {
+			fs, fp := factSubject, factPredicate
+			chunks[i].FactSubject = &fs
+			chunks[i].FactPredicate = &fp
+		}
 	}
+
 	if old, ok := doc.Metadata["supersedes"].(string); ok && old != "" {
 		return o.Store.SupersedeOnUpsert(ctx, chunks, old)
+	}
+
+	// Structured-fact ladder (SPEC §5 step 1, ~0ms, one indexed lookup).
+	if factSubject != "" && factPredicate != "" {
+		existing, found, err := o.Store.LookupFact(ctx, factSubject, factPredicate)
+		if err != nil {
+			return fmt.Errorf("lookup fact: %w", err)
+		}
+		if found {
+			if normalizeContent(existing.Content) == normalizeContent(chunks[0].Content) {
+				return o.Store.Reinforce(ctx, []string{existing.ID}) // duplicate
+			}
+			return o.Store.Supersede(ctx, chunks, existing.ID) // correction
+		}
 	}
 	return o.Store.Upsert(ctx, chunks)
 }
