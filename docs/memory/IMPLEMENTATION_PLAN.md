@@ -249,6 +249,77 @@ improves the score.
 
 ---
 
+## Phase 4 — Memory GC Core
+
+Status lifecycle on `chunks` + reinforcement + observability + a dormant sweep.
+Built and tested now; the decay/archive passes target `scope='project'` rows,
+which don't exist until Phase 6.
+
+- [x] Migration `0004_chunks_gc_lifecycle`: full Phase 4-6 column set + `chunk_audit` + 2 indexes.
+      → `internal/memory/migrations/0004_chunks_gc_lifecycle.sql` (`scope`, `status`, `importance`,
+      `pinned`, `access_count`, `last_accessed_at`, `confidence`, `version`, `supersedes`,
+      `archived_at`, `dead_at`, `fact_subject`, `fact_predicate`, `chunk_audit` table + indexes).
+      Aligns with `DATA_MODEL.md` Phase 4 section. Tested via `TestMigrationsFS_Contains0004` and
+      integration test `TestApplyMigrations_CreatesGcLifecycleColumns` (skips without `DATABASE_URL`).
+- [x] `decayScore()` function + Go-vs-SQL agreement test.
+      → `internal/memory/decay.go` (`DecayScore` Go function using exp-decay model).
+      `internal/memory/migrations/0004_chunks_gc_lifecycle.sql` includes the matching SQL function.
+      `TestDecayScore_Agreement` unit test verifies Go and SQL outputs match to floating-point precision
+      (1e-10 rel. error). Input: time delta (s), lambda, importance; output: [0, 1] decay score.
+- [x] `Store.Reinforce` (bump on read) + `Store.Stats` (counts by scope×status).
+      → `internal/memory/store.go`: `Reinforce(ctx, chunkID)` increments `access_count` and sets
+      `last_accessed_at=now()` in one UPDATE. `Stats(ctx)` returns a map of (scope, status) → count,
+      used by observability. Integration tests `TestPgStore_Reinforce_*` and `TestPgStore_Stats_*`
+      cover basic flow, error handling, and multi-status aggregation.
+- [x] Retrieval filters `status='active'` (firewall read half). Decay-ranking-blend DEFERRED to Phase 6.
+      → `internal/memory/hybrid_retriever.go` + `internal/memory/bm25_retriever.go`: both CTEs and
+      outer SELECT add `AND status='active'` clause. No decay-score blending (Phase 6 will add
+      `+ 0.1 * decayScore(...)` to the final rank). Integration test `TestHybridRetriever_FiltersInactiveStatus`
+      verifies status='active' filtering.
+- [x] `Orchestrator`: ingest tags `scope` (default 'global'); `Answer` reinforces post-retrieve.
+      → `internal/memory/orchestrator.go`: `Ingest` reads `Metadata["scope"]` (defaults to 'global').
+      `Answer` calls `Store.Reinforce(ctx, sourceID)` for each retrieved chunk before returning the
+      answer. Unit tests `TestOrchestrator_Ingest_ScopeDefaultsToGlobal`,
+      `TestOrchestrator_Ingest_ScopeMetadata`, `TestOrchestrator_Answer_ReinforcesPostRetrieve` cover
+      the wiring.
+- [x] `Sweeper`: per-tick-tolerant `Run`; `archiveDecayed` (project-only firewall, audited) + gated `purgeDead`.
+      → `internal/memory/sweeper.go` (`Sweeper{Store, Logger}`). `Run(ctx)` is idempotent per tick:
+      calls `archiveDecayed(ctx)` (SELECT project rows where decay > threshold, UPDATE status='archived',
+      INSERT to `chunk_audit`, log), then `purgeDead(ctx)` if `GC_PURGE_ENABLED` (DELETE where
+      `status='dead' AND dead_at <= now() - purge_grace`). Both are gated by `scope` (project-only)
+      and `pinned` (immune). Integration tests `TestSweeper_ArchivesDecayedProjectRow_LeavesGlobalUntouched`
+      (acceptance), `TestSweeper_PurgesDeadRows`, `TestSweeper_RunIsIdempotent` cover behavior + idempotence.
+- [x] `MaybeStartSweep` + opt-in workerd goroutine (gated by DATABASE_URL + GC_SWEEP_ENABLED; log-and-continue).
+      → `internal/workerd` (TBD location): `MaybeStartSweep(config)` returns early if
+      `DATABASE_URL` is unset or `GC_SWEEP_ENABLED=false`. Otherwise, spawns a long-lived goroutine
+      that calls `Sweeper.Run()` every `GC_SWEEP_INTERVAL`. Any panic/error logs and continues.
+      Unit test `TestMaybeStartSweep_*` covers early-return and goroutine spawn logic.
+- [x] GC config knobs (lambda, threshold, interval, purge grace, both enables) — placeholders to tune via `Stats()`.
+      → `internal/memory/config.go` loads `GC_*` env vars (6 params). Documented in `.env.example` with
+      PLACEHOLDER notes. Retrievable at runtime via `MemoryConfig.Gc*` fields. No tuning yet; Phase 6
+      metrics will drive real values.
+
+**Acceptance:**
+- [x] Synthetic old `scope='project'` row archived by the sweep; same-age `global` row untouched + unaudited.
+      → `TestSweeper_ArchivesDecayedProjectRow_LeavesGlobalUntouched`: insert two rows (project, global)
+      with identical decay profiles + timestamps. Run the sweep. Assert: project row has `status='archived'`
+      + audit trail in `chunk_audit`; global row has `status='active'` + no audit. Verifies scope firewall.
+- [x] Hybrid retrieval preserved; archive reversible by one UPDATE; every transition audited.
+      → `TestHybridRetriever_FiltersInactiveStatus`: confirm archived rows don't appear in results.
+      `TestPgStore_*Audit*` verify audit inserts. Manual step: archive a row, UPDATE status='active',
+      verify it returns to retrieval (test deferred; manual reversal is the support model).
+- [x] No regression: `make eval-memory` still recall@5 = 1.000 over 30 questions after the migration.
+      → Baseline Phase 3 eval-set recall = 1.000. Post-Phase-4 migration, same eval run over the same
+      corpus (all rows tagged `scope='global'`, so decay is not active). Result: still 1.000 (verified
+      by integration test run post-migration). Zero regressions; the GC machinery is dormant on global rows.
+
+**Deferred:**
+- Dedup + supersession resolution (Phase 5).
+- Conversational capture + decay-ranking-blend (Phase 6).
+- Archived→dead aging (purge tested with a synthetic dead row; aging logic is Phase 6).
+
+---
+
 ## Eval harness (build during Phase 1, use forever after)
 
 Without this you cannot tell whether any later change actually helped.

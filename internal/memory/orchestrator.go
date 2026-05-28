@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Orchestrator drives the ingestion and query paths. Every dependency is an
@@ -54,6 +56,13 @@ func (o *Orchestrator) Ingest(ctx context.Context, doc RawDocument) error {
 	for i := range chunks {
 		chunks[i].Embedding = vecs[i]
 	}
+	scope := "global"
+	if raw, ok := doc.Metadata["scope"].(string); ok && raw != "" {
+		scope = raw
+	}
+	for i := range chunks {
+		chunks[i].Scope = scope
+	}
 	if old, ok := doc.Metadata["supersedes"].(string); ok && old != "" {
 		return o.Store.SupersedeOnUpsert(ctx, chunks, old)
 	}
@@ -77,6 +86,15 @@ func (o *Orchestrator) Answer(ctx context.Context, q Query) (Answer, error) {
 	candidates, err := o.Retriever.Retrieve(ctx, local, depth)
 	if err != nil {
 		return Answer{}, fmt.Errorf("retrieve: %w", err)
+	}
+	if o.Store != nil && len(candidates) > 0 {
+		ids := make([]string, len(candidates))
+		for i, c := range candidates {
+			ids[i] = c.ID
+		}
+		if err := o.Store.Reinforce(ctx, ids); err != nil {
+			log.Warn().Err(err).Msg("reinforce failed; serving answer anyway")
+		}
 	}
 	finalK := q.K
 	if finalK <= 0 {

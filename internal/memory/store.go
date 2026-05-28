@@ -20,6 +20,20 @@ type Store interface {
 	// transaction; either both commit or neither does. Calling with a
 	// supersedesOldDocID that matches no rows is not an error.
 	SupersedeOnUpsert(ctx context.Context, chunks []Chunk, supersedesOldDocID string) error
+
+	// Reinforce bumps access_count + last_accessed_at for the given ids in one
+	// statement. Empty ids is a no-op. Not audited (hot path).
+	Reinforce(ctx context.Context, ids []string) error
+
+	// Stats returns row counts grouped by (scope, status) for observability.
+	Stats(ctx context.Context) ([]ScopeStatusCount, error)
+}
+
+// ScopeStatusCount holds a single (scope, status) bucket with its row count.
+type ScopeStatusCount struct {
+	Scope  string
+	Status string
+	Count  int
 }
 
 type PgStore struct {
@@ -35,18 +49,19 @@ func (s *PgStore) Upsert(ctx context.Context, chunks []Chunk) error {
 			return fmt.Errorf("marshal metadata for %s: %w", c.ID, err)
 		}
 		_, err = s.conn.Exec(ctx, `
-			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at, scope)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (id) DO UPDATE SET
 				content = EXCLUDED.content,
 				embedding = EXCLUDED.embedding,
 				metadata = EXCLUDED.metadata,
 				source = EXCLUDED.source,
 				tenant_id = EXCLUDED.tenant_id,
-				published_at = EXCLUDED.published_at
+				published_at = EXCLUDED.published_at,
+				scope = EXCLUDED.scope
 		`,
 			c.ID, c.Content, pgvector.NewVector(c.Embedding), meta,
-			nullableStr(c.Source), nullableStr(c.Tenant), c.PublishedAt,
+			nullableStr(c.Source), nullableStr(c.Tenant), c.PublishedAt, scopeOrDefault(c.Scope),
 		)
 		if err != nil {
 			return fmt.Errorf("upsert %s: %w", c.ID, err)
@@ -96,6 +111,13 @@ func nullableStr(s string) any {
 	return s
 }
 
+func scopeOrDefault(scope string) string {
+	if scope == "" {
+		return "global"
+	}
+	return scope
+}
+
 func (s *PgStore) SupersedeOnUpsert(ctx context.Context, chunks []Chunk, supersedesOldDocID string) error {
 	if len(chunks) == 0 {
 		return fmt.Errorf("SupersedeOnUpsert: empty chunk slice")
@@ -113,18 +135,19 @@ func (s *PgStore) SupersedeOnUpsert(ctx context.Context, chunks []Chunk, superse
 			return fmt.Errorf("marshal metadata for %s: %w", c.ID, err)
 		}
 		_, err = tx.Exec(ctx, `
-			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at, scope)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (id) DO UPDATE SET
 				content = EXCLUDED.content,
 				embedding = EXCLUDED.embedding,
 				metadata = EXCLUDED.metadata,
 				source = EXCLUDED.source,
 				tenant_id = EXCLUDED.tenant_id,
-				published_at = EXCLUDED.published_at
+				published_at = EXCLUDED.published_at,
+				scope = EXCLUDED.scope
 		`,
 			c.ID, c.Content, pgvector.NewVector(c.Embedding), meta,
-			nullableStr(c.Source), nullableStr(c.Tenant), c.PublishedAt,
+			nullableStr(c.Source), nullableStr(c.Tenant), c.PublishedAt, scopeOrDefault(c.Scope),
 		)
 		if err != nil {
 			return fmt.Errorf("upsert %s: %w", c.ID, err)
@@ -148,4 +171,41 @@ func (s *PgStore) SupersedeOnUpsert(ctx context.Context, chunks []Chunk, superse
 		return fmt.Errorf("commit: %w", err)
 	}
 	return nil
+}
+
+func (s *PgStore) Reinforce(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := s.conn.Exec(ctx, `
+		UPDATE chunks
+		SET access_count = access_count + 1, last_accessed_at = now()
+		WHERE id = ANY($1)
+	`, ids)
+	if err != nil {
+		return fmt.Errorf("reinforce: %w", err)
+	}
+	return nil
+}
+
+func (s *PgStore) Stats(ctx context.Context) ([]ScopeStatusCount, error) {
+	rows, err := s.conn.Query(ctx, `
+		SELECT scope, status, count(*)
+		FROM chunks
+		GROUP BY scope, status
+		ORDER BY scope, status
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("stats: %w", err)
+	}
+	defer rows.Close()
+	var out []ScopeStatusCount
+	for rows.Next() {
+		var c ScopeStatusCount
+		if err := rows.Scan(&c.Scope, &c.Status, &c.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }
