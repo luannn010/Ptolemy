@@ -351,4 +351,18 @@ func TestPgStore_Stats_CountsByScopeStatus(t *testing.T) {
 	}
 }
 
+func TestPgStore_Supersede_UnknownOldIDErrors(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	err := s.Supersede(ctx, []Chunk{{ID: "x", Content: "c", Embedding: []float32{1, 0, 0, 0}, PublishedAt: time.Now().UTC(), Scope: "global"}}, "nonexistent")
+	if err == nil {
+		t.Fatal("expected error superseding a non-existent oldID")
+	}
+	got, _ := s.Get(ctx, []string{"x"})
+	if len(got) != 0 {
+		t.Fatalf("expected rollback; row x should not exist, got %+v", got)
+	}
+}
+
 func ptr(s string) *string { return &s }

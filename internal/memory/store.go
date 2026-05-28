@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -21,6 +22,8 @@ type Store interface {
 	// Supersede inserts newChunks (active) and retires oldID, linking the chain:
 	// old → status='superseded', superseded_by=newChunks[0].ID; newChunks[0] →
 	// supersedes=oldID, version=old.version+1. Transactional + audited.
+	// Non-representative chunks in newChunks are inserted as fresh rows
+	// (version=1, no supersedes pointer); callers must pass new ids for them.
 	Supersede(ctx context.Context, newChunks []Chunk, oldID string) error
 
 	// History returns the full version chain for id, oldest → newest.
@@ -170,12 +173,15 @@ func (s *PgStore) Supersede(ctx context.Context, newChunks []Chunk, oldID string
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	rep := newChunks[0].ID
+	if oldID == rep {
+		return fmt.Errorf("Supersede: new representative id %q must differ from oldID", rep)
+	}
 	var oldVersion int
 	if err := tx.QueryRow(ctx, `SELECT version FROM chunks WHERE id=$1`, oldID).Scan(&oldVersion); err != nil {
 		return fmt.Errorf("supersede: load old %s: %w", oldID, err)
 	}
-	rep := newChunks[0].ID
-	for i, c := range newChunks {
+	for _, c := range newChunks {
 		meta, err := json.Marshal(c.Metadata)
 		if err != nil {
 			return fmt.Errorf("marshal metadata for %s: %w", c.ID, err)
@@ -201,7 +207,6 @@ func (s *PgStore) Supersede(ctx context.Context, newChunks []Chunk, oldID string
 			c.FactSubject, c.FactPredicate, supersedes, version); err != nil {
 			return fmt.Errorf("supersede insert %s: %w", c.ID, err)
 		}
-		_ = i
 	}
 	if err := markSupersededTx(ctx, tx, []string{oldID}, rep); err != nil {
 		return err
@@ -212,10 +217,12 @@ func (s *PgStore) Supersede(ctx context.Context, newChunks []Chunk, oldID string
 func (s *PgStore) History(ctx context.Context, id string) ([]Chunk, error) {
 	rows, err := s.conn.Query(ctx, `
 		WITH RECURSIVE history AS (
-		  SELECT id, content, scope, status, version, supersedes, superseded_by FROM chunks WHERE id=$1
+		  SELECT id, content, scope, status, version, supersedes, superseded_by, ARRAY[id] AS path
+		    FROM chunks WHERE id=$1
 		  UNION ALL
-		  SELECT c.id, c.content, c.scope, c.status, c.version, c.supersedes, c.superseded_by
+		  SELECT c.id, c.content, c.scope, c.status, c.version, c.supersedes, c.superseded_by, h.path || c.id
 		    FROM chunks c JOIN history h ON c.id = h.supersedes
+		   WHERE NOT c.id = ANY(h.path)
 		)
 		SELECT id, content, scope, status, version, supersedes, superseded_by FROM history ORDER BY version
 	`, id)
@@ -243,7 +250,7 @@ func (s *PgStore) LookupFact(ctx context.Context, factSubject, factPredicate str
 		ORDER BY version DESC, created_at DESC
 		LIMIT 1
 	`, factSubject, factPredicate).Scan(&c.ID, &c.Content, &c.Scope, &c.Status, &c.Version)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return Chunk{}, false, nil
 	}
 	if err != nil {
