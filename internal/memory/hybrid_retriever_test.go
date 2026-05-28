@@ -138,7 +138,7 @@ func TestHybridRetriever_PrefersFreshOverStale(t *testing.T) {
 	}
 	for _, rc := range got {
 		if rc.ID == "v1#0" {
-			t.Fatalf("v1#0 must be filtered by superseded_by IS NULL; got %+v", idsHybrid(got))
+			t.Fatalf("v1#0 must be excluded by the status='active' filter; got %+v", idsHybrid(got))
 		}
 	}
 	if len(got) == 0 {
@@ -238,10 +238,17 @@ func TestHybridRetriever_ExcludesSupersededByStatusAlone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	seenLive := false
 	for _, c := range got {
 		if c.ID == "stale" {
 			t.Fatalf("retrieval returned superseded row 'stale'")
 		}
+		if c.ID == "live" {
+			seenLive = true
+		}
+	}
+	if !seenLive {
+		t.Fatal("active row 'live' was not returned (status filter must not exclude active rows)")
 	}
 }
 
