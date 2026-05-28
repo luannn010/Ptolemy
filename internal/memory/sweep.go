@@ -21,8 +21,11 @@ func NewSweeper(conn *pgx.Conn, cfg GCConfig) *Sweeper {
 	return &Sweeper{conn: conn, cfg: cfg}
 }
 
-// sweepOnce runs the Phase 4 passes in order. Directly callable in tests.
+// sweepOnce runs all passes in order: dedup → archive → purge. Directly callable in tests.
 func (s *Sweeper) sweepOnce(ctx context.Context) error {
+	if err := s.dedupRecent(ctx); err != nil {
+		return fmt.Errorf("dedup pass: %w", err)
+	}
 	if err := s.archiveDecayed(ctx); err != nil {
 		return fmt.Errorf("archive pass: %w", err)
 	}
@@ -207,10 +210,11 @@ func (s *Sweeper) collapseDuplicate(ctx context.Context, survivorID, loserID str
 	return tx.Commit(ctx)
 }
 
-// Run ticks every cfg.SweepInterval and runs a sweep. Per-tick-tolerant: a
-// failed sweep is logged at Error and the loop continues to the next interval.
-// Returns when ctx is cancelled.
-func (s *Sweeper) Run(ctx context.Context) {
+// Run ticks every cfg.SweepInterval and runs a sweep. Closes done when it returns
+// (on ctx cancellation) so the caller can wait before tearing down the connection.
+// Per-tick-tolerant: a failed sweep is logged at Error and the loop continues.
+func (s *Sweeper) Run(ctx context.Context, done chan<- struct{}) {
+	defer close(done)
 	log.Info().Dur("interval", s.cfg.SweepInterval).Msg("memory sweep loop started")
 	runLoop(ctx, s.cfg.SweepInterval, s.sweepOnce)
 	log.Info().Msg("memory sweep loop stopped")

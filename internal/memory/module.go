@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/rs/zerolog/log"
 )
 
 // NewModule wires a production Orchestrator from MemoryConfig. It opens a pgx
@@ -76,6 +78,17 @@ func MaybeStartSweep(ctx context.Context) (cleanup func(), enabled bool, err err
 		return nil, true, fmt.Errorf("migrate: %w", err)
 	}
 	sw := NewSweeper(conn, cfg.GC)
-	go sw.Run(ctx)
-	return func() { _ = conn.Close(context.Background()) }, true, nil
+	sweepCtx, cancelSweep := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go sw.Run(sweepCtx, done)
+	cleanup = func() {
+		cancelSweep()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			log.Warn().Msg("memory sweep did not stop within 5s; closing connection anyway")
+		}
+		_ = conn.Close(context.Background())
+	}
+	return cleanup, true, nil
 }
