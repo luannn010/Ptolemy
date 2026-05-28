@@ -33,6 +33,20 @@ type MemoryConfig struct {
 	// production behavior is preserved when RAG_RECENCY_* are unset.
 	RecencyWeight   float64       // env: RAG_RECENCY_WEIGHT
 	RecencyHalfLife time.Duration // env: RAG_RECENCY_HALFLIFE_DAYS (parsed as float days)
+
+	// GC knobs (Phase 4). Defaults are placeholders to be tuned against real
+	// chat volume once Phase 6 lands.
+	GC GCConfig
+}
+
+// GCConfig holds the garbage-collection knobs loaded from env vars.
+type GCConfig struct {
+	SweepEnabled     bool          // GC_SWEEP_ENABLED (default false)
+	SweepInterval    time.Duration // GC_SWEEP_INTERVAL (default 1h)
+	DecayLambda      float64       // GC_DECAY_LAMBDA (default 0.05)
+	ArchiveThreshold float64       // GC_ARCHIVE_THRESHOLD (default 0.1)
+	PurgeEnabled     bool          // GC_PURGE_ENABLED (default false)
+	PurgeGraceDays   float64       // GC_PURGE_GRACE_DAYS (default 30)
 }
 
 func LoadConfig() (MemoryConfig, error) {
@@ -76,6 +90,27 @@ func LoadConfig() (MemoryConfig, error) {
 		return MemoryConfig{}, fmt.Errorf("RAG_RECENCY_HALFLIFE_DAYS resolves to %v, must be >= 1h", cfg.RecencyHalfLife)
 	}
 
+	cfg.GC = GCConfig{
+		SweepEnabled:     boolEnv("GC_SWEEP_ENABLED", false),
+		SweepInterval:    durationEnv("GC_SWEEP_INTERVAL", time.Hour),
+		DecayLambda:      floatEnv("GC_DECAY_LAMBDA", 0.05),
+		ArchiveThreshold: floatEnv("GC_ARCHIVE_THRESHOLD", 0.1),
+		PurgeEnabled:     boolEnv("GC_PURGE_ENABLED", false),
+		PurgeGraceDays:   floatEnv("GC_PURGE_GRACE_DAYS", 30),
+	}
+	if cfg.GC.DecayLambda < 0 {
+		return MemoryConfig{}, fmt.Errorf("GC_DECAY_LAMBDA must be >= 0, got %v", cfg.GC.DecayLambda)
+	}
+	if cfg.GC.ArchiveThreshold <= 0 || cfg.GC.ArchiveThreshold > 1 {
+		return MemoryConfig{}, fmt.Errorf("GC_ARCHIVE_THRESHOLD must be in (0,1], got %v", cfg.GC.ArchiveThreshold)
+	}
+	if cfg.GC.SweepInterval < time.Second {
+		return MemoryConfig{}, fmt.Errorf("GC_SWEEP_INTERVAL must be >= 1s, got %v", cfg.GC.SweepInterval)
+	}
+	if cfg.GC.PurgeGraceDays < 1 {
+		return MemoryConfig{}, fmt.Errorf("GC_PURGE_GRACE_DAYS must be >= 1, got %v", cfg.GC.PurgeGraceDays)
+	}
+
 	return cfg, nil
 }
 
@@ -97,6 +132,30 @@ func floatEnv(key string, fallback float64) float64 {
 		return fallback
 	}
 	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
+func boolEnv(key string, fallback bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
+func durationEnv(key string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	v, err := time.ParseDuration(raw)
 	if err != nil {
 		return fallback
 	}
