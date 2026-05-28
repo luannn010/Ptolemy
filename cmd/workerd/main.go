@@ -100,8 +100,10 @@ func main() {
 		}
 	}()
 
-	sweepCtx, cancelSweep := context.WithCancel(context.Background())
-	sweepCleanup, sweepEnabled, sweepErr := memory.MaybeStartSweep(sweepCtx)
+	// Sweep has its own lifetime (a Background root, not tied to HTTP shutdown);
+	// MaybeStartSweep owns cancellation — sweepCleanup() stops the goroutine and
+	// closes the connection.
+	sweepCleanup, sweepEnabled, sweepErr := memory.MaybeStartSweep(context.Background())
 	switch {
 	case sweepErr != nil:
 		log.Error().Err(sweepErr).Msg("memory sweep enabled but failed to start; continuing without it")
@@ -115,7 +117,6 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 
-	cancelSweep()
 	if sweepCleanup != nil {
 		sweepCleanup()
 	}

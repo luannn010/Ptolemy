@@ -86,7 +86,7 @@ func MaybeStartSweep(ctx context.Context) (cleanup func(), enabled bool, err err
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
-			log.Warn().Msg("memory sweep did not stop within 5s; closing connection anyway")
+			log.Error().Msg("memory sweep did not stop within 5s; closing connection anyway (may interrupt an in-flight write)")
 		}
 		_ = conn.Close(context.Background())
 	}
