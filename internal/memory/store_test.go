@@ -185,3 +185,70 @@ func TestPgStore_SupersedeOnUpsert_RollsBackOnError(t *testing.T) {
 		t.Fatalf("v2#0 must not exist after rollback, got %+v", byID["v2#0"])
 	}
 }
+
+func TestPgStore_Reinforce_BumpsCounters(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	if err := s.Upsert(context.Background(), []Chunk{
+		{ID: "r1", Content: "x", Embedding: []float32{1, 0, 0, 0}, PublishedAt: time.Now().UTC()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var before time.Time
+	_ = conn.QueryRow(context.Background(),
+		`SELECT last_accessed_at FROM chunks WHERE id='r1'`).Scan(&before)
+
+	if err := s.Reinforce(context.Background(), []string{"r1"}); err != nil {
+		t.Fatalf("Reinforce: %v", err)
+	}
+
+	var count int
+	var after time.Time
+	if err := conn.QueryRow(context.Background(),
+		`SELECT access_count, last_accessed_at FROM chunks WHERE id='r1'`).Scan(&count, &after); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("access_count: got %d want 1", count)
+	}
+	if !after.After(before) {
+		t.Fatalf("last_accessed_at not advanced: before=%v after=%v", before, after)
+	}
+}
+
+func TestPgStore_Reinforce_EmptyIsNoOp(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	if err := s.Reinforce(context.Background(), nil); err != nil {
+		t.Fatalf("empty Reinforce should be a no-op, got %v", err)
+	}
+}
+
+func TestPgStore_Stats_CountsByScopeStatus(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	if err := s.Upsert(context.Background(), []Chunk{
+		{ID: "g1", Content: "a", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now},
+		{ID: "g2", Content: "b", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Force a project+archived row directly.
+	_, err := conn.Exec(context.Background(),
+		`UPDATE chunks SET scope='project', status='archived' WHERE id='g2'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats, err := s.Stats(context.Background())
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	got := map[string]int{}
+	for _, sc := range stats {
+		got[sc.Scope+"/"+sc.Status] = sc.Count
+	}
+	if got["global/active"] != 1 || got["project/archived"] != 1 {
+		t.Fatalf("stats wrong: %+v", got)
+	}
+}

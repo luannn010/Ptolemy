@@ -10,6 +10,8 @@ import (
 type fakeStore struct {
 	upserted       []Chunk
 	supersedeCalls []supersedeCall
+	reinforced     [][]string // records each Reinforce call's ids
+	statsCalls     int
 }
 
 type supersedeCall struct {
@@ -29,6 +31,16 @@ func (f *fakeStore) SupersedeOnUpsert(_ context.Context, chunks []Chunk, oldDocI
 	f.upserted = append(f.upserted, chunks...)
 	f.supersedeCalls = append(f.supersedeCalls, supersedeCall{OldDocID: oldDocID, NewChunks: chunks})
 	return nil
+}
+
+func (f *fakeStore) Reinforce(_ context.Context, ids []string) error {
+	f.reinforced = append(f.reinforced, ids)
+	return nil
+}
+
+func (f *fakeStore) Stats(_ context.Context) ([]ScopeStatusCount, error) {
+	f.statsCalls++
+	return nil, nil
 }
 
 type fakeRetriever struct{}
