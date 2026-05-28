@@ -209,3 +209,86 @@ func TestLoadConfig_RejectsZeroHalfLife(t *testing.T) {
 		t.Fatalf("expected zero halflife to be rejected")
 	}
 }
+
+func TestLoadConfig_GCDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "1024")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	for _, k := range []string{"GC_SWEEP_ENABLED", "GC_SWEEP_INTERVAL", "GC_DECAY_LAMBDA",
+		"GC_ARCHIVE_THRESHOLD", "GC_PURGE_ENABLED", "GC_PURGE_GRACE_DAYS"} {
+		t.Setenv(k, "")
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.GC.SweepEnabled || cfg.GC.PurgeEnabled {
+		t.Fatalf("enables should default false: %+v", cfg.GC)
+	}
+	if cfg.GC.SweepInterval != time.Hour {
+		t.Fatalf("interval default 1h, got %v", cfg.GC.SweepInterval)
+	}
+	if cfg.GC.DecayLambda != 0.05 || cfg.GC.ArchiveThreshold != 0.1 || cfg.GC.PurgeGraceDays != 30 {
+		t.Fatalf("GC numeric defaults wrong: %+v", cfg.GC)
+	}
+}
+
+func TestLoadConfig_GCEnvParsed(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "1024")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("GC_SWEEP_ENABLED", "true")
+	t.Setenv("GC_SWEEP_INTERVAL", "5s")
+	t.Setenv("GC_DECAY_LAMBDA", "0.1")
+	t.Setenv("GC_ARCHIVE_THRESHOLD", "0.2")
+	t.Setenv("GC_PURGE_ENABLED", "true")
+	t.Setenv("GC_PURGE_GRACE_DAYS", "7")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.GC.SweepEnabled || !cfg.GC.PurgeEnabled {
+		t.Fatalf("enables should be true: %+v", cfg.GC)
+	}
+	if cfg.GC.SweepInterval != 5*time.Second {
+		t.Fatalf("interval: got %v", cfg.GC.SweepInterval)
+	}
+	if cfg.GC.DecayLambda != 0.1 || cfg.GC.ArchiveThreshold != 0.2 || cfg.GC.PurgeGraceDays != 7 {
+		t.Fatalf("GC numerics: %+v", cfg.GC)
+	}
+}
+
+func TestLoadConfig_GCRejectsBadValues(t *testing.T) {
+	base := func() {
+		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("EMBEDDING_BASE_URL", "http://e")
+		t.Setenv("EMBEDDING_MODEL", "m")
+		t.Setenv("EMBEDDING_DIM", "1024")
+		t.Setenv("BRAIN_BASE_URL", "http://l")
+		t.Setenv("BRAIN_MODEL", "lm")
+	}
+	cases := map[string]map[string]string{
+		"negative lambda":    {"GC_DECAY_LAMBDA": "-0.1"},
+		"threshold over 1":   {"GC_ARCHIVE_THRESHOLD": "1.5"},
+		"threshold zero":     {"GC_ARCHIVE_THRESHOLD": "0"},
+		"interval too small": {"GC_SWEEP_INTERVAL": "500ms"}, // < 1s floor
+		"grace under 1 day":  {"GC_PURGE_GRACE_DAYS": "0"},
+	}
+	for name, env := range cases {
+		t.Run(name, func(t *testing.T) {
+			base()
+			for k, v := range env {
+				t.Setenv(k, v)
+			}
+			if _, err := LoadConfig(); err == nil {
+				t.Fatalf("%s: expected error", name)
+			}
+		})
+	}
+}

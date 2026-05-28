@@ -14,6 +14,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/gitops"
 	"github.com/luannn010/ptolemy/internal/httpapi"
 	"github.com/luannn010/ptolemy/internal/logging"
+	"github.com/luannn010/ptolemy/internal/memory"
 	"github.com/luannn010/ptolemy/internal/policy"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
@@ -99,9 +100,25 @@ func main() {
 		}
 	}()
 
+	sweepCtx, cancelSweep := context.WithCancel(context.Background())
+	sweepCleanup, sweepEnabled, sweepErr := memory.MaybeStartSweep(sweepCtx)
+	switch {
+	case sweepErr != nil:
+		log.Error().Err(sweepErr).Msg("memory sweep enabled but failed to start; continuing without it")
+	case sweepEnabled:
+		log.Info().Msg("memory sweep started")
+	default:
+		log.Info().Msg("memory sweep disabled (set DATABASE_URL and GC_SWEEP_ENABLED=true to enable)")
+	}
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
+
+	cancelSweep()
+	if sweepCleanup != nil {
+		sweepCleanup()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

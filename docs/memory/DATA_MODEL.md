@@ -74,6 +74,73 @@ CREATE INDEX chunks_tenant        ON chunks (tenant_id);
   is reversible and auditable.
 - `tenant_id` — if Ptolemy is multi-tenant, every retrieval query MUST filter on it.
 
+### Phase 4 (GC lifecycle)
+
+```sql
+-- Migration 0004_chunks_gc_lifecycle adds the following columns to chunks:
+ALTER TABLE chunks ADD COLUMN scope TEXT DEFAULT 'global';                  -- 'project' decays; 'global' is immune
+ALTER TABLE chunks ADD COLUMN status TEXT DEFAULT 'active';                 -- active | archived | superseded | dead
+ALTER TABLE chunks ADD COLUMN importance REAL DEFAULT 0.5;                  -- [0,1], influence on decay
+ALTER TABLE chunks ADD COLUMN pinned BOOLEAN DEFAULT false;                 -- pinned rows are decay-immune
+ALTER TABLE chunks ADD COLUMN access_count INTEGER DEFAULT 0;               -- reads reinforce; bumped on every Answer
+ALTER TABLE chunks ADD COLUMN last_accessed_at TIMESTAMPTZ;                 -- reinforcement signal
+ALTER TABLE chunks ADD COLUMN confidence TEXT DEFAULT 'normal';             -- low | normal | high (Phase 5 news)
+ALTER TABLE chunks ADD COLUMN version TEXT;                                 -- Phase 5 supersession chain
+ALTER TABLE chunks ADD COLUMN supersedes TEXT REFERENCES chunks(id);        -- forward pointer for dedup
+ALTER TABLE chunks ADD COLUMN archived_at TIMESTAMPTZ;                      -- transition timestamp
+ALTER TABLE chunks ADD COLUMN dead_at TIMESTAMPTZ;                          -- anchors purge grace (30d from dead_at)
+ALTER TABLE chunks ADD COLUMN fact_subject TEXT;                            -- Phase 5 structured-fact dedup
+ALTER TABLE chunks ADD COLUMN fact_predicate TEXT;                          -- Phase 5 structured-fact dedup
+
+-- Indexes for GC:
+CREATE INDEX chunks_status_active ON chunks (id)        WHERE status = 'active';  -- retrieval filtering
+CREATE INDEX chunks_scope_status  ON chunks (scope, status);                 -- decay query filtering
+CREATE INDEX chunk_audit_chunk_id ON chunk_audit (chunk_id);                 -- audit trail lookups
+
+-- Future (Phase 5): a partial index on dead_at WHERE status='dead' may be added
+-- when dedup starts producing many dead rows in need of efficient purge sweeps.
+```
+
+**Column notes**
+
+- `scope` — 'project' rows decay over time; 'global' rows are immune. The archive query's `scope='project'`
+  clause enforces this boundary (schema-level firewall). A row's scope determines whether its decay score
+  is calculated at all.
+- `status` — lifecycle state: 'active' (returned by retrieval), 'archived' (off-path until unarchived),
+  'superseded' (replaced by a newer version), 'dead' (in purge grace period). Retrieval filters `WHERE
+  status='active'`. Transition audited in `chunk_audit`.
+- `importance` / `pinned` — `pinned=true` exempts the row from decay entirely; `importance` scales the
+  decay rate for non-pinned rows (Phase 5 tuning). Pinned + global rows are decay-immune.
+- `access_count` / `last_accessed_at` — reinforcement signals bumped on every read (via `Answer`). Hot
+  path does not audit; only status transitions are audited to `chunk_audit`.
+- `confidence` — 'low' | 'normal' | 'high'. Placeholder for Phase 5 (news ingestion source signals).
+- `version` / `supersedes` — Phase 5 supersession chain. Forward pointer for dedup resolution when
+  multiple versions of the same fact exist.
+- `archived_at` / `dead_at` — transition timestamps. `dead_at` is the anchor for the purge grace period
+  (e.g., 30 days: any row with `status='dead' AND dead_at <= now() - INTERVAL '30 days'` is eligible
+  for purge).
+- `fact_subject` / `fact_predicate` — Phase 5 structured-fact dedup. Enable cross-document fact
+  resolution (e.g., "the_ptolemy_project" as a subject, "founded_year" as predicate).
+
+### Table: `chunk_audit`
+
+```sql
+CREATE TABLE chunk_audit (
+    id          TEXT PRIMARY KEY,              -- uuid
+    chunk_id    TEXT NOT NULL REFERENCES chunks(id),
+    old_status  TEXT,                          -- status before the transition
+    new_status  TEXT NOT NULL,                 -- status after the transition
+    reason      TEXT,                          -- decay, manual, supersession, etc.
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX chunk_audit_chunk_id ON chunk_audit (chunk_id);
+CREATE INDEX chunk_audit_created_at ON chunk_audit (created_at);
+```
+
+Append-only trail of every status transition (e.g., active → archived by decay, or archived → dead by aging).
+Used for observability and reversibility. Reinforcement (access_count bumps) is **not** audited (hot path).
+
 ---
 
 ## Table: `topic_digests` (Phase 3, optional)

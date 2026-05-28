@@ -18,6 +18,21 @@ type Chunk struct {
 	ValidTo      *time.Time
 	SupersededBy *string
 	CreatedAt    time.Time
+
+	// Phase 4 (GC lifecycle)
+	Scope          string     // 'project' | 'global'
+	Status         string     // 'active' | 'archived' | 'superseded' | 'dead'
+	Importance     float64
+	Pinned         bool
+	AccessCount    int
+	LastAccessedAt time.Time
+	Confidence     string     // 'low' | 'normal' | 'high'
+	Version        int
+	Supersedes     *string
+	ArchivedAt     *time.Time
+	DeadAt         *time.Time
+	FactSubject    *string
+	FactPredicate  *string
 }
 
 type RetrievedChunk struct {

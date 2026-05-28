@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -41,4 +43,39 @@ func NewModule(ctx context.Context, cfg MemoryConfig) (*Orchestrator, *pgx.Conn,
 		Depth:          20,
 		FinalK:         cfg.TopK,
 	}, conn, nil
+}
+
+// MaybeStartSweep loads MemoryConfig and, if GC_SWEEP_ENABLED is true AND a
+// DATABASE_URL is configured, opens a pgx connection, applies migrations, and
+// starts the sweep goroutine bound to ctx. Returns a cleanup func (closes the
+// connection — call it on shutdown AFTER cancelling ctx) and an enabled flag.
+//
+// Never panics. A memory-side failure (bad config, unreachable DB) returns
+// (nil, true, err) so the caller can log loudly and continue serving its core
+// duties without the sweep.
+func MaybeStartSweep(ctx context.Context) (cleanup func(), enabled bool, err error) {
+	if !boolEnv("GC_SWEEP_ENABLED", false) {
+		return nil, false, nil
+	}
+	// Sweep is explicitly enabled, so a missing DATABASE_URL is a
+	// misconfiguration — surface it as an error (enabled=true) so the operator
+	// sees "enabled but failed to start" rather than a silent "disabled".
+	if strings.TrimSpace(os.Getenv("DATABASE_URL")) == "" {
+		return nil, true, fmt.Errorf("GC_SWEEP_ENABLED=true but DATABASE_URL is not set")
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		return nil, true, fmt.Errorf("memory config: %w", err)
+	}
+	conn, err := pgx.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, true, fmt.Errorf("connect postgres: %w", err)
+	}
+	if err := ApplyMigrations(ctx, conn, cfg.EmbeddingDim); err != nil {
+		_ = conn.Close(ctx)
+		return nil, true, fmt.Errorf("migrate: %w", err)
+	}
+	sw := NewSweeper(conn, cfg.GC)
+	go sw.Run(ctx)
+	return func() { _ = conn.Close(context.Background()) }, true, nil
 }
