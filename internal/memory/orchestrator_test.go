@@ -373,3 +373,65 @@ func TestOrchestrator_Answer_AsOfRespected(t *testing.T) {
 		t.Fatalf("expected AsOf=%v, got %v", pin, r.lastQuery.AsOf)
 	}
 }
+
+type fakeRetriever2 struct{ out []RetrievedChunk }
+
+func (f *fakeRetriever2) Retrieve(_ context.Context, _ Query, _ int) ([]RetrievedChunk, error) {
+	return f.out, nil
+}
+
+func TestOrchestrator_Ingest_ScopeDefaultsGlobal(t *testing.T) {
+	fs := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1, 0, 0, 0}}},
+		Store:    fs,
+	}
+	if err := o.Ingest(context.Background(), RawDocument{ID: "d", Text: "alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.upserted) == 0 || fs.upserted[0].Scope != "global" {
+		t.Fatalf("expected scope 'global', got %+v", fs.upserted)
+	}
+}
+
+func TestOrchestrator_Ingest_ScopeFromMetadata(t *testing.T) {
+	fs := &fakeStore{}
+	o := &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1, 0, 0, 0}}},
+		Store:    fs,
+	}
+	err := o.Ingest(context.Background(), RawDocument{
+		ID: "d", Text: "alpha", Metadata: map[string]any{"scope": "project"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.upserted) == 0 || fs.upserted[0].Scope != "project" {
+		t.Fatalf("expected scope 'project', got %+v", fs.upserted)
+	}
+}
+
+func TestOrchestrator_Answer_Reinforces(t *testing.T) {
+	fs := &fakeStore{}
+	o := &Orchestrator{
+		Embedder:       fakeEmbedder{vecs: [][]float32{{1, 0, 0, 0}}},
+		Store:          fs,
+		Retriever:      &fakeRetriever2{out: []RetrievedChunk{{Chunk: Chunk{ID: "c1#0"}}, {Chunk: Chunk{ID: "c2#0"}}}},
+		Fusion:         PassthroughFusion{},
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 6000},
+		Generator:      fakeGenerator{},
+		Depth:          20,
+		FinalK:         5,
+	}
+	if _, err := o.Answer(context.Background(), Query{Text: "alpha", K: 5}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.reinforced) != 1 {
+		t.Fatalf("expected exactly one Reinforce call, got %d", len(fs.reinforced))
+	}
+	if len(fs.reinforced[0]) != 2 {
+		t.Fatalf("expected 2 ids reinforced, got %v", fs.reinforced[0])
+	}
+}
