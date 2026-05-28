@@ -88,6 +88,49 @@ func TestSweeper_ArchiveIsReversible(t *testing.T) {
 	}
 }
 
+func TestRunLoop_ContinuesAfterTickError(t *testing.T) {
+	calls := 0
+	tick := func(_ context.Context) error {
+		calls++
+		if calls < 3 {
+			return context.DeadlineExceeded // simulate a failing tick
+		}
+		return nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		runLoop(ctx, time.Millisecond, tick)
+		close(done)
+	}()
+	// Let several ticks fire, then cancel.
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("runLoop did not return after cancel")
+	}
+	if calls < 3 {
+		t.Fatalf("loop should have continued past failing ticks, got %d calls", calls)
+	}
+}
+
+func TestRunLoop_StopsOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+	returned := make(chan struct{})
+	go func() {
+		runLoop(ctx, time.Millisecond, func(_ context.Context) error { return nil })
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("runLoop should return promptly on a cancelled ctx")
+	}
+}
+
 func TestSweeper_PurgeDead_GatedAndGraced(t *testing.T) {
 	conn := freshDB(t)
 	old := time.Now().UTC().Add(-40 * 24 * time.Hour)
