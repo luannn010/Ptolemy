@@ -1,0 +1,88 @@
+package memory
+
+import (
+	"context"
+	"sync"
+	"testing"
+)
+
+type captureFakeEmbedder struct{}
+
+func (captureFakeEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	out := make([][]float32, len(texts))
+	for i := range texts {
+		out[i] = []float32{1, 0, 0, 0}
+	}
+	return out, nil
+}
+
+// captureFakeStore records Upsert calls; implements just enough of Store.
+type captureFakeStore struct {
+	mu       sync.Mutex
+	upserted []Chunk
+}
+
+func (s *captureFakeStore) Upsert(ctx context.Context, c []Chunk) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.upserted = append(s.upserted, c...)
+	return nil
+}
+func (s *captureFakeStore) Get(context.Context, []string) ([]Chunk, error)           { return nil, nil }
+func (s *captureFakeStore) SupersedeOnUpsert(context.Context, []Chunk, string) error { return nil }
+func (s *captureFakeStore) Supersede(context.Context, []Chunk, string) error         { return nil }
+func (s *captureFakeStore) History(context.Context, string) ([]Chunk, error)         { return nil, nil }
+func (s *captureFakeStore) LookupFact(context.Context, string, string) (Chunk, bool, error) {
+	return Chunk{}, false, nil
+}
+func (s *captureFakeStore) Reinforce(context.Context, []string) error         { return nil }
+func (s *captureFakeStore) Stats(context.Context) ([]ScopeStatusCount, error) { return nil, nil }
+
+func newTestHook(store Store) *PerTurnCaptureHook {
+	return NewCaptureHook(NewExtractor(fakeChat{resp: `[{"content":"The GC sweep archives stale project rows below the threshold","perspective":"factual","fact_subject":"GC sweep","fact_predicate":"archives"}]`}),
+		captureFakeEmbedder{}, store, 8)
+}
+
+func TestCapture_ProcessTurnWritesProjectRow(t *testing.T) {
+	store := &captureFakeStore{}
+	h := newTestHook(store)
+	ex := Exchange{UserText: "how does the GC archive?", AssistantText: "the sweep archives stale project rows below the threshold",
+		SubjectID: "userA", SessionID: "s1", ProjectID: "ptolemy"}
+	if err := h.processTurn(context.Background(), ex); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.upserted) != 1 {
+		t.Fatalf("want 1 row, got %d", len(store.upserted))
+	}
+	c := store.upserted[0]
+	if c.Scope != "project" || c.SubjectID == nil || *c.SubjectID != "userA" || c.ProjectID == nil || *c.ProjectID != "ptolemy" {
+		t.Fatalf("scoping wrong: %+v", c)
+	}
+	if c.Importance != factImportance {
+		t.Fatalf("factual entry should get factImportance %.2f, got %.2f", factImportance, c.Importance)
+	}
+	if c.Metadata["extractor_version"] != ExtractorVersion {
+		t.Fatalf("extractor_version not stamped: %+v", c.Metadata)
+	}
+}
+
+func TestCapture_GateSkipsTrivial(t *testing.T) {
+	store := &captureFakeStore{}
+	h := newTestHook(store)
+	_ = h.processTurn(context.Background(), Exchange{UserText: "thanks", AssistantText: "yw", SubjectID: "userA"})
+	if len(store.upserted) != 0 {
+		t.Fatalf("trivial turn should produce no rows, got %d", len(store.upserted))
+	}
+}
+
+func TestCapture_EnqueueDoesNotBlockAndDrops(t *testing.T) {
+	store := &captureFakeStore{}
+	// buffer 1, no worker started → second+ enqueues must drop, never block.
+	h := NewCaptureHook(NewExtractor(fakeChat{resp: "[]"}), captureFakeEmbedder{}, store, 1)
+	for i := 0; i < 100; i++ {
+		h.Enqueue(Exchange{UserText: "x", AssistantText: "y", SubjectID: "userA"})
+	}
+	if got := h.Metrics().Dropped(); got == 0 {
+		t.Fatalf("expected drops on a full channel, got %d", got)
+	}
+}
