@@ -17,6 +17,10 @@ type Store interface {
 
 	// SupersedeOnUpsert atomically upserts the new chunks AND retires every chunk
 	// whose id starts with "<oldDocID>#" via the unified version-chain model.
+	// Doc-level: it sets the back-link (old rows → status='superseded', superseded_by)
+	// but NOT a forward supersedes/version on the new chunks (a multi-chunk doc has no
+	// 1:1 chunk mapping), so History() walks chains created by row-level Supersede, not
+	// by doc-level replacement.
 	SupersedeOnUpsert(ctx context.Context, chunks []Chunk, supersedesOldDocID string) error
 
 	// Supersede inserts newChunks (active) and retires oldID, linking the chain:
