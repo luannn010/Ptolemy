@@ -77,16 +77,17 @@ CREATE INDEX chunks_tenant        ON chunks (tenant_id);
 ### Phase 4 (GC lifecycle)
 
 ```sql
--- Migration 0004_chunks_gc_lifecycle adds the following columns to chunks:
-ALTER TABLE chunks ADD COLUMN scope TEXT DEFAULT 'global';                  -- 'project' decays; 'global' is immune
-ALTER TABLE chunks ADD COLUMN status TEXT DEFAULT 'active';                 -- active | archived | superseded | dead
-ALTER TABLE chunks ADD COLUMN importance REAL DEFAULT 0.5;                  -- [0,1], influence on decay
-ALTER TABLE chunks ADD COLUMN pinned BOOLEAN DEFAULT false;                 -- pinned rows are decay-immune
-ALTER TABLE chunks ADD COLUMN access_count INTEGER DEFAULT 0;               -- reads reinforce; bumped on every Answer
-ALTER TABLE chunks ADD COLUMN last_accessed_at TIMESTAMPTZ;                 -- reinforcement signal
-ALTER TABLE chunks ADD COLUMN confidence TEXT DEFAULT 'normal';             -- low | normal | high (Phase 5 news)
+-- Migration 0004_chunks_gc_lifecycle adds the following columns to chunks
+-- (NOT NULL with DEFAULTs so existing rows backfill in place):
+ALTER TABLE chunks ADD COLUMN scope TEXT NOT NULL DEFAULT 'global';              -- 'project' decays; 'global' is immune
+ALTER TABLE chunks ADD COLUMN status TEXT NOT NULL DEFAULT 'active';             -- active | archived | superseded | dead
+ALTER TABLE chunks ADD COLUMN importance REAL NOT NULL DEFAULT 1.0;              -- [0,1], influence on decay
+ALTER TABLE chunks ADD COLUMN pinned BOOLEAN NOT NULL DEFAULT false;             -- pinned rows are decay-immune
+ALTER TABLE chunks ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0;           -- reads reinforce; bumped on every Answer
+ALTER TABLE chunks ADD COLUMN last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT now(); -- reinforcement signal
+ALTER TABLE chunks ADD COLUMN confidence TEXT NOT NULL DEFAULT 'normal';         -- low | normal | high (Phase 5 news)
 ALTER TABLE chunks ADD COLUMN version INTEGER NOT NULL DEFAULT 1;           -- Phase 5 supersession chain (starts at 1, incremented by Supersede)
-ALTER TABLE chunks ADD COLUMN supersedes TEXT REFERENCES chunks(id);        -- forward pointer for dedup
+ALTER TABLE chunks ADD COLUMN supersedes TEXT;                              -- backward pointer to the retired chunk (set by Supersede; no FK)
 ALTER TABLE chunks ADD COLUMN archived_at TIMESTAMPTZ;                      -- transition timestamp
 ALTER TABLE chunks ADD COLUMN dead_at TIMESTAMPTZ;                          -- anchors purge grace (30d from dead_at)
 ALTER TABLE chunks ADD COLUMN fact_subject TEXT;                            -- Phase 5 structured-fact dedup
@@ -125,16 +126,15 @@ CREATE INDEX chunk_audit_chunk_id ON chunk_audit (chunk_id);                 -- 
 
 ```sql
 CREATE TABLE chunk_audit (
-    id          TEXT PRIMARY KEY,              -- uuid
-    chunk_id    TEXT NOT NULL REFERENCES chunks(id),
+    id          BIGSERIAL PRIMARY KEY,
+    chunk_id    TEXT NOT NULL,                 -- references a chunks.id (no FK constraint)
     old_status  TEXT,                          -- status before the transition
     new_status  TEXT NOT NULL,                 -- status after the transition
-    reason      TEXT,                          -- decay, manual, supersession, etc.
+    reason      TEXT NOT NULL,                 -- decay | duplicate | supersession | purge
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX chunk_audit_chunk_id ON chunk_audit (chunk_id);
-CREATE INDEX chunk_audit_created_at ON chunk_audit (created_at);
 ```
 
 Append-only trail of every status transition (e.g., active → archived by decay, or archived → dead by aging).
