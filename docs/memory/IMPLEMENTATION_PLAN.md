@@ -320,6 +320,74 @@ which don't exist until Phase 6.
 
 ---
 
+## Phase 5 — Supersession Unification + Dedup
+
+Single supersession path, structured-fact ladder + confidence at ingest, gated trigram dedup sweep.
+Spec: `docs/superpowers/specs/2026-05-29-memory-phase5.md`.
+
+- [x] Migration `0005_chunks_dedup_supersession`: `CREATE EXTENSION pg_trgm`;
+      `chunks_content_trgm` GIN trigram index (dedup candidate prefilter);
+      `chunks_fact` partial composite index on `(fact_subject, fact_predicate)` (structured-fact
+      ladder lookup); unification backfill (`UPDATE ... SET status='superseded' WHERE
+      superseded_by IS NOT NULL AND status='active'`) to align legacy Phase-2-superseded rows.
+      → `internal/memory/migrations/0005_chunks_dedup_supersession.sql`.
+      Tested via `TestMigrationsFS_Contains0005`; integration test
+      `TestApplyMigrations_0005DedupSupersession` skips without `DATABASE_URL`.
+- [x] Unified supersession path — `markSupersededTx`, `Supersede`, `History`, `LookupFact`.
+      `markSupersededTx` is the single transactional helper used by both `Supersede` (row-level)
+      and the reworked `SupersedeOnUpsert` (doc-level). `Supersede` inserts new chunks, links
+      `supersedes`/`version+1`, retires old ID (status='superseded', superseded_by, audited).
+      `History` walks the chain via recursive CTE, oldest→newest. `MarkSuperseded` removed.
+      → `internal/memory/store.go`.
+      Tests: `TestPgStore_Supersede_HidesOldShowsNew`, `TestPgStore_History_WalksChain`,
+      `TestPgStore_Supersede_Reversible`, `TestPgStore_SupersedeOnUpsert_StampsUnifiedModel`,
+      `TestOrchestrator_Confidence_NewsFlow` (integration; skip without `DATABASE_URL`).
+- [x] Retrieval: single `status='active'` filter across all arms (bm25, hybrid×3, VectorRetriever).
+      `superseded_by IS NULL` clauses removed; closes the VectorRetriever status-filter gap.
+      → `internal/memory/bm25_retriever.go`, `internal/memory/hybrid_retriever.go`,
+      `internal/memory/retriever.go`.
+      Test: `TestHybridRetriever_ExcludesSupersededByStatusAlone`.
+- [x] Structured-fact ingest ladder + confidence wired in `Orchestrator.Ingest`.
+      When `fact_subject`+`fact_predicate` are set: calls `LookupFact`; same normalized content →
+      `Reinforce` (duplicate); different content → `Supersede` (contradiction/correction).
+      `confidence` read from `Metadata["confidence"]` (default 'normal'), stamped on every chunk.
+      Cardinal rule: only normalized-content equality collapses; a contradiction is never collapsed.
+      → `internal/memory/orchestrator.go`, `normalizeContent` helper in `internal/memory/store.go`.
+      Tests: `TestOrchestrator_Ingest_NoFact_Upserts`, `TestOrchestrator_Ingest_FactDuplicate_Reinforces`,
+      `TestOrchestrator_Ingest_FactContradiction_Supersedes`.
+- [x] Gated `dedupRecent` sweep pass + shutdown-race fix.
+      `dedupRecent` (gated by `GC_DEDUP_ENABLED`, default false): trigram similarity prefilters
+      candidates within scope; collapses only if `normalizeContent` equal — contradictions kept.
+      Loser marked dead/'duplicate' (audited); survivor reinforced. Sweep pass order: dedup →
+      archive → purge. `Run` signature gains a `done chan<- struct{}` that it closes on exit;
+      `MaybeStartSweep` cleanup waits on it before closing the connection (shutdown-race fix).
+      → `internal/memory/sweep.go`, `internal/memory/module.go`, `cmd/workerd/main.go`.
+      Tests: `TestSweeper_Dedup_ContradictionPairBothSurvive`,
+      `TestSweeper_Dedup_NearIdenticalCollapses`, `TestSweeper_Dedup_GatedOffIsNoOp`,
+      `TestSweeper_Run_SignalsDoneOnCancel`.
+- [x] `eval-memory-dedup` measurement mode + GC eval fixtures.
+      `MeasureDedupCollapses` (pure, DB-free) counts docs the dedup predicate would collapse on the
+      fixture corpus; used by `MeasureDedup` in the eval harness and the `-dedup` flag in
+      `cmd/memory-eval`. GC reference fixtures under `internal/memory/eval/testdata/gc/`.
+      → `internal/memory/sweep.go` (`MeasureDedupCollapses`),
+      `internal/memory/eval/eval.go` (`MeasureDedup`), `cmd/memory-eval/main.go`,
+      `Makefile` (`eval-memory-dedup` target).
+      Test: `TestMeasureDedup_CountsNormalizedEqualPairs`.
+- [x] GC dedup config knobs (`GC_DEDUP_ENABLED`, `GC_DEDUP_THRESHOLD`, `GC_DEDUP_LOOKBACK`).
+      Validated: threshold in (0,1], lookback ≥ 1m. Defaults: false / 0.7 / 24h.
+      → `internal/memory/config.go`.
+      Tests: `TestGCConfig_DedupDefaults`, `TestGCConfig_RejectsBadDedup`.
+
+**Acceptance:**
+- [x] Cardinal rule: `TestSweeper_Dedup_ContradictionPairBothSurvive` — contradictions never collapsed.
+- [x] Single supersession read filter: `status='active'` across all four retrieval arms.
+- [x] Recall neutral: `make eval-memory` = recall@5 1.000 over 30 questions after migration 0005.
+- [x] Dedup measured before enabled: `eval-memory-dedup` reports redundancy; `GC_DEDUP_ENABLED` ships false.
+- [x] Config-driven: threshold + lookback are env-driven and validated.
+- [x] Shutdown race fixed: `Run` closes `done`; cleanup waits before closing conn.
+
+---
+
 ## Eval harness (build during Phase 1, use forever after)
 
 Without this you cannot tell whether any later change actually helped.
