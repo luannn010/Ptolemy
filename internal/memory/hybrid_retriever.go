@@ -53,6 +53,7 @@ vec AS (
     LIMIT $3
 )
 SELECT c.id, c.content, c.metadata, COALESCE(c.source,''), c.published_at,
+       c.subject_id, c.session_id, c.project_id,
        COALESCE(1.0 / (60 + b.rank), 0)
      + COALESCE(1.0 / (60 + v.rank), 0)
      + $6 * exp(-extract(epoch FROM $5 - c.published_at) / $7) AS score
@@ -117,7 +118,8 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	for rows.Next() {
 		var rc RetrievedChunk
 		var meta []byte
-		if err := rows.Scan(&rc.ID, &rc.Content, &meta, &rc.Source, &rc.PublishedAt, &rc.Score); err != nil {
+		if err := rows.Scan(&rc.ID, &rc.Content, &meta, &rc.Source, &rc.PublishedAt,
+			&rc.SubjectID, &rc.SessionID, &rc.ProjectID, &rc.Score); err != nil {
 			return nil, err
 		}
 		if len(meta) > 0 {
