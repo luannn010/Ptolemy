@@ -271,6 +271,10 @@ func TestGCConfig_DedupDefaults(t *testing.T) {
 	t.Setenv("EMBEDDING_DIM", "768")
 	t.Setenv("BRAIN_BASE_URL", "http://x")
 	t.Setenv("BRAIN_MODEL", "m")
+	// Clear the dedup vars so an ambient shell value can't mask the defaults.
+	for _, k := range []string{"GC_DEDUP_ENABLED", "GC_DEDUP_THRESHOLD", "GC_DEDUP_LOOKBACK"} {
+		t.Setenv(k, "")
+	}
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -300,6 +304,12 @@ func TestGCConfig_RejectsBadDedup(t *testing.T) {
 	if _, err := LoadConfig(); err == nil {
 		t.Error("expected error for GC_DEDUP_THRESHOLD > 1")
 	}
+	base()
+	t.Setenv("GC_DEDUP_THRESHOLD", "0")
+	if _, err := LoadConfig(); err == nil {
+		t.Error("expected error for GC_DEDUP_THRESHOLD = 0")
+	}
+	base()
 	t.Setenv("GC_DEDUP_THRESHOLD", "0.7")
 	t.Setenv("GC_DEDUP_LOOKBACK", "30s")
 	if _, err := LoadConfig(); err == nil {
