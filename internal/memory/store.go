@@ -49,18 +49,19 @@ func (s *PgStore) Upsert(ctx context.Context, chunks []Chunk) error {
 			return fmt.Errorf("marshal metadata for %s: %w", c.ID, err)
 		}
 		_, err = s.conn.Exec(ctx, `
-			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at, scope)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (id) DO UPDATE SET
 				content = EXCLUDED.content,
 				embedding = EXCLUDED.embedding,
 				metadata = EXCLUDED.metadata,
 				source = EXCLUDED.source,
 				tenant_id = EXCLUDED.tenant_id,
-				published_at = EXCLUDED.published_at
+				published_at = EXCLUDED.published_at,
+				scope = EXCLUDED.scope
 		`,
 			c.ID, c.Content, pgvector.NewVector(c.Embedding), meta,
-			nullableStr(c.Source), nullableStr(c.Tenant), c.PublishedAt,
+			nullableStr(c.Source), nullableStr(c.Tenant), c.PublishedAt, scopeOrDefault(c.Scope),
 		)
 		if err != nil {
 			return fmt.Errorf("upsert %s: %w", c.ID, err)
@@ -110,6 +111,13 @@ func nullableStr(s string) any {
 	return s
 }
 
+func scopeOrDefault(scope string) string {
+	if scope == "" {
+		return "global"
+	}
+	return scope
+}
+
 func (s *PgStore) SupersedeOnUpsert(ctx context.Context, chunks []Chunk, supersedesOldDocID string) error {
 	if len(chunks) == 0 {
 		return fmt.Errorf("SupersedeOnUpsert: empty chunk slice")
@@ -127,18 +135,19 @@ func (s *PgStore) SupersedeOnUpsert(ctx context.Context, chunks []Chunk, superse
 			return fmt.Errorf("marshal metadata for %s: %w", c.ID, err)
 		}
 		_, err = tx.Exec(ctx, `
-			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at, scope)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (id) DO UPDATE SET
 				content = EXCLUDED.content,
 				embedding = EXCLUDED.embedding,
 				metadata = EXCLUDED.metadata,
 				source = EXCLUDED.source,
 				tenant_id = EXCLUDED.tenant_id,
-				published_at = EXCLUDED.published_at
+				published_at = EXCLUDED.published_at,
+				scope = EXCLUDED.scope
 		`,
 			c.ID, c.Content, pgvector.NewVector(c.Embedding), meta,
-			nullableStr(c.Source), nullableStr(c.Tenant), c.PublishedAt,
+			nullableStr(c.Source), nullableStr(c.Tenant), c.PublishedAt, scopeOrDefault(c.Scope),
 		)
 		if err != nil {
 			return fmt.Errorf("upsert %s: %w", c.ID, err)
