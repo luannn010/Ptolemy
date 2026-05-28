@@ -8,10 +8,12 @@ import (
 )
 
 type fakeStore struct {
-	upserted       []Chunk
-	supersedeCalls []supersedeCall
-	reinforced     [][]string // records each Reinforce call's ids
-	statsCalls     int
+	upserted          []Chunk
+	supersedeCalls    []supersedeCall
+	reinforced        [][]string // records each Reinforce call's ids
+	statsCalls        int
+	rowSupersedeCalls []string // records each Supersede(newChunks, oldID) call's oldID
+	factHit           *Chunk   // when non-nil, LookupFact returns it as found
 }
 
 type supersedeCall struct {
@@ -24,13 +26,23 @@ func (f *fakeStore) Upsert(_ context.Context, chunks []Chunk) error {
 	return nil
 }
 func (f *fakeStore) Get(_ context.Context, _ []string) ([]Chunk, error) { return nil, nil }
-func (f *fakeStore) MarkSuperseded(_ context.Context, _, _ string) error {
-	return nil
-}
 func (f *fakeStore) SupersedeOnUpsert(_ context.Context, chunks []Chunk, oldDocID string) error {
 	f.upserted = append(f.upserted, chunks...)
 	f.supersedeCalls = append(f.supersedeCalls, supersedeCall{OldDocID: oldDocID, NewChunks: chunks})
 	return nil
+}
+
+func (f *fakeStore) Supersede(_ context.Context, newChunks []Chunk, oldID string) error {
+	f.upserted = append(f.upserted, newChunks...)
+	f.rowSupersedeCalls = append(f.rowSupersedeCalls, oldID)
+	return nil
+}
+func (f *fakeStore) History(_ context.Context, _ string) ([]Chunk, error) { return nil, nil }
+func (f *fakeStore) LookupFact(_ context.Context, _, _ string) (Chunk, bool, error) {
+	if f.factHit != nil {
+		return *f.factHit, true, nil
+	}
+	return Chunk{}, false, nil
 }
 
 func (f *fakeStore) Reinforce(_ context.Context, ids []string) error {
