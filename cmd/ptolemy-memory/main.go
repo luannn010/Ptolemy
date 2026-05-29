@@ -18,6 +18,11 @@ import (
 	"os"
 	"strings"
 
+	// autoload reads .env at startup so memory.LoadConfig() picks up
+	// DATABASE_URL, EMBEDDING_*, BRAIN_* without the caller (e.g. a hook
+	// shell) having to export them.
+	_ "github.com/joho/godotenv/autoload"
+
 	"github.com/luannn010/ptolemy/internal/memory"
 )
 

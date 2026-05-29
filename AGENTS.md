@@ -22,6 +22,7 @@ Before any implementation task:
 3. Confirm task scope and allowed files.
 4. Keep changes small, reversible, and task-scoped.
 5. Complete Section 1 (Startup Gate) in `docs/workflows/agent/agents-compliance-checklist.md`.
+6. Recall project context via the memory tools (`ptolemy_memory_recall`, or the `ptolemy-memory` CLI) before asking the user to re-explain; capture durable facts/decisions with `ptolemy_memory_capture` as they emerge. See CLAUDE.md §"Memory & context recall" for the full flow.
 
 ## Branching and Commit Policy
 

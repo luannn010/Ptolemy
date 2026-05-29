@@ -1,6 +1,14 @@
 # binaries
 bin/
 *.exe
+# stray binaries built into repo root by `go build ./cmd/...` without -o
+/ptolemy-mcp
+/ptolemy-memory
+/memory-demo
+/memory-eval
+/memory-synth-eval
+/workerd
+/policy-demo
 
 # vosk build artifacts (downloaded/unzipped locally, not committed)
 /vosk-lib/
@@ -42,3 +50,4 @@ tmp-kb-reset.json
 /.worktrees/
 coverage
 coverage.out
+/.cache/*

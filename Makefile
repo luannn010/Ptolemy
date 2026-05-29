@@ -12,6 +12,7 @@ build:
 	go build -o $(BIN_DIR)/memory-demo ./cmd/memory-demo
 	go build -o $(BIN_DIR)/memory-eval ./cmd/memory-eval
 	go build -o $(BIN_DIR)/memory-synth-eval ./cmd/memory-synth-eval
+	go build -o $(BIN_DIR)/ptolemy-memory ./cmd/ptolemy-memory
 
 test:
 	go test -p 1 ./...
