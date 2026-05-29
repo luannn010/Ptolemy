@@ -49,7 +49,6 @@ WITH bm25 AS (
       AND status = 'active'
       AND published_at <= $5
       AND (subject_id IS NULL OR subject_id = $8)
-      AND ($9::text IS NULL OR project_id IS NULL OR project_id = $9)
     ORDER BY paradedb.score(id) DESC
     LIMIT $3
 ),
@@ -59,7 +58,6 @@ vec AS (
     WHERE status = 'active'
       AND published_at <= $5
       AND (subject_id IS NULL OR subject_id = $8)
-      AND ($9::text IS NULL OR project_id IS NULL OR project_id = $9)
     ORDER BY embedding <=> $2
     LIMIT $3
 )
@@ -79,6 +77,10 @@ WHERE (b.id IS NOT NULL OR v.id IS NOT NULL)
   AND c.status = 'active'
   AND c.published_at <= $5
   AND (c.subject_id IS NULL OR c.subject_id = $8)
+  -- project filter lives ONLY here (outer), not in the @@@ CTE: ParadeDB rejects a
+  -- pure-parameter predicate ($9::text IS NULL) inside a @@@ query as an unsupported
+  -- shape. The outer filter still enforces correctness (no cross-project leak) and is
+  -- a no-op when $9 is NULL, keeping the all-global eval byte-identical.
   AND ($9::text IS NULL OR c.project_id IS NULL OR c.project_id = $9)
 ORDER BY score DESC,
          -- project-only recency tiebreak; NULL for every non-project row, so it is
