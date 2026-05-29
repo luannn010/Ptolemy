@@ -66,27 +66,54 @@ func LoadSynthScenarios(path string) ([]SynthScenario, error) {
 	return out, nil
 }
 
-// RunSynthEval drives each scenario end-to-end: capture every turn synchronously,
-// consolidate the (subject,project), recall scoped to it, and score the recalled
-// synthesis summary. Uses the live BRAIN LLM (extractor + consolidator), so it runs
-// via `make eval-synth`, not `go test`. Returns pass count + failure descriptions.
-func RunSynthEval(ctx context.Context, hook *memory.PerTurnCaptureHook, cons *memory.Consolidator, retr memory.Retriever, scenarios []SynthScenario) (passed int, failures []string, err error) {
+// RunSynthEval gates the 6b consolidation+recall pipeline. For each scenario it
+// INJECTS the turns as atom rows directly (the assistant text holds the declarative
+// fact), consolidates the (subject,project) via the live BRAIN LLM, recalls scoped to
+// it, and scores the recalled synthesis summary. Atoms are injected rather than run
+// through the per-turn extractor on purpose: extraction is 6a's concern (separately
+// unit-tested + smoke-verified), and injecting keeps this gate deterministic and fast
+// (one LLM call per scenario — the consolidation — instead of one per turn). Runs via
+// `make eval-synth`, not `go test`. Returns pass count + failure descriptions.
+func RunSynthEval(ctx context.Context, store memory.Store, embedder memory.Embedder, cons *memory.Consolidator, retr memory.Retriever, scenarios []SynthScenario) (passed int, failures []string, err error) {
 	for _, sc := range scenarios {
-		for si, sess := range sc.Sessions {
+		subj, proj := sc.Subject, sc.Project
+		// Flatten turns in order; the assistant text is the atom content. Order matters:
+		// later atoms (corrections) are created after earlier ones, so the consolidator's
+		// created_at-ASC scan presents the correction last (newer truth).
+		var contents []string
+		for _, sess := range sc.Sessions {
 			for _, turn := range sess {
-				ex := memory.Exchange{
-					UserText: turn.User, AssistantText: turn.Assistant,
-					SubjectID: sc.Subject, SessionID: fmt.Sprintf("%s-s%d", sc.ID, si), ProjectID: sc.Project,
-				}
-				if cerr := hook.Capture(ctx, ex); cerr != nil {
-					return passed, failures, fmt.Errorf("scenario %s capture: %w", sc.ID, cerr)
-				}
+				contents = append(contents, turn.Assistant)
 			}
 		}
-		if cerr := cons.ConsolidateSubjectProject(ctx, sc.Subject, sc.Project); cerr != nil {
+		vecs, eerr := embedder.Embed(ctx, contents)
+		if eerr != nil || len(vecs) != len(contents) {
+			if eerr == nil {
+				eerr = fmt.Errorf("embedder returned %d vectors for %d atoms", len(vecs), len(contents))
+			}
+			return passed, failures, fmt.Errorf("scenario %s embed: %w", sc.ID, eerr)
+		}
+		for i, content := range contents {
+			s2, p2, pe2 := subj, proj, "factual"
+			atom := memory.Chunk{
+				ID:          fmt.Sprintf("%s-atom-%d", sc.ID, i),
+				Content:     content,
+				Embedding:   vecs[i],
+				Scope:       "project",
+				Status:      "active",
+				Importance:  0.5,
+				SubjectID:   &s2,
+				ProjectID:   &p2,
+				Perspective: &pe2,
+				Metadata:    map[string]any{"kind": "atom"},
+			}
+			if uerr := store.Upsert(ctx, []memory.Chunk{atom}); uerr != nil {
+				return passed, failures, fmt.Errorf("scenario %s upsert atom: %w", sc.ID, uerr)
+			}
+		}
+		if cerr := cons.ConsolidateSubjectProject(ctx, subj, proj); cerr != nil {
 			return passed, failures, fmt.Errorf("scenario %s consolidate: %w", sc.ID, cerr)
 		}
-		subj, proj := sc.Subject, sc.Project
 		got, rerr := retr.Retrieve(ctx, memory.Query{Text: sc.Query, K: 8, SubjectID: &subj, ProjectID: &proj}, 32)
 		if rerr != nil {
 			return passed, failures, fmt.Errorf("scenario %s retrieve: %w", sc.ID, rerr)
