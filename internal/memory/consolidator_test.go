@@ -70,3 +70,35 @@ func TestConsolidator_RevisionSupersedesPriorSummary(t *testing.T) {
 		t.Fatalf("active summary must reflect current truth 0.1, not stale 0.2: %q", content)
 	}
 }
+
+func TestConsolidator_DueRespectsBuffer(t *testing.T) {
+	conn := freshDB(t)
+	store := NewPgStore(conn)
+	subj, proj := "userA", "ptolemy"
+	mkAtom := func(id string) Chunk {
+		ss, pr, pe := subj, proj, "factual"
+		return Chunk{ID: id, Content: id + " content detail", Embedding: []float32{1, 0, 0, 0}, PublishedAt: time.Now().UTC(),
+			Scope: "project", Importance: 0.5, SubjectID: &ss, ProjectID: &pr, Perspective: &pe, Metadata: map[string]any{"kind": "atom"}}
+	}
+	if err := store.Upsert(context.Background(), []Chunk{mkAtom("a1"), mkAtom("a2")}); err != nil {
+		t.Fatal(err)
+	}
+	c := NewConsolidator(conn, store, fakeChat{resp: "{}"}, ConsolidateConfig{Buffer: 3, MinAtoms: 1})
+	due, err := c.dueSubjectProjects(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(due) != 0 {
+		t.Fatalf("2 atoms < buffer 3 → not due; got %v", due)
+	}
+	if err := store.Upsert(context.Background(), []Chunk{mkAtom("a3")}); err != nil {
+		t.Fatal(err)
+	}
+	due, err = c.dueSubjectProjects(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(due) != 1 {
+		t.Fatalf("3 atoms >= buffer 3 → due; got %v", due)
+	}
+}

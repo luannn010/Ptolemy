@@ -93,6 +93,46 @@ func MaybeStartSweep(ctx context.Context) (cleanup func(), enabled bool, err err
 	return cleanup, true, nil
 }
 
+// MaybeStartConsolidator mirrors MaybeStartSweep: if CONSOLIDATE_ENABLED and a
+// DATABASE_URL is set, it starts the batch consolidation loop bound to ctx.
+// Returns a cleanup func (cancel + wait, then close conn) and an enabled flag.
+func MaybeStartConsolidator(ctx context.Context) (cleanup func(), enabled bool, err error) {
+	if !boolEnv("CONSOLIDATE_ENABLED", false) {
+		return nil, false, nil
+	}
+	if strings.TrimSpace(os.Getenv("DATABASE_URL")) == "" {
+		return nil, true, fmt.Errorf("CONSOLIDATE_ENABLED=true but DATABASE_URL is not set")
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		return nil, true, fmt.Errorf("memory config: %w", err)
+	}
+	conn, err := pgx.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, true, fmt.Errorf("connect postgres: %w", err)
+	}
+	if err := ApplyMigrations(ctx, conn, cfg.EmbeddingDim); err != nil {
+		_ = conn.Close(ctx)
+		return nil, true, fmt.Errorf("migrate: %w", err)
+	}
+	cons := NewConsolidator(conn, NewPgStore(conn),
+		NewOpenAIGenerator(cfg.LLMBaseURL, cfg.LLMModel, ""), cfg.Consolidate).
+		WithEmbedder(NewOpenAIEmbedder(cfg.EmbeddingBaseURL, cfg.EmbeddingModel, cfg.EmbeddingAPIKey))
+	cctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go cons.Run(cctx, done)
+	cleanup = func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			log.Error().Msg("consolidator did not stop within 5s; closing connection anyway")
+		}
+		_ = conn.Close(context.Background())
+	}
+	return cleanup, true, nil
+}
+
 // NewCaptureHookFromConfig builds (but does not start) the per-turn capture hook,
 // constructing the BRAIN_* extractor from config. The caller starts it with
 // hook.Start(ctx) and feeds it via hook.Enqueue. Wiring into the agent loop is

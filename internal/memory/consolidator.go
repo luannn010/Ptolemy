@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/rs/zerolog/log"
 )
 
 // ConsolidatorVersion is stamped into every synthesis row's metadata.
@@ -182,4 +183,56 @@ func (c *Consolidator) activeSynthesis(ctx context.Context, subject, project str
 		return Chunk{}, false, fmt.Errorf("active synthesis: %w", err)
 	}
 	return ch, true, nil
+}
+
+// dueSubjectProjects returns (subject,project) pairs whose count of active atoms
+// created since their last active synthesis is >= Buffer (or, with no prior
+// synthesis, whose active atom count is >= Buffer). Drives the batch trigger.
+func (c *Consolidator) dueSubjectProjects(ctx context.Context) ([][2]string, error) {
+	rows, err := c.conn.Query(ctx, `
+		SELECT a.subject_id, a.project_id
+		FROM chunks a
+		WHERE a.scope='project' AND a.status='active' AND a.subject_id IS NOT NULL AND a.project_id IS NOT NULL
+		  AND COALESCE(a.metadata->>'kind','atom')='atom'
+		  AND a.created_at > COALESCE((
+		        SELECT max(s.created_at) FROM chunks s
+		        WHERE s.metadata->>'kind'='synthesis' AND s.status='active'
+		          AND s.subject_id=a.subject_id AND s.project_id=a.project_id), 'epoch'::timestamptz)
+		GROUP BY a.subject_id, a.project_id
+		HAVING count(*) >= $1`, c.cfg.Buffer)
+	if err != nil {
+		return nil, fmt.Errorf("due scan: %w", err)
+	}
+	defer rows.Close()
+	var out [][2]string
+	for rows.Next() {
+		var s, p string
+		if err := rows.Scan(&s, &p); err != nil {
+			return nil, err
+		}
+		out = append(out, [2]string{s, p})
+	}
+	return out, rows.Err()
+}
+
+// consolidateOnce consolidates every due (subject,project). Directly callable in tests.
+func (c *Consolidator) consolidateOnce(ctx context.Context) error {
+	due, err := c.dueSubjectProjects(ctx)
+	if err != nil {
+		return err
+	}
+	for _, sp := range due {
+		if err := c.ConsolidateSubjectProject(ctx, sp[0], sp[1]); err != nil {
+			log.Error().Err(err).Str("subject", sp[0]).Str("project", sp[1]).Msg("consolidate failed; continuing")
+		}
+	}
+	return nil
+}
+
+// Run ticks every cfg.Interval and consolidates due subject/projects. Closes done on return.
+func (c *Consolidator) Run(ctx context.Context, done chan<- struct{}) {
+	defer close(done)
+	log.Info().Dur("interval", c.cfg.Interval).Int("buffer", c.cfg.Buffer).Msg("consolidator loop started")
+	runLoop(ctx, c.cfg.Interval, c.consolidateOnce)
+	log.Info().Msg("consolidator loop stopped")
 }
