@@ -1,0 +1,155 @@
+[
+  {
+    "id": "gc-threshold-correction",
+    "subject": "userA",
+    "project": "ptolemy",
+    "sessions": [
+      [{"user": "set the GC archive threshold to 0.2", "assistant": "the sweep will archive a project row when its decay score drops below 0.2"}],
+      [{"user": "actually change the archive threshold to 0.1", "assistant": "updated: the sweep archives when the decay score drops below 0.1"}]
+    ],
+    "query": "what is the GC archive threshold on this project",
+    "expect_keywords": ["below 0.1"],
+    "reject_keywords": ["below 0.2"]
+  },
+  {
+    "id": "retention-days-correction",
+    "subject": "userA",
+    "project": "billing",
+    "sessions": [
+      [{"user": "we keep purged rows for a grace window", "assistant": "purged rows are retained for 30 days before deletion"}],
+      [{"user": "shorten the grace window", "assistant": "the retention grace window is now 14 days before deletion"}]
+    ],
+    "query": "how long do we retain purged rows",
+    "expect_keywords": ["14 days"],
+    "reject_keywords": ["30 days"]
+  },
+  {
+    "id": "auth-method-correction",
+    "subject": "userB",
+    "project": "gateway",
+    "sessions": [
+      [{"user": "how does the API authenticate clients", "assistant": "clients authenticate with API keys passed in the X-Api-Key header"}],
+      [{"user": "we migrated auth", "assistant": "clients now authenticate with OAuth2 bearer tokens in the Authorization header"}]
+    ],
+    "query": "what authentication method does the gateway use",
+    "expect_keywords": ["OAuth2"],
+    "reject_keywords": ["API keys"]
+  },
+  {
+    "id": "embedding-dim-correction",
+    "subject": "userB",
+    "project": "search",
+    "sessions": [
+      [{"user": "what embedding dimension do we use", "assistant": "the index stores 768-dimensional embedding vectors"}],
+      [{"user": "we upgraded the embedder", "assistant": "the index now stores 1024-dimensional embedding vectors after the model upgrade"}]
+    ],
+    "query": "what embedding dimension does search use",
+    "expect_keywords": ["1024"],
+    "reject_keywords": ["768"]
+  },
+  {
+    "id": "deploy-target-correction",
+    "subject": "userC",
+    "project": "infra",
+    "sessions": [
+      [{"user": "where do we deploy the worker", "assistant": "the worker deploys to AWS ECS Fargate in us-east-1"}],
+      [{"user": "we moved clouds", "assistant": "the worker now deploys to GCP Cloud Run in us-central1"}]
+    ],
+    "query": "where does the worker deploy",
+    "expect_keywords": ["Cloud Run"],
+    "reject_keywords": ["ECS"]
+  },
+  {
+    "id": "sweep-interval",
+    "subject": "userC",
+    "project": "ptolemy",
+    "sessions": [
+      [{"user": "how often does the GC sweep run", "assistant": "the GC sweep runs on an hourly interval"}]
+    ],
+    "query": "what is the GC sweep interval",
+    "expect_keywords": ["hourly"],
+    "reject_keywords": []
+  },
+  {
+    "id": "recall-ranking",
+    "subject": "userD",
+    "project": "search",
+    "sessions": [
+      [{"user": "how is recall ranked", "assistant": "recall ranks candidates with reciprocal rank fusion combining dense and lexical scores"}],
+      [{"user": "and recency", "assistant": "a recency boost is then applied so newer chunks rank higher in recall"}]
+    ],
+    "query": "how does recall rank results",
+    "expect_keywords": ["reciprocal rank fusion", "recency"],
+    "reject_keywords": []
+  },
+  {
+    "id": "schema-tables",
+    "subject": "userD",
+    "project": "ptolemy",
+    "sessions": [
+      [{"user": "what tables hold policy data", "assistant": "policy decisions are persisted to the policy_decisions table"}],
+      [{"user": "and command logging", "assistant": "every shell command is written to the command_logs table"}]
+    ],
+    "query": "which tables store policy and command data",
+    "expect_keywords": ["policy_decisions", "command_logs"],
+    "reject_keywords": []
+  },
+  {
+    "id": "consolidate-buffer-correction",
+    "subject": "userE",
+    "project": "ptolemy",
+    "sessions": [
+      [{"user": "when does consolidation trigger", "assistant": "consolidation triggers after 20 new atoms accumulate for a subject"}],
+      [{"user": "lower the buffer", "assistant": "consolidation now triggers after 5 new atoms accumulate for a subject"}]
+    ],
+    "query": "how many atoms trigger consolidation",
+    "expect_keywords": ["5 new atoms"],
+    "reject_keywords": ["20 new atoms"]
+  },
+  {
+    "id": "decay-lambda",
+    "subject": "userE",
+    "project": "billing",
+    "sessions": [
+      [{"user": "what decay rate do we use for scoring", "assistant": "the decay lambda for scoring is 0.05 per day"}]
+    ],
+    "query": "what is the decay lambda",
+    "expect_keywords": ["0.05"],
+    "reject_keywords": []
+  },
+  {
+    "id": "db-engine",
+    "subject": "userF",
+    "project": "infra",
+    "sessions": [
+      [{"user": "what database backs the memory store", "assistant": "the memory store runs on PostgreSQL with the pgvector extension"}]
+    ],
+    "query": "what database backs memory",
+    "expect_keywords": ["PostgreSQL", "pgvector"],
+    "reject_keywords": []
+  },
+  {
+    "id": "chunk-size",
+    "subject": "userF",
+    "project": "search",
+    "sessions": [
+      [{"user": "what chunk size do we ingest at", "assistant": "documents are chunked at 512 tokens per chunk"}],
+      [{"user": "what overlap", "assistant": "chunks use a 50 token overlap between neighbors"}]
+    ],
+    "query": "what chunk size and overlap do we ingest at",
+    "expect_keywords": ["512", "50 token"],
+    "reject_keywords": []
+  },
+  {
+    "id": "rate-limit-correction",
+    "subject": "userG",
+    "project": "gateway",
+    "sessions": [
+      [{"user": "what is the per-client rate limit", "assistant": "each client is limited to 100 requests per minute"}],
+      [{"user": "raise the limit", "assistant": "the per-client rate limit is now 500 requests per minute, up from 100"}]
+    ],
+    "query": "what is the per-client rate limit",
+    "expect_keywords": ["500"],
+    "reject_keywords": ["100 requests"]
+  }
+]

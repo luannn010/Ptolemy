@@ -88,6 +88,13 @@ func (h *PerTurnCaptureHook) Enqueue(ex Exchange) {
 	}
 }
 
+// Capture runs the full pipeline synchronously (gate→extract→embed→store) and
+// returns its error. Enqueue is the async hot-path entry; Capture is for callers
+// (e.g. the synthesis eval) that need deterministic, ordered capture.
+func (h *PerTurnCaptureHook) Capture(ctx context.Context, ex Exchange) error {
+	return h.processTurn(ctx, ex)
+}
+
 // processTurn is the deterministic pipeline, directly callable in tests.
 func (h *PerTurnCaptureHook) processTurn(ctx context.Context, ex Exchange) error {
 	if d := Gate(ex); d.Skip {

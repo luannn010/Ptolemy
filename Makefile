@@ -11,6 +11,7 @@ build:
 	go build -o $(BIN_DIR)/policy-demo ./cmd/policy-demo
 	go build -o $(BIN_DIR)/memory-demo ./cmd/memory-demo
 	go build -o $(BIN_DIR)/memory-eval ./cmd/memory-eval
+	go build -o $(BIN_DIR)/memory-synth-eval ./cmd/memory-synth-eval
 
 test:
 	go test -p 1 ./...
@@ -73,3 +74,10 @@ eval-memory-sweep: build
 eval-memory-dedup: build
 	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
 	  $(BIN_DIR)/memory-eval -seed $(EVAL_SEED) -dedup
+
+# Phase 6b synthesis eval (~12 seed scenarios, growable toward 20-40). Uses the
+# dedicated eval DB (MEMORY_EVAL_DATABASE_URL, falling back to DATABASE_URL) at the
+# real EMBEDDING_DIM. Needs .env (BRAIN_*, EMBEDDING_*).
+eval-synth: build
+	@set -a; . ./.env; set +a; \
+	  $(BIN_DIR)/memory-synth-eval -scenarios internal/memory/eval/testdata/synth_scenarios.json
