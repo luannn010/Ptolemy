@@ -52,6 +52,12 @@ smoke-capture:
 	@set -a; . ./.env; set +a; \
 	  go test -p 1 -tags=smoke -run TestExtractorSmoke ./internal/memory/ -v
 
+# Phase 6b consolidation smoke: runs the REAL BRAIN_* LLM through the consolidator
+# synthesize step and logs the summary. Requires .env (BRAIN_*).
+smoke-consolidate:
+	@set -a; . ./.env; set +a; \
+	  go test -p 1 -tags=smoke -run TestConsolidatorSmoke ./internal/memory/ -v
+
 # Phase 3 memory eval. RAG_FIXTURE_DIR points the binary at the frozen
 # fixture corpus under internal/memory/eval/testdata/corpus/; eval.LoadFixtureCorpus
 # enumerates the dir and the orchestrator's ingest path chunks/embeds/upserts.
