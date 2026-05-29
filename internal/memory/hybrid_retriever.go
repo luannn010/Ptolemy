@@ -22,6 +22,7 @@ type HybridRetriever struct {
 	recencyWeight   float64
 	recencyHalfLife time.Duration
 	decayLambda     float64
+	aliasExpansion  bool
 }
 
 func NewHybridRetriever(conn *pgx.Conn, e Embedder, recencyWeight float64, recencyHalfLife time.Duration) *HybridRetriever {
@@ -36,6 +37,9 @@ func NewHybridRetriever(conn *pgx.Conn, e Embedder, recencyWeight float64, recen
 
 // WithDecayLambda overrides the project-row decay dial (SPEC-GC §4 default 0.05).
 func (r *HybridRetriever) WithDecayLambda(l float64) *HybridRetriever { r.decayLambda = l; return r }
+
+// WithAliasExpansion toggles lexical-arm synonym expansion (default off).
+func (r *HybridRetriever) WithAliasExpansion(on bool) *HybridRetriever { r.aliasExpansion = on; return r }
 
 const hybridRrfQuery = `
 WITH bm25 AS (
@@ -115,8 +119,12 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	if q.ProjectID != nil {
 		proj = *q.ProjectID
 	}
+	bm25Text := q.Text
+	if r.aliasExpansion {
+		bm25Text = expandAliases(q.Text)
+	}
 	rows, err := r.conn.Query(ctx, hybridRrfQuery,
-		q.Text,
+		bm25Text,
 		pgvector.NewVector(vecs[0]),
 		depth,
 		finalK,
