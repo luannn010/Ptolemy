@@ -366,6 +366,41 @@ func TestPgStore_Supersede_UnknownOldIDErrors(t *testing.T) {
 	}
 }
 
+func TestPgStore_Supersede_ProjectFactCarriesSubject(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	subj, sess, proj, persp := "userA", "s1", "ptolemy", "factual"
+	fsub, fpred := "archive threshold", "value"
+	mk := func(id, content string) Chunk {
+		ss, se, pr, pe, fs, fp := subj, sess, proj, persp, fsub, fpred
+		return Chunk{ID: id, Content: content, Embedding: []float32{1, 0, 0, 0}, PublishedAt: time.Now().UTC(),
+			Scope: "project", Importance: 0.7, SubjectID: &ss, SessionID: &se, ProjectID: &pr, Perspective: &pe,
+			FactSubject: &fs, FactPredicate: &fp}
+	}
+	old := mk("oldfact", "the archive threshold is 0.2")
+	if err := s.Upsert(context.Background(), []Chunk{old}); err != nil {
+		t.Fatalf("seed upsert: %v", err)
+	}
+	newc := mk("newfact", "the archive threshold is 0.1")
+	if err := s.Supersede(context.Background(), []Chunk{newc}, "oldfact"); err != nil {
+		t.Fatalf("Supersede project fact: %v", err) // currently FAILS: chunks_project_owned_chk violation
+	}
+	got, err := s.Get(context.Background(), []string{"newfact", "oldfact"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Chunk{}
+	for _, c := range got {
+		byID[c.ID] = c
+	}
+	if byID["newfact"].SubjectID == nil || *byID["newfact"].SubjectID != "userA" {
+		t.Fatalf("superseding row lost subject_id: %+v", byID["newfact"])
+	}
+	if byID["oldfact"].Status != "superseded" {
+		t.Fatalf("old fact should be superseded, got %q", byID["oldfact"].Status)
+	}
+}
+
 func TestOrchestrator_Confidence_NewsFlow(t *testing.T) {
 	conn := freshDB(t)
 	ctx := context.Background()

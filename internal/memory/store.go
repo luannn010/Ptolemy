@@ -219,17 +219,22 @@ func (s *PgStore) Supersede(ctx context.Context, newChunks []Chunk, oldID string
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO chunks (id, content, embedding, metadata, source, tenant_id, published_at,
-			                    scope, confidence, fact_subject, fact_predicate, supersedes, version)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+			                    scope, confidence, fact_subject, fact_predicate, supersedes, version,
+			                    importance, subject_id, session_id, project_id, perspective)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
 			ON CONFLICT (id) DO UPDATE SET
 				content=EXCLUDED.content, embedding=EXCLUDED.embedding, metadata=EXCLUDED.metadata,
 				source=EXCLUDED.source, tenant_id=EXCLUDED.tenant_id, published_at=EXCLUDED.published_at,
 				scope=EXCLUDED.scope, confidence=EXCLUDED.confidence,
 				fact_subject=EXCLUDED.fact_subject, fact_predicate=EXCLUDED.fact_predicate,
-				supersedes=EXCLUDED.supersedes, version=EXCLUDED.version
+				supersedes=EXCLUDED.supersedes, version=EXCLUDED.version,
+				importance=EXCLUDED.importance, subject_id=EXCLUDED.subject_id,
+				session_id=EXCLUDED.session_id, project_id=EXCLUDED.project_id,
+				perspective=EXCLUDED.perspective
 		`, c.ID, c.Content, pgvector.NewVector(c.Embedding), meta, nullableStr(c.Source), nullableStr(c.Tenant),
 			c.PublishedAt, scopeOrDefault(c.Scope), confidenceOrDefault(c.Confidence),
-			c.FactSubject, c.FactPredicate, supersedes, version); err != nil {
+			c.FactSubject, c.FactPredicate, supersedes, version,
+			importanceOrDefault(c.Importance), c.SubjectID, c.SessionID, c.ProjectID, c.Perspective); err != nil {
 			return fmt.Errorf("supersede insert %s: %w", c.ID, err)
 		}
 	}

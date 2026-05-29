@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -41,6 +42,7 @@ type PerTurnCaptureHook struct {
 	store     Store
 	ch        chan Exchange
 	metrics   *CaptureMetrics
+	startOnce sync.Once
 }
 
 func NewCaptureHook(ex *Extractor, emb Embedder, st Store, buf int) *PerTurnCaptureHook {
@@ -60,18 +62,20 @@ func (h *PerTurnCaptureHook) Metrics() *CaptureMetrics { return h.metrics }
 
 // Start launches the background worker bound to ctx. Returns immediately.
 func (h *PerTurnCaptureHook) Start(ctx context.Context) {
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case ex := <-h.ch:
-				if err := h.processTurn(ctx, ex); err != nil {
-					log.Warn().Err(err).Msg("capture processTurn failed; dropping exchange")
+	h.startOnce.Do(func() {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case ex := <-h.ch:
+					if err := h.processTurn(ctx, ex); err != nil {
+						log.Warn().Err(err).Msg("capture processTurn failed; dropping exchange")
+					}
 				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 // Enqueue hands an exchange to the worker without blocking. A full channel drops.
@@ -151,6 +155,7 @@ func (h *PerTurnCaptureHook) buildChunk(ex Exchange, e ExtractedEntry, vec []flo
 		Embedding:   vec,
 		PublishedAt: now,
 		Scope:       "project",
+		Status:      "active",
 		Perspective: &persp,
 		SubjectID:   &subj,
 		SessionID:   &sess,
