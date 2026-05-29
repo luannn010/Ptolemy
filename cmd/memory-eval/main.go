@@ -64,6 +64,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
+	if evalURL := strings.TrimSpace(os.Getenv("MEMORY_EVAL_DATABASE_URL")); evalURL != "" {
+		cfg.DatabaseURL = evalURL // eval runs against a dedicated DB so unit-test freshDB (dim=4) and eval (dim=768) stop clobbering each other
+	}
 	ctx := context.Background()
 	orch, conn, err := memory.NewModule(ctx, cfg)
 	if err != nil {

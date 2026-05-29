@@ -367,6 +367,41 @@ func TestLoadConfig_GCRejectsBadValues(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_Phase6bDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AliasExpansion {
+		t.Error("AliasExpansion must default false (eval-affecting)")
+	}
+	if cfg.Consolidate.Enabled {
+		t.Error("Consolidate.Enabled must default false")
+	}
+	if cfg.Consolidate.Buffer != 20 || cfg.Consolidate.MinAtoms != 3 || cfg.Consolidate.Interval != time.Hour {
+		t.Errorf("consolidate defaults wrong: %+v", cfg.Consolidate)
+	}
+}
+
+func TestLoadConfig_RejectsBadConsolidateInterval(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("CONSOLIDATE_INTERVAL", "500ms") // < 1s floor
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("CONSOLIDATE_INTERVAL=500ms: expected error")
+	}
+}
+
 func TestLoadConfig_MMRLambdaRange(t *testing.T) {
 	base := func() {
 		t.Setenv("DATABASE_URL", "postgres://x")

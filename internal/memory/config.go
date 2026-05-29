@@ -41,6 +41,18 @@ type MemoryConfig struct {
 	// Phase 6a capture/recall knobs.
 	CaptureBufferSize int     // CAPTURE_BUFFER_SIZE (default 256; 0/garbage → default)
 	MMRLambda         float64 // RAG_MMR_LAMBDA (default 0.7; must be in [0,1])
+
+	// Phase 6b knobs.
+	AliasExpansion bool // RAG_ALIAS_EXPANSION (default false; eval-affecting, measured)
+	Consolidate    ConsolidateConfig
+}
+
+// ConsolidateConfig holds the Phase-6b consolidation knobs.
+type ConsolidateConfig struct {
+	Enabled  bool          // CONSOLIDATE_ENABLED (default false)
+	Buffer   int           // CONSOLIDATE_BUFFER new atoms before a (subject,project) is consolidated (default 20)
+	Interval time.Duration // CONSOLIDATE_INTERVAL timer fallback (default 1h)
+	MinAtoms int           // CONSOLIDATE_MIN_ATOMS minimum atoms to bother summarizing (default 3)
 }
 
 // GCConfig holds the garbage-collection knobs loaded from env vars.
@@ -133,6 +145,17 @@ func LoadConfig() (MemoryConfig, error) {
 	cfg.MMRLambda = floatEnv("RAG_MMR_LAMBDA", 0.7)
 	if cfg.MMRLambda < 0 || cfg.MMRLambda > 1 {
 		return MemoryConfig{}, fmt.Errorf("RAG_MMR_LAMBDA must be in [0,1], got %v", cfg.MMRLambda)
+	}
+
+	cfg.AliasExpansion = boolEnv("RAG_ALIAS_EXPANSION", false)
+	cfg.Consolidate = ConsolidateConfig{
+		Enabled:  boolEnv("CONSOLIDATE_ENABLED", false),
+		Buffer:   intEnv("CONSOLIDATE_BUFFER", 20),
+		Interval: durationEnv("CONSOLIDATE_INTERVAL", time.Hour),
+		MinAtoms: intEnv("CONSOLIDATE_MIN_ATOMS", 3),
+	}
+	if cfg.Consolidate.Interval < time.Second {
+		return MemoryConfig{}, fmt.Errorf("CONSOLIDATE_INTERVAL must be >= 1s, got %v", cfg.Consolidate.Interval)
 	}
 
 	return cfg, nil
