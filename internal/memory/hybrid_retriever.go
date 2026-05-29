@@ -21,6 +21,7 @@ type HybridRetriever struct {
 	embedder        Embedder
 	recencyWeight   float64
 	recencyHalfLife time.Duration
+	decayLambda     float64
 }
 
 func NewHybridRetriever(conn *pgx.Conn, e Embedder, recencyWeight float64, recencyHalfLife time.Duration) *HybridRetriever {
@@ -29,8 +30,12 @@ func NewHybridRetriever(conn *pgx.Conn, e Embedder, recencyWeight float64, recen
 		embedder:        e,
 		recencyWeight:   recencyWeight,
 		recencyHalfLife: recencyHalfLife,
+		decayLambda:     0.05,
 	}
 }
+
+// WithDecayLambda overrides the project-row decay dial (SPEC-GC §4 default 0.05).
+func (r *HybridRetriever) WithDecayLambda(l float64) *HybridRetriever { r.decayLambda = l; return r }
 
 const hybridRrfQuery = `
 WITH bm25 AS (
@@ -56,9 +61,13 @@ vec AS (
 )
 SELECT c.id, c.content, c.metadata, COALESCE(c.source,''), c.published_at,
        c.subject_id, c.session_id, c.project_id,
-       COALESCE(1.0 / (60 + b.rank), 0)
-     + COALESCE(1.0 / (60 + v.rank), 0)
-     + $6 * exp(-extract(epoch FROM $5 - c.published_at) / $7) AS score
+       ( COALESCE(1.0 / (60 + b.rank), 0)
+       + COALESCE(1.0 / (60 + v.rank), 0)
+       + $6 * exp(-extract(epoch FROM $5 - c.published_at) / $7) )
+     * CASE WHEN c.scope = 'project' AND NOT c.pinned
+            THEN c.importance * exp(-$10::float8 * extract(epoch FROM now() - c.last_accessed_at) / 86400
+                                    / (1 + c.access_count))
+            ELSE 1.0 END AS score
 FROM chunks c
 LEFT JOIN bm25 b ON b.id = c.id
 LEFT JOIN vec  v ON v.id = c.id
@@ -116,6 +125,7 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 		r.recencyHalfLife.Seconds(),
 		subj,
 		proj,
+		r.decayLambda,
 	)
 	if err != nil {
 		return nil, err
