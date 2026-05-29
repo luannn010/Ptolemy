@@ -40,6 +40,7 @@ WITH bm25 AS (
       AND status = 'active'
       AND published_at <= $5
       AND (subject_id IS NULL OR subject_id = $8)
+      AND ($9::text IS NULL OR project_id IS NULL OR project_id = $9)
     ORDER BY paradedb.score(id) DESC
     LIMIT $3
 ),
@@ -49,6 +50,7 @@ vec AS (
     WHERE status = 'active'
       AND published_at <= $5
       AND (subject_id IS NULL OR subject_id = $8)
+      AND ($9::text IS NULL OR project_id IS NULL OR project_id = $9)
     ORDER BY embedding <=> $2
     LIMIT $3
 )
@@ -64,6 +66,7 @@ WHERE (b.id IS NOT NULL OR v.id IS NOT NULL)
   AND c.status = 'active'
   AND c.published_at <= $5
   AND (c.subject_id IS NULL OR c.subject_id = $8)
+  AND ($9::text IS NULL OR c.project_id IS NULL OR c.project_id = $9)
 ORDER BY score DESC,
          -- project-only recency tiebreak; NULL for every non-project row, so it is
          -- a constant (no-op) on the all-global eval baseline and cannot reorder it.
@@ -99,6 +102,10 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	if q.SubjectID != nil {
 		subj = *q.SubjectID
 	}
+	var proj any
+	if q.ProjectID != nil {
+		proj = *q.ProjectID
+	}
 	rows, err := r.conn.Query(ctx, hybridRrfQuery,
 		q.Text,
 		pgvector.NewVector(vecs[0]),
@@ -108,6 +115,7 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 		r.recencyWeight,
 		r.recencyHalfLife.Seconds(),
 		subj,
+		proj,
 	)
 	if err != nil {
 		return nil, err
