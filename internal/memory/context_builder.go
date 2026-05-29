@@ -47,11 +47,37 @@ type MMRContextBuilder struct {
 }
 
 func (b MMRContextBuilder) Build(q Query, chunks []RetrievedChunk) PromptContext {
-	selected := selectMMR(chunks, b.Lambda, b.K)
+	// Dual-circuit: a matching synthesis summary is the pre-compressed "how"; surface
+	// the highest-scoring one first, then fill remaining slots with distinct atoms via MMR.
+	var synth []RetrievedChunk
+	var atoms []RetrievedChunk
+	for _, c := range chunks {
+		if kind, _ := c.Metadata["kind"].(string); kind == "synthesis" {
+			synth = append(synth, c)
+		} else {
+			atoms = append(atoms, c)
+		}
+	}
+	var ordered []RetrievedChunk
+	k := b.K
+	if len(synth) > 0 {
+		top := synth[0]
+		for _, s := range synth {
+			if s.Score > top.Score {
+				top = s
+			}
+		}
+		ordered = append(ordered, top)
+		if k > 0 {
+			k--
+		}
+	}
+	ordered = append(ordered, selectMMR(atoms, b.Lambda, k)...)
+
 	var body strings.Builder
 	var ids []string
 	used := 0
-	for i, c := range selected {
+	for i, c := range ordered {
 		piece := fmt.Sprintf("\n[source:%s]\n%s\n", c.ID, c.Content)
 		if i > 0 && b.MaxRunes > 0 && used+len([]rune(piece)) > b.MaxRunes {
 			break

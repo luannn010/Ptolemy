@@ -93,3 +93,31 @@ func TestMMR_EmptyCandidates(t *testing.T) {
 		t.Fatalf("empty candidates → no sources, got %v", pc.SourceIDs)
 	}
 }
+
+func TestMMR_PrefersSynthesisThenAtoms(t *testing.T) {
+	chunks := []RetrievedChunk{
+		{Chunk: Chunk{ID: "atom1", Content: "the sweep archives stale rows", Metadata: map[string]any{"kind": "atom"}}, Score: 0.9},
+		{Chunk: Chunk{ID: "syn1", Content: "how the GC works: decay then archive then purge", Metadata: map[string]any{"kind": "synthesis"}}, Score: 0.5},
+		{Chunk: Chunk{ID: "atom2", Content: "purge deletes dead rows after grace", Metadata: map[string]any{"kind": "atom"}}, Score: 0.8},
+	}
+	b := MMRContextBuilder{Lambda: 0.7, K: 2, MaxRunes: 6000}
+	pc := b.Build(Query{Text: "how does the GC work"}, chunks)
+	if len(pc.SourceIDs) == 0 || pc.SourceIDs[0] != "syn1" {
+		t.Fatalf("synthesis must be surfaced first; got %v", pc.SourceIDs)
+	}
+	if len(pc.SourceIDs) < 2 {
+		t.Fatalf("expected synthesis + at least one atom, got %v", pc.SourceIDs)
+	}
+}
+
+func TestMMR_NoSynthesisUnchanged(t *testing.T) {
+	chunks := []RetrievedChunk{
+		{Chunk: Chunk{ID: "a", Content: "alpha beta gamma"}, Score: 1.0},
+		{Chunk: Chunk{ID: "b", Content: "delta epsilon zeta"}, Score: 0.8},
+	}
+	b := MMRContextBuilder{Lambda: 0.7, K: 2, MaxRunes: 6000}
+	pc := b.Build(Query{Text: "q"}, chunks)
+	if len(pc.SourceIDs) != 2 {
+		t.Fatalf("want 2, got %v", pc.SourceIDs)
+	}
+}
