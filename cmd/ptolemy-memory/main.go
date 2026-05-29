@@ -31,6 +31,7 @@ import (
 // command logic is unit-testable without a live DB.
 type recaller interface {
 	Answer(ctx context.Context, q memory.Query) (memory.Answer, error)
+	Recall(ctx context.Context, q memory.Query) (memory.RecallResult, error)
 }
 
 type capturer interface {
@@ -38,10 +39,11 @@ type capturer interface {
 }
 
 type recallOpts struct {
-	Query   string
-	Subject string
-	Project string
-	K       int
+	Query    string
+	Subject  string
+	Project  string
+	K        int
+	Generate bool // true → LLM-synthesized prose answer; false (default) → fast retrieval-only context
 }
 
 func main() {
@@ -67,6 +69,7 @@ func cmdRecall(ctx context.Context, args []string) int {
 	subject := fs.String("subject", "", "owner scope")
 	project := fs.String("project", "", "project scope")
 	k := fs.Int("k", 0, "max results (0 = config default)")
+	generate := fs.Bool("generate", false, "synthesize a prose answer via the LLM (slower); default returns retrieval-only context")
 	_ = fs.Parse(args)
 
 	orch, conn, err := openModule(ctx)
@@ -77,7 +80,7 @@ func cmdRecall(ctx context.Context, args []string) int {
 	defer conn.Close(ctx)
 
 	sub, prj := scope(*subject, *project)
-	if err := runRecall(ctx, orch, recallOpts{Query: *query, Subject: sub, Project: prj, K: *k}, os.Stdout); err != nil {
+	if err := runRecall(ctx, orch, recallOpts{Query: *query, Subject: sub, Project: prj, K: *k, Generate: *generate}, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "recall: %v\n", err)
 		return 1
 	}
@@ -113,7 +116,9 @@ func cmdCapture(ctx context.Context, args []string) int {
 }
 
 // runRecall builds the query (defaulting an empty --query to a project-context
-// recall) and prints the synthesis summary plus citations to out.
+// recall) and prints the recalled context plus sources to out. By default it
+// uses the fast retrieval-only path (no LLM); --generate opts into a synthesized
+// prose answer.
 func runRecall(ctx context.Context, r recaller, opts recallOpts, out io.Writer) error {
 	text := strings.TrimSpace(opts.Query)
 	if text == "" {
@@ -126,13 +131,26 @@ func runRecall(ctx context.Context, r recaller, opts recallOpts, out io.Writer) 
 	if opts.Project != "" {
 		q.ProjectID = &opts.Project
 	}
-	ans, err := r.Answer(ctx, q)
-	if err != nil {
-		return err
+
+	var body string
+	var sources []string
+	if opts.Generate {
+		ans, err := r.Answer(ctx, q)
+		if err != nil {
+			return err
+		}
+		body, sources = ans.Text, ans.Citations
+	} else {
+		res, err := r.Recall(ctx, q)
+		if err != nil {
+			return err
+		}
+		body, sources = res.Context, res.SourceIDs
 	}
-	fmt.Fprintln(out, ans.Text)
-	if len(ans.Citations) > 0 {
-		fmt.Fprintf(out, "\nsources: %s\n", strings.Join(ans.Citations, ", "))
+
+	fmt.Fprintln(out, body)
+	if len(sources) > 0 {
+		fmt.Fprintf(out, "\nsources: %s\n", strings.Join(sources, ", "))
 	}
 	return nil
 }

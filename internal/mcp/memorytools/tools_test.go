@@ -12,14 +12,24 @@ import (
 // --- fakes -------------------------------------------------------------------
 
 type fakeRecaller struct {
-	gotQuery memory.Query
-	answer   memory.Answer
-	err      error
+	gotQuery    memory.Query
+	answer      memory.Answer
+	recall      memory.RecallResult
+	err         error
+	answerCalls int
+	recallCalls int
 }
 
 func (f *fakeRecaller) Answer(_ context.Context, q memory.Query) (memory.Answer, error) {
 	f.gotQuery = q
+	f.answerCalls++
 	return f.answer, f.err
+}
+
+func (f *fakeRecaller) Recall(_ context.Context, q memory.Query) (memory.RecallResult, error) {
+	f.gotQuery = q
+	f.recallCalls++
+	return f.recall, f.err
 }
 
 type fakeCapturer struct {
@@ -101,7 +111,7 @@ func TestRecallToolRequiresQuery(t *testing.T) {
 // --- recall ------------------------------------------------------------------
 
 func TestHandleRecall(t *testing.T) {
-	rec := &fakeRecaller{answer: memory.Answer{Text: "BRAIN is on port 1090", Citations: []string{"turn:abc"}}}
+	rec := &fakeRecaller{recall: memory.RecallResult{Context: "BRAIN is on port 1090", SourceIDs: []string{"turn:abc"}}}
 	h := NewHandler(Deps{Recall: rec, Subject: "luan", Project: "ptolemy"})
 
 	res, handled, err := h("ptolemy_memory_recall", map[string]any{"query": "which port"}, nil)
@@ -110,6 +120,10 @@ func TestHandleRecall(t *testing.T) {
 	}
 	if !handled {
 		t.Fatal("expected handled=true")
+	}
+	// Default is the fast retrieval-only path (no LLM).
+	if rec.recallCalls != 1 || rec.answerCalls != 0 {
+		t.Fatalf("expected Recall by default, got recall=%d answer=%d", rec.recallCalls, rec.answerCalls)
 	}
 	if rec.gotQuery.Text != "which port" {
 		t.Fatalf("query text not passed: %q", rec.gotQuery.Text)
@@ -131,6 +145,28 @@ func TestHandleRecall(t *testing.T) {
 	}
 	if out.Text != "BRAIN is on port 1090" || len(out.Citations) != 1 {
 		t.Fatalf("unexpected result payload: %#v", out)
+	}
+}
+
+func TestHandleRecallGenerateUsesLLM(t *testing.T) {
+	rec := &fakeRecaller{answer: memory.Answer{Text: "prose", Citations: []string{"c1"}}}
+	h := NewHandler(Deps{Recall: rec, Subject: "luan", Project: "ptolemy"})
+
+	res, _, err := h("ptolemy_memory_recall", map[string]any{"query": "q", "generate": true}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.answerCalls != 1 || rec.recallCalls != 0 {
+		t.Fatalf("expected Answer when generate=true, got recall=%d answer=%d", rec.recallCalls, rec.answerCalls)
+	}
+	var out struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal([]byte(textOf(t, res)), &out); err != nil {
+		t.Fatalf("result not JSON: %v", err)
+	}
+	if out.Text != "prose" {
+		t.Fatalf("unexpected payload: %#v", out)
 	}
 }
 

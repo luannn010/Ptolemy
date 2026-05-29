@@ -11,14 +11,24 @@ import (
 )
 
 type fakeRecaller struct {
-	got    memory.Query
-	answer memory.Answer
-	err    error
+	got         memory.Query
+	answer      memory.Answer
+	recall      memory.RecallResult
+	err         error
+	answerCalls int
+	recallCalls int
 }
 
 func (f *fakeRecaller) Answer(_ context.Context, q memory.Query) (memory.Answer, error) {
 	f.got = q
+	f.answerCalls++
 	return f.answer, f.err
+}
+
+func (f *fakeRecaller) Recall(_ context.Context, q memory.Query) (memory.RecallResult, error) {
+	f.got = q
+	f.recallCalls++
+	return f.recall, f.err
 }
 
 type fakeCapturer struct {
@@ -31,24 +41,42 @@ func (f *fakeCapturer) Capture(_ context.Context, ex memory.Exchange) error {
 	return f.err
 }
 
-func TestRunRecallPrintsSummary(t *testing.T) {
-	r := &fakeRecaller{answer: memory.Answer{Text: "BRAIN is on port 1090", Citations: []string{"synth:1"}}}
+func TestRunRecallDefaultsToFastRetrieval(t *testing.T) {
+	r := &fakeRecaller{recall: memory.RecallResult{Context: "BRAIN is on port 1090", SourceIDs: []string{"synth:1"}}}
 	var out bytes.Buffer
 	err := runRecall(context.Background(), r, recallOpts{Query: "which port", Subject: "luan", Project: "ptolemy", K: 5}, &out)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if r.recallCalls != 1 || r.answerCalls != 0 {
+		t.Fatalf("expected Recall (fast) by default, got recall=%d answer=%d", r.recallCalls, r.answerCalls)
+	}
 	if r.got.Text != "which port" || *r.got.SubjectID != "luan" || *r.got.ProjectID != "ptolemy" || r.got.K != 5 {
 		t.Fatalf("query not built correctly: %#v", r.got)
 	}
 	if !strings.Contains(out.String(), "BRAIN is on port 1090") {
-		t.Fatalf("summary not printed: %q", out.String())
+		t.Fatalf("context not printed: %q", out.String())
+	}
+}
+
+func TestRunRecallGenerateUsesLLM(t *testing.T) {
+	r := &fakeRecaller{answer: memory.Answer{Text: "prose answer", Citations: []string{"c1"}}}
+	var out bytes.Buffer
+	err := runRecall(context.Background(), r, recallOpts{Query: "q", Generate: true}, &out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r.answerCalls != 1 || r.recallCalls != 0 {
+		t.Fatalf("expected Answer (LLM) when Generate=true, got recall=%d answer=%d", r.recallCalls, r.answerCalls)
+	}
+	if !strings.Contains(out.String(), "prose answer") {
+		t.Fatalf("answer not printed: %q", out.String())
 	}
 }
 
 func TestRunRecallEmptyQueryRecallsProjectContext(t *testing.T) {
 	// SessionStart use: no --query means "recall this project's context".
-	r := &fakeRecaller{answer: memory.Answer{Text: "project summary"}}
+	r := &fakeRecaller{recall: memory.RecallResult{Context: "project summary"}}
 	var out bytes.Buffer
 	err := runRecall(context.Background(), r, recallOpts{Query: "", Subject: "luan", Project: "ptolemy"}, &out)
 	if err != nil {

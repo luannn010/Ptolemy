@@ -96,6 +96,68 @@ func (o *Orchestrator) Ingest(ctx context.Context, doc RawDocument) error {
 	return o.Store.Upsert(ctx, chunks)
 }
 
+// RecallResult is the retrieval-only output of Recall: the assembled context
+// (dual-circuit synthesis summary + supporting atoms, already budget-packed) and
+// the source ids — WITHOUT an LLM generation pass. This is the fast path for
+// "recall context" callers (hooks, MCP) who want the compressed context, not a
+// freshly-worded answer.
+type RecallResult struct {
+	Context   string
+	SourceIDs []string
+}
+
+// contextPacker is the optional capability a ContextBuilder may implement to
+// expose its ordering + budget packing without the prompt framing. Same-package
+// so MMRContextBuilder satisfies it via the unexported selectAndPack.
+type contextPacker interface {
+	selectAndPack(chunks []RetrievedChunk) (string, []string)
+}
+
+// Recall runs the retrieval path (retrieve → reinforce → fuse → select/pack)
+// and returns the assembled context directly, skipping Generator.Generate. It
+// shares ordering/budgeting with Answer's ContextBuilder so recalled context
+// matches what the LLM would have seen — just without the generation latency.
+func (o *Orchestrator) Recall(ctx context.Context, q Query) (RecallResult, error) {
+	depth := o.Depth
+	if depth <= 0 {
+		depth = 20
+	}
+	asOf := time.Now().UTC()
+	if q.AsOf != nil {
+		asOf = *q.AsOf
+	}
+	local := q
+	local.AsOf = &asOf
+
+	candidates, err := o.Retriever.Retrieve(ctx, local, depth)
+	if err != nil {
+		return RecallResult{}, fmt.Errorf("retrieve: %w", err)
+	}
+	if o.Store != nil && len(candidates) > 0 {
+		ids := make([]string, len(candidates))
+		for i, c := range candidates {
+			ids[i] = c.ID
+		}
+		if err := o.Store.Reinforce(ctx, ids); err != nil {
+			log.Warn().Err(err).Msg("reinforce failed; serving recall anyway")
+		}
+	}
+	finalK := q.K
+	if finalK <= 0 {
+		finalK = o.FinalK
+	}
+	fused := o.Fusion.Fuse([][]RetrievedChunk{candidates}, finalK)
+
+	if packer, ok := o.ContextBuilder.(contextPacker); ok {
+		body, sourceIDs := packer.selectAndPack(fused)
+		return RecallResult{Context: body, SourceIDs: sourceIDs}, nil
+	}
+	// Fallback for builders without selectAndPack: derive context from the
+	// PromptContext the builder produces.
+	pc := o.ContextBuilder.Build(q, fused)
+	return RecallResult{Context: pc.User, SourceIDs: pc.SourceIDs}, nil
+}
+
 func (o *Orchestrator) Answer(ctx context.Context, q Query) (Answer, error) {
 	depth := o.Depth
 	if depth <= 0 {

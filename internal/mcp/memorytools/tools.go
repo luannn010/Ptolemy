@@ -20,9 +20,11 @@ import (
 	"github.com/luannn010/ptolemy/internal/memory"
 )
 
-// Recaller is the recall slice of *memory.Orchestrator.
+// Recaller is the recall slice of *memory.Orchestrator. Recall is the fast
+// retrieval-only path (no LLM); Answer adds an LLM-synthesized prose response.
 type Recaller interface {
 	Answer(ctx context.Context, q memory.Query) (memory.Answer, error)
+	Recall(ctx context.Context, q memory.Query) (memory.RecallResult, error)
 }
 
 // Capturer is the sync-capture slice of *memory.PerTurnCaptureHook.
@@ -48,7 +50,7 @@ type Deps struct {
 func Tools() []mcp.Tool {
 	return []mcp.Tool{
 		mcp.NewTool("ptolemy_memory_recall",
-			"Recall durable project context: returns a compact synthesis summary plus supporting atoms and citations. Prefer this over asking the user to paste context.",
+			"Recall durable project context: returns a compact synthesis summary plus supporting atoms and citations. Fast retrieval-only by default (no LLM); set generate=true for a synthesized prose answer. Prefer this over asking the user to paste context.",
 			map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -56,6 +58,7 @@ func Tools() []mcp.Tool {
 					"k":          map[string]any{"type": "integer", "description": "Max results (default from config)."},
 					"subject_id": map[string]any{"type": "string", "description": "Owner scope; defaults to the configured subject."},
 					"project_id": map[string]any{"type": "string", "description": "Project scope; defaults to the configured project."},
+					"generate":   map[string]any{"type": "boolean", "description": "Synthesize a prose answer via the LLM (slower). Default false returns retrieval-only context."},
 				},
 				"required": []string{"query"},
 			}),
@@ -116,11 +119,18 @@ func (d Deps) handleRecall(args map[string]any) (map[string]any, bool, error) {
 	if project != "" {
 		q.ProjectID = &project
 	}
-	ans, err := d.Recall.Answer(context.Background(), q)
+	if gen, _ := args["generate"].(bool); gen {
+		ans, err := d.Recall.Answer(context.Background(), q)
+		if err != nil {
+			return nil, true, err
+		}
+		return jsonResult(map[string]any{"text": ans.Text, "citations": ans.Citations}), true, nil
+	}
+	res, err := d.Recall.Recall(context.Background(), q)
 	if err != nil {
 		return nil, true, err
 	}
-	return jsonResult(map[string]any{"text": ans.Text, "citations": ans.Citations}), true, nil
+	return jsonResult(map[string]any{"text": res.Context, "citations": res.SourceIDs}), true, nil
 }
 
 func (d Deps) handleCapture(args map[string]any) (map[string]any, bool, error) {

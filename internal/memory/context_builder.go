@@ -47,8 +47,21 @@ type MMRContextBuilder struct {
 }
 
 func (b MMRContextBuilder) Build(q Query, chunks []RetrievedChunk) PromptContext {
-	// Dual-circuit: a matching synthesis summary is the pre-compressed "how"; surface
-	// the highest-scoring one first, then fill remaining slots with distinct atoms via MMR.
+	body, ids := b.selectAndPack(chunks)
+	return PromptContext{
+		System:    "You are a careful assistant. Answer using only the provided sources and cite them by id in square brackets like [source:id].",
+		User:      fmt.Sprintf("Sources:\n%s\n\nQuestion: %s", body, q.Text),
+		SourceIDs: ids,
+	}
+}
+
+// selectAndPack orders chunks via the dual-circuit rule (highest-scoring
+// synthesis summary first, then diverse atoms via MMR) and packs them under the
+// rune budget, returning the rendered [source:id] blocks and the kept ids. It
+// is shared by Build (prompt framing) and Orchestrator.Recall (retrieval-only,
+// no LLM). A matching synthesis summary is the pre-compressed "how"; the atoms
+// fill remaining slots.
+func (b MMRContextBuilder) selectAndPack(chunks []RetrievedChunk) (string, []string) {
 	var synth []RetrievedChunk
 	var atoms []RetrievedChunk
 	for _, c := range chunks {
@@ -86,11 +99,7 @@ func (b MMRContextBuilder) Build(q Query, chunks []RetrievedChunk) PromptContext
 		ids = append(ids, c.ID)
 		used += len([]rune(piece))
 	}
-	return PromptContext{
-		System:    "You are a careful assistant. Answer using only the provided sources and cite them by id in square brackets like [source:id].",
-		User:      fmt.Sprintf("Sources:\n%s\n\nQuestion: %s", body.String(), q.Text),
-		SourceIDs: ids,
-	}
+	return body.String(), ids
 }
 
 func selectMMR(chunks []RetrievedChunk, lambda float64, k int) []RetrievedChunk {
