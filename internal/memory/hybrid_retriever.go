@@ -109,7 +109,7 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	if len(vecs) == 0 {
 		return nil, fmt.Errorf("embedding server returned no vector")
 	}
-	log.Debug().Int64("embed_ms", time.Since(embedStart).Milliseconds()).Int("dim", len(vecs[0])).Msg("retriever: query embedded")
+	log.Info().Str("stage", "embed").Int64("ms", time.Since(embedStart).Milliseconds()).Int("dim", len(vecs[0])).Msg("retriever: query embedded")
 	// Orchestrator.Answer always passes a non-nil AsOf, but standalone callers
 	// (ARCHITECTURE.md "Option B" — HybridRetriever used directly without the
 	// hybrid orchestrator) may pass Query.AsOf == nil. The local fallback keeps
@@ -165,10 +165,16 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	log.Debug().
+	ev := log.Info()
+	if len(out) == 0 {
+		ev = log.Warn()
+	}
+	ev.Str("stage", "vector_search").
 		Int64("query_ms", time.Since(queryStart).Milliseconds()).
 		Int("rows", len(out)).
 		Int("depth", depth).
+		Str("subject", fmt.Sprintf("%v", subj)).
+		Str("project", fmt.Sprintf("%v", proj)).
 		Msg("retriever: hybrid SQL (BM25+vector RRF) done")
 	return out, nil
 }

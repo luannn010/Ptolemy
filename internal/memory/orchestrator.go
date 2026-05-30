@@ -135,7 +135,7 @@ func (o *Orchestrator) Recall(ctx context.Context, q Query) (RecallResult, error
 	if err != nil {
 		return RecallResult{}, fmt.Errorf("retrieve: %w", err)
 	}
-	log.Debug().Int64("retrieve_ms", time.Since(retrieveStart).Milliseconds()).Int("candidates", len(candidates)).Msg("recall: retrieve done")
+	log.Info().Str("stage", "retrieve").Int64("ms", time.Since(retrieveStart).Milliseconds()).Int("candidates", len(candidates)).Msg("recall: retrieve done")
 
 	if o.Store != nil && len(candidates) > 0 {
 		reinforceStart := time.Now()
@@ -146,7 +146,7 @@ func (o *Orchestrator) Recall(ctx context.Context, q Query) (RecallResult, error
 		if err := o.Store.Reinforce(ctx, ids); err != nil {
 			log.Warn().Err(err).Msg("reinforce failed; serving recall anyway")
 		}
-		log.Debug().Int64("reinforce_ms", time.Since(reinforceStart).Milliseconds()).Int("ids", len(ids)).Msg("recall: reinforce done")
+		log.Info().Str("stage", "reinforce").Int64("ms", time.Since(reinforceStart).Milliseconds()).Int("ids", len(ids)).Msg("recall: reinforce done")
 	}
 	finalK := q.K
 	if finalK <= 0 {
@@ -155,15 +155,22 @@ func (o *Orchestrator) Recall(ctx context.Context, q Query) (RecallResult, error
 	fused := o.Fusion.Fuse([][]RetrievedChunk{candidates}, finalK)
 
 	packStart := time.Now()
+	var packedIDs int
 	defer func() {
-		log.Debug().
+		ev := log.Info()
+		if packedIDs == 0 {
+			ev = log.Warn()
+		}
+		ev.Str("stage", "pack").
 			Int64("pack_ms", time.Since(packStart).Milliseconds()).
 			Int64("total_ms", time.Since(recallStart).Milliseconds()).
+			Int("packed", packedIDs).
 			Msg("recall: select/pack done (no LLM)")
 	}()
 
 	if packer, ok := o.ContextBuilder.(contextPacker); ok {
 		body, sourceIDs := packer.selectAndPack(fused)
+		packedIDs = len(sourceIDs)
 		return RecallResult{Context: body, SourceIDs: sourceIDs}, nil
 	}
 	// Fallback for builders without selectAndPack: derive context from the

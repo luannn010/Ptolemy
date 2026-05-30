@@ -30,14 +30,20 @@ import (
 )
 
 // setupLogging routes zerolog to stderr (stdout stays clean for the recalled
-// context, which hooks pipe into the model). Default is quiet (errors only);
-// --verbose drops to debug so the per-stage retrieval timings print.
-func setupLogging(verbose bool) {
+// context, which hooks pipe into the model). Default level is Info so the
+// pipeline narrates every stage (gate → extract → embed → store, and
+// embed → vector_search → retrieve → pack) to the terminal; --verbose drops
+// to Debug for extra detail; --quiet silences everything but errors (use in
+// hooks so injected context isn't polluted).
+func setupLogging(verbose, quiet bool) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-	if verbose {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
+	switch {
+	case quiet:
 		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	case verbose:
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	default:
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
 }
 
@@ -85,10 +91,11 @@ func cmdRecall(ctx context.Context, args []string) int {
 	project := fs.String("project", "", "project scope")
 	k := fs.Int("k", 0, "max results (0 = config default)")
 	generate := fs.Bool("generate", false, "synthesize a prose answer via the LLM (slower); default returns retrieval-only context")
-	verbose := fs.Bool("verbose", false, "log per-stage timing (embed/query/reinforce/pack) to stderr")
+	verbose := fs.Bool("verbose", false, "extra debug detail")
+	quiet := fs.Bool("quiet", false, "errors only (use in hooks; keeps piped context clean)")
 	_ = fs.Parse(args)
 
-	setupLogging(*verbose)
+	setupLogging(*verbose, *quiet)
 
 	orch, conn, err := openModule(ctx)
 	if err != nil {
@@ -112,10 +119,11 @@ func cmdCapture(ctx context.Context, args []string) int {
 	subject := fs.String("subject", "", "owner scope")
 	project := fs.String("project", "", "project scope")
 	session := fs.String("session", "", "session id")
-	verbose := fs.Bool("verbose", false, "log per-stage timing to stderr")
+	verbose := fs.Bool("verbose", false, "extra debug detail")
+	quiet := fs.Bool("quiet", false, "errors only")
 	_ = fs.Parse(args)
 
-	setupLogging(*verbose)
+	setupLogging(*verbose, *quiet)
 
 	hook, conn, err := openCapture(ctx)
 	if err != nil {

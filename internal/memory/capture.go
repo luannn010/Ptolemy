@@ -98,28 +98,47 @@ func (h *PerTurnCaptureHook) Capture(ctx context.Context, ex Exchange) error {
 // processTurn is the deterministic pipeline, directly callable in tests.
 func (h *PerTurnCaptureHook) processTurn(ctx context.Context, ex Exchange) error {
 	if d := Gate(ex); d.Skip {
+		log.Info().Str("stage", "gate").Str("reason", d.Reason).Msg("capture: turn SKIPPED — nothing stored")
 		return nil
 	}
+	log.Info().Str("stage", "gate").Msg("capture: turn passed gate; calling extractor LLM")
+
+	extractStart := time.Now()
 	entries, err := h.extractor.Extract(ctx, ex)
 	if err != nil {
 		atomic.AddInt64(&h.metrics.extractErr, 1)
+		log.Error().Str("stage", "extract").Err(err).Msg("capture: extractor LLM failed — nothing stored")
 		return err
 	}
+	log.Info().Str("stage", "extract").
+		Int64("ms", time.Since(extractStart).Milliseconds()).
+		Int("entries", len(entries)).
+		Msg("capture: extractor produced atoms")
 	if len(entries) == 0 {
+		log.Warn().Str("stage", "extract").Msg("capture: extractor returned 0 grounded atoms (LLM produced nothing, or all entries failed grounding/pronoun filters) — nothing stored")
 		return nil
+	}
+	for i, e := range entries {
+		log.Info().Str("stage", "extract").Int("i", i).Str("perspective", e.Perspective).Str("content", e.Content).Msg("capture: atom")
 	}
 	texts := make([]string, len(entries))
 	for i, e := range entries {
 		texts[i] = e.Content
 	}
+	embedStart := time.Now()
 	vecs, err := h.embedder.Embed(ctx, texts)
 	if err != nil || len(vecs) != len(entries) {
 		atomic.AddInt64(&h.metrics.embedErr, 1)
 		if err == nil {
 			err = errors.New("embedder returned wrong vector count")
 		}
+		log.Error().Str("stage", "embed").Err(err).Msg("capture: embedding failed — nothing stored")
 		return err
 	}
+	log.Info().Str("stage", "embed").
+		Int64("ms", time.Since(embedStart).Milliseconds()).
+		Int("vectors", len(vecs)).Int("dim", len(vecs[0])).
+		Msg("capture: atoms embedded")
 	now := time.Now().UTC()
 	// Per-entry, non-transactional: a mid-loop store error leaves earlier entries
 	// of this turn already written. Acceptable for 6a — chunk ids are content-
@@ -146,8 +165,12 @@ func (h *PerTurnCaptureHook) processTurn(ctx context.Context, ex Exchange) error
 			}
 		}
 		if err := h.store.Upsert(ctx, []Chunk{c}); err != nil {
+			log.Error().Str("stage", "store").Err(err).Str("id", c.ID).Msg("capture: upsert failed")
 			return err
 		}
+		log.Info().Str("stage", "store").Str("id", c.ID).
+			Str("subject", deref(c.SubjectID)).Str("project", deref(c.ProjectID)).
+			Msg("capture: atom STORED")
 		atomic.AddInt64(&h.metrics.captured, 1)
 	}
 	return nil
@@ -184,4 +207,12 @@ func (h *PerTurnCaptureHook) buildChunk(ex Exchange, e ExtractedEntry, vec []flo
 func captureChunkID(ex Exchange, e ExtractedEntry) string {
 	sum := sha256.Sum256([]byte(ex.SubjectID + "|" + ex.ProjectID + "|" + e.Content))
 	return "turn:" + hex.EncodeToString(sum[:])[:24]
+}
+
+// deref renders a *string for logging ("<nil>" when nil/empty).
+func deref(s *string) string {
+	if s == nil || *s == "" {
+		return "<nil>"
+	}
+	return *s
 }
