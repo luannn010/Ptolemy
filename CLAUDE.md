@@ -79,7 +79,7 @@ Hooks in `.claude/settings.local.json` (host-specific, gitignored) automate the 
 
 - Module path: `github.com/luannn010/ptolemy`. Go 1.25.
 - Four-table schema only: `sessions`, `command_logs`, `policy_decisions`, `schema_migrations`. Do not add tables without a written plan.
-- Build: `make build` produces `workerd`, `ptolemy-mcp`, `policy-demo`, `ptolemy-memory`, and the `memory-*` eval/demo tools.
+- Build: `make build` produces `workerd`, `ptolemy-mcp`, `ptolemy`, and `ptolemy-memory` (a thin alias for `ptolemy memory recall|capture`). The former `policy-demo` and `memory-*` demo/eval binaries are now subcommands: `ptolemy policy check` and `ptolemy memory demo|eval|synth-eval`.
 - Tests: `make test` (uses `-p 1`). Policy bypass suite lives at [internal/policy/engine_test.go](internal/policy/engine_test.go).
 - Audit: every `Authorize` result is logged via zerolog and persisted to `policy_decisions` from inside the guard, before any side effect.
 
