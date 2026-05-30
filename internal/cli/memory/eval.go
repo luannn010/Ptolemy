@@ -1,7 +1,7 @@
-// memory-eval ingests the seed corpus into the live memory store and then
-// runs every question through the retriever, printing per-question hit/miss
-// and a mean recall@k summary. Intended for `make eval-memory`.
-package main
+// eval ingests the seed corpus into the live memory store and then runs every
+// question through the retriever, printing per-question hit/miss and a mean
+// recall@k summary. Exposed as `ptolemy memory eval` (see RunEval).
+package memory
 
 import (
 	"context"
@@ -13,23 +13,16 @@ import (
 	"strings"
 	"time"
 
-	// .env autoload (matches cmd/memory-demo).
-	_ "github.com/joho/godotenv/autoload"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/luannn010/ptolemy/internal/memory"
 	"github.com/luannn010/ptolemy/internal/memory/eval"
 )
 
-func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
-	}
-}
-
-func run(args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("memory-eval", flag.ContinueOnError)
+// RunEval is the `ptolemy memory eval` subcommand. It parses flags from args
+// (ContinueOnError, so a parse error returns rather than exiting), then runs
+// the retrieval eval, sweep, or dedup measurement against the live store.
+func RunEval(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("memory eval", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	seedPath := fs.String("seed", "internal/memory/eval/testdata/seed.json", "path to seed JSON")
 	skipIngest := fs.Bool("skip-ingest", false, "skip the corpus ingest step (use existing chunks)")
@@ -67,7 +60,6 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if evalURL := strings.TrimSpace(os.Getenv("MEMORY_EVAL_DATABASE_URL")); evalURL != "" {
 		cfg.DatabaseURL = evalURL // eval runs against a dedicated DB so unit-test freshDB (dim=4) and eval (dim=768) stop clobbering each other
 	}
-	ctx := context.Background()
 	orch, conn, err := memory.NewModule(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("module: %w", err)
