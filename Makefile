@@ -84,4 +84,4 @@ eval-memory-dedup: build
 # real EMBEDDING_DIM. Needs .env (BRAIN_*, EMBEDDING_*).
 eval-synth: build
 	@set -a; . ./.env; set +a; \
-	  $(BIN_DIR)/memory-synth-eval -scenarios internal/memory/eval/testdata/synth_scenarios.json
+	  $(BIN_DIR)/ptolemy memory synth-eval -scenarios internal/memory/eval/testdata/synth_scenarios.json
