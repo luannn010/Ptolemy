@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type Generator interface {
@@ -27,7 +28,10 @@ func NewOpenAIGenerator(baseURL, model, apiKey string) *OpenAIGenerator {
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		Model:   model,
 		APIKey:  apiKey,
-		Client:  http.DefaultClient,
+		// A bounded timeout so a hung/overloaded BRAIN fails the call instead of
+		// blocking the caller indefinitely (http.DefaultClient has no timeout).
+		// Generous (180s) to tolerate a cold model load on the first call.
+		Client: &http.Client{Timeout: 180 * time.Second},
 	}
 }
 
@@ -38,7 +42,28 @@ type chatMessage struct {
 type chatRequest struct {
 	Model    string        `json:"model"`
 	Messages []chatMessage `json:"messages"`
+	// MaxTokens caps generation. Extraction/consolidation/answer all produce
+	// short, bounded output; without a cap a runaway model can generate for
+	// minutes. Omitted from JSON when zero.
+	MaxTokens int `json:"max_tokens,omitempty"`
+	// ChatTemplateKwargs carries enable_thinking=false. Qwen3.x is a reasoning
+	// model that, left on, emits a hidden <think> block before the answer —
+	// pure latency for the mechanical JSON tasks here (measured ~10x slower).
+	// llama.cpp / vLLM forward this into the chat template.
+	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 }
+
+// noThinking is the kwargs map disabling the reasoning pass for every memory LLM
+// call. Centralized so Generate and Complete stay in sync.
+func noThinking() map[string]any { return map[string]any{"enable_thinking": false} }
+
+// Generation token caps. Memory LLM outputs are small: extraction is a short
+// JSON array, an answer is a few sentences. These are headroom, not targets.
+const (
+	maxAnswerTokens  = 1024
+	maxExtractTokens = 1024
+)
+
 type chatResponse struct {
 	Choices []struct {
 		Message chatMessage `json:"message"`
@@ -54,6 +79,8 @@ func (g *OpenAIGenerator) Generate(ctx context.Context, q Query, pc PromptContex
 			{Role: "system", Content: pc.System},
 			{Role: "user", Content: pc.User},
 		},
+		MaxTokens:          maxAnswerTokens,
+		ChatTemplateKwargs: noThinking(),
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
@@ -114,6 +141,8 @@ func (g *OpenAIGenerator) Complete(ctx context.Context, system, user string) (st
 			{Role: "system", Content: system},
 			{Role: "user", Content: user},
 		},
+		MaxTokens:          maxExtractTokens,
+		ChatTemplateKwargs: noThinking(),
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
