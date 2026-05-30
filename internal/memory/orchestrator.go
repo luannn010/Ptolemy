@@ -171,6 +171,11 @@ func (o *Orchestrator) Recall(ctx context.Context, q Query) (RecallResult, error
 	if packer, ok := o.ContextBuilder.(contextPacker); ok {
 		body, sourceIDs := packer.selectAndPack(fused)
 		packedIDs = len(sourceIDs)
+		if log.Debug().Enabled() {
+			for i, id := range sourceIDs {
+				log.Debug().Str("stage", "recalled").Int("n", i).Str("id", id).Msg("recall: kept source")
+			}
+		}
 		return RecallResult{Context: body, SourceIDs: sourceIDs}, nil
 	}
 	// Fallback for builders without selectAndPack: derive context from the

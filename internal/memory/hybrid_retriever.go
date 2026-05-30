@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -67,6 +68,7 @@ vec AS (
 )
 SELECT c.id, c.content, c.metadata, COALESCE(c.source,''), c.published_at,
        c.subject_id, c.session_id, c.project_id,
+       b.rank AS bm25_rank, v.rank AS vec_rank,
        ( COALESCE(1.0 / (60 + b.rank), 0)
        + COALESCE(1.0 / (60 + v.rank), 0)
        + $6 * exp(-extract(epoch FROM $5 - c.published_at) / $7) )
@@ -149,16 +151,41 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	}
 	defer rows.Close()
 
+	debug := log.Debug().Enabled()
 	var out []RetrievedChunk
 	for rows.Next() {
 		var rc RetrievedChunk
 		var meta []byte
+		var bm25Rank, vecRank *int // NULL when that arm did not match this row
 		if err := rows.Scan(&rc.ID, &rc.Content, &meta, &rc.Source, &rc.PublishedAt,
-			&rc.SubjectID, &rc.SessionID, &rc.ProjectID, &rc.Score); err != nil {
+			&rc.SubjectID, &rc.SessionID, &rc.ProjectID, &bm25Rank, &vecRank, &rc.Score); err != nil {
 			return nil, err
 		}
 		if len(meta) > 0 {
 			_ = json.Unmarshal(meta, &rc.Metadata)
+		}
+		if debug {
+			// "arm" shows which retrieval key matched: both / bm25 (lexical) /
+			// vector (semantic). Ranks are 1-based within each arm.
+			arm := "vector"
+			switch {
+			case bm25Rank != nil && vecRank != nil:
+				arm = "both"
+			case bm25Rank != nil:
+				arm = "bm25"
+			}
+			kind, _ := rc.Metadata["kind"].(string)
+			log.Debug().
+				Str("stage", "retrieved").
+				Int("n", len(out)).
+				Str("id", rc.ID).
+				Float64("score", rc.Score).
+				Str("arm", arm).
+				Interface("bm25_rank", bm25Rank).
+				Interface("vec_rank", vecRank).
+				Str("kind", kind).
+				Str("content", preview(rc.Content, 80)).
+				Msg("retriever: candidate")
 		}
 		out = append(out, rc)
 	}
@@ -177,4 +204,15 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 		Str("project", fmt.Sprintf("%v", proj)).
 		Msg("retriever: hybrid SQL (BM25+vector RRF) done")
 	return out, nil
+}
+
+// preview truncates content to n runes for single-line log output, collapsing
+// newlines so a chunk stays on one log line.
+func preview(s string, n int) string {
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\n", " "), "\r", " ")
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }
