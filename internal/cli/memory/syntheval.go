@@ -1,11 +1,11 @@
-// memory-synth-eval drives the Phase 6b multi-session synthesis eval: for each
-// scenario it injects the turns as atom rows, consolidates the (subject,project)
-// via the live BRAIN LLM, recalls scoped to it, and scores the recalled synthesis
-// summary against expect/reject keywords. Atoms are injected (not run through the
-// per-turn extractor) so the gate is deterministic and makes one LLM call per
-// scenario. Intended for `make eval-synth`; uses the live BRAIN LLM, so NOT a
-// `go test` target.
-package main
+// syntheval drives the Phase 6b multi-session synthesis eval: for each scenario
+// it injects the turns as atom rows, consolidates the (subject,project) via the
+// live BRAIN LLM, recalls scoped to it, and scores the recalled synthesis
+// summary against expect/reject keywords. Atoms are injected (not run through
+// the per-turn extractor) so the gate is deterministic and makes one LLM call
+// per scenario. Exposed as `ptolemy memory synth-eval`; uses the live BRAIN
+// LLM, so it is NOT a `go test` target.
+package memory
 
 import (
 	"context"
@@ -15,22 +15,15 @@ import (
 	"os"
 	"strings"
 
-	// .env autoload (matches cmd/memory-eval).
-	_ "github.com/joho/godotenv/autoload"
-
 	"github.com/luannn010/ptolemy/internal/memory"
 	"github.com/luannn010/ptolemy/internal/memory/eval"
 )
 
-func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
-	}
-}
-
-func run(args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("memory-synth-eval", flag.ContinueOnError)
+// RunSynthEval is the `ptolemy memory synth-eval` subcommand. It returns
+// ErrEvalFailed (mapped to exit 1 by the dispatcher) when one or more scenarios
+// fail, distinct from setup errors (exit 2).
+func RunSynthEval(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("memory synth-eval", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	scenariosPath := fs.String("scenarios", "internal/memory/eval/testdata/synth_scenarios.json", "path to synthesis scenarios JSON")
 	if err := fs.Parse(args); err != nil {
@@ -48,7 +41,6 @@ func run(args []string, stdout, stderr io.Writer) error {
 	// than the production MinAtoms default; force it to 1 for the eval.
 	cfg.Consolidate.MinAtoms = 1
 
-	ctx := context.Background()
 	orch, conn, err := memory.NewModule(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("module: %w", err)
@@ -77,7 +69,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stdout, "  FAIL %s\n", f)
 	}
 	if passed != len(scenarios) {
-		os.Exit(1)
+		return ErrEvalFailed
 	}
 	return nil
 }
