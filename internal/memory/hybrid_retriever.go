@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
+	"github.com/rs/zerolog/log"
 )
 
 // HybridRetriever runs the spec's Option A: a single SQL query with both
@@ -39,7 +40,10 @@ func NewHybridRetriever(conn *pgx.Conn, e Embedder, recencyWeight float64, recen
 func (r *HybridRetriever) WithDecayLambda(l float64) *HybridRetriever { r.decayLambda = l; return r }
 
 // WithAliasExpansion toggles lexical-arm synonym expansion (default off).
-func (r *HybridRetriever) WithAliasExpansion(on bool) *HybridRetriever { r.aliasExpansion = on; return r }
+func (r *HybridRetriever) WithAliasExpansion(on bool) *HybridRetriever {
+	r.aliasExpansion = on
+	return r
+}
 
 const hybridRrfQuery = `
 WITH bm25 AS (
@@ -97,6 +101,7 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	if finalK <= 0 {
 		finalK = depth
 	}
+	embedStart := time.Now()
 	vecs, err := r.embedder.Embed(ctx, []string{q.Text})
 	if err != nil {
 		return nil, fmt.Errorf("embed query: %w", err)
@@ -104,6 +109,7 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	if len(vecs) == 0 {
 		return nil, fmt.Errorf("embedding server returned no vector")
 	}
+	log.Debug().Int64("embed_ms", time.Since(embedStart).Milliseconds()).Int("dim", len(vecs[0])).Msg("retriever: query embedded")
 	// Orchestrator.Answer always passes a non-nil AsOf, but standalone callers
 	// (ARCHITECTURE.md "Option B" — HybridRetriever used directly without the
 	// hybrid orchestrator) may pass Query.AsOf == nil. The local fallback keeps
@@ -125,6 +131,7 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 	if r.aliasExpansion {
 		bm25Text = expandAliases(q.Text)
 	}
+	queryStart := time.Now()
 	rows, err := r.conn.Query(ctx, hybridRrfQuery,
 		bm25Text,
 		pgvector.NewVector(vecs[0]),
@@ -155,5 +162,13 @@ func (r *HybridRetriever) Retrieve(ctx context.Context, q Query, depth int) ([]R
 		}
 		out = append(out, rc)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	log.Debug().
+		Int64("query_ms", time.Since(queryStart).Milliseconds()).
+		Int("rows", len(out)).
+		Int("depth", depth).
+		Msg("retriever: hybrid SQL (BM25+vector RRF) done")
+	return out, nil
 }

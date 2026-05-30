@@ -129,11 +129,16 @@ func (o *Orchestrator) Recall(ctx context.Context, q Query) (RecallResult, error
 	local := q
 	local.AsOf = &asOf
 
+	recallStart := time.Now()
+	retrieveStart := time.Now()
 	candidates, err := o.Retriever.Retrieve(ctx, local, depth)
 	if err != nil {
 		return RecallResult{}, fmt.Errorf("retrieve: %w", err)
 	}
+	log.Debug().Int64("retrieve_ms", time.Since(retrieveStart).Milliseconds()).Int("candidates", len(candidates)).Msg("recall: retrieve done")
+
 	if o.Store != nil && len(candidates) > 0 {
+		reinforceStart := time.Now()
 		ids := make([]string, len(candidates))
 		for i, c := range candidates {
 			ids[i] = c.ID
@@ -141,12 +146,21 @@ func (o *Orchestrator) Recall(ctx context.Context, q Query) (RecallResult, error
 		if err := o.Store.Reinforce(ctx, ids); err != nil {
 			log.Warn().Err(err).Msg("reinforce failed; serving recall anyway")
 		}
+		log.Debug().Int64("reinforce_ms", time.Since(reinforceStart).Milliseconds()).Int("ids", len(ids)).Msg("recall: reinforce done")
 	}
 	finalK := q.K
 	if finalK <= 0 {
 		finalK = o.FinalK
 	}
 	fused := o.Fusion.Fuse([][]RetrievedChunk{candidates}, finalK)
+
+	packStart := time.Now()
+	defer func() {
+		log.Debug().
+			Int64("pack_ms", time.Since(packStart).Milliseconds()).
+			Int64("total_ms", time.Since(recallStart).Milliseconds()).
+			Msg("recall: select/pack done (no LLM)")
+	}()
 
 	if packer, ok := o.ContextBuilder.(contextPacker); ok {
 		body, sourceIDs := packer.selectAndPack(fused)
