@@ -50,6 +50,22 @@ func TestActionValidator_AcceptsValidActions(t *testing.T) {
 	}
 }
 
+func TestRenderPlannerState_IncludesActionHistory(t *testing.T) {
+	state := AgentState{
+		Query:     "what is X",
+		Budget:    5,
+		Steps:     []AgentAction{{Type: ActionRetrieve, Query: "prior query"}},
+		StepCount: 1,
+	}
+	out := renderPlannerState(state)
+	if !strings.Contains(out, "prior query") {
+		t.Fatalf("planner state should surface prior retrieve query, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Actions already taken") {
+		t.Fatalf("expected action-history header, got:\n%s", out)
+	}
+}
+
 func TestBrainPlanner_SendsGrammarAndParsesAction(t *testing.T) {
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

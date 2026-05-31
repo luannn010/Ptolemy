@@ -54,6 +54,18 @@ func renderPlannerState(state AgentState) string {
 	// StepCount is zero-based (steps already taken); +1 renders the 1-indexed
 	// current step number for the prompt.
 	fmt.Fprintf(&b, "Step %d of %d.\n\n", state.StepCount+1, state.Budget)
+	if len(state.Steps) > 0 {
+		b.WriteString("Actions already taken:\n")
+		for i, a := range state.Steps {
+			switch a.Type {
+			case ActionRetrieve:
+				fmt.Fprintf(&b, "  %d. retrieve %q\n", i+1, a.Query)
+			default:
+				fmt.Fprintf(&b, "  %d. %s\n", i+1, a.Type)
+			}
+		}
+		b.WriteString("Do not repeat a retrieve query that already returned the chunks below.\n\n")
+	}
 	if len(state.AccumulatedChunks) == 0 {
 		b.WriteString("Chunks retrieved so far: none.\n")
 	} else {
