@@ -39,7 +39,7 @@ func (s *captureFakeStore) Reinforce(context.Context, []string) error         { 
 func (s *captureFakeStore) Stats(context.Context) ([]ScopeStatusCount, error) { return nil, nil }
 
 func newTestHook(store Store) *PerTurnCaptureHook {
-	return NewCaptureHook(NewExtractor(fakeChat{resp: `[{"content":"The GC sweep archives stale project rows below the threshold","perspective":"factual","fact_subject":"GC sweep","fact_predicate":"archives"}]`}),
+	return NewCaptureHook(NewExtractor(fakeChat{resp: `{"atoms":[{"content":"the sweep archives stale project rows below the threshold","perspective":"factual","fact_subject":"GC sweep","fact_predicate":"archives"}]}`}),
 		captureFakeEmbedder{}, store, 8)
 }
 
@@ -78,11 +78,43 @@ func TestCapture_GateSkipsTrivial(t *testing.T) {
 func TestCapture_EnqueueDoesNotBlockAndDrops(t *testing.T) {
 	store := &captureFakeStore{}
 	// buffer 1, no worker started → second+ enqueues must drop, never block.
-	h := NewCaptureHook(NewExtractor(fakeChat{resp: "[]"}), captureFakeEmbedder{}, store, 1)
+	h := NewCaptureHook(NewExtractor(fakeChat{resp: `{"atoms":[]}`}), captureFakeEmbedder{}, store, 1)
 	for i := 0; i < 100; i++ {
 		h.Enqueue(Exchange{UserText: "x", AssistantText: "y", SubjectID: "userA"})
 	}
 	if got := h.Metrics().Dropped(); got == 0 {
 		t.Fatalf("expected drops on a full channel, got %d", got)
+	}
+}
+
+func TestExtractor_EndToEnd_DropsHallucinated(t *testing.T) {
+	store := &captureFakeStore{}
+	h := NewCaptureHook(NewExtractor(fakeChat{resp: `{"atoms":[{"content":"Quarterly revenue grew forty percent in Brazil","perspective":"factual","fact_subject":"","fact_predicate":"archives"}]}`}), captureFakeEmbedder{}, store, 8)
+	ex := Exchange{
+		UserText:      "how does the GC archive?",
+		AssistantText: "the sweep archives stale project rows below the threshold",
+		SubjectID:     "userA", SessionID: "s1", ProjectID: "ptolemy",
+	}
+	if err := h.processTurn(context.Background(), ex); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.upserted) != 0 {
+		t.Fatalf("hallucinated atom should be dropped, got %d stored rows", len(store.upserted))
+	}
+}
+
+func TestExtractor_EndToEnd_StoresValid(t *testing.T) {
+	store := &captureFakeStore{}
+	h := NewCaptureHook(NewExtractor(fakeChat{resp: `{"atoms":[{"content":"The GC sweep archives stale project rows below the threshold","perspective":"factual","fact_subject":"GC sweep","fact_predicate":"archives"}]}`}), captureFakeEmbedder{}, store, 8)
+	ex := Exchange{
+		UserText:      "how does the GC archive?",
+		AssistantText: "The GC sweep archives stale project rows below the threshold",
+		SubjectID:     "userA", SessionID: "s1", ProjectID: "ptolemy",
+	}
+	if err := h.processTurn(context.Background(), ex); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.upserted) != 1 {
+		t.Fatalf("valid atom should be stored, got %d rows", len(store.upserted))
 	}
 }

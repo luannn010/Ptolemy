@@ -55,7 +55,7 @@ func (c *Consolidator) synthesize(ctx context.Context, prevSummary string, atoms
 		fmt.Fprintf(&b, "%s :: %s\n", a.ID, a.Content)
 	}
 	user := "PREVIOUS SUMMARY (may be empty):\n" + prevSummary + "\n\nATOMS (id :: content):\n" + b.String()
-	raw, err := c.chat.Complete(ctx, consolidatePromptTemplate, user)
+	raw, err := c.chat.Complete(ctx, consolidatePromptTemplate, user, CompleteOptions{})
 	if err != nil {
 		return Synthesis{}, fmt.Errorf("consolidate llm: %w", err)
 	}
