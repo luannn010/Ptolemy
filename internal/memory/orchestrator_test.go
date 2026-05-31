@@ -513,6 +513,60 @@ func TestOrchestrator_Ingest_NewFact_Upserts(t *testing.T) {
 	}
 }
 
+func TestOrchestrator_Answer_DelegatesToAgentLoopWhenSet(t *testing.T) {
+	// Distinct generators per path so the test can tell which one produced the
+	// answer. If Answer delegates to the loop, the citation is "loop#0"; if the
+	// legacy path runs instead, it would be "legacy#0" — so this test fails if
+	// the delegation guard regresses.
+	legacyGen := &stubGenerator{text: "legacy [source:legacy#0]", cites: []string{"legacy#0"}}
+	loopGen := &stubGenerator{text: "loop [source:loop#0]", cites: []string{"loop#0"}}
+	o := &Orchestrator{
+		Retriever:      stubRetriever{chunks: []RetrievedChunk{chunk("legacy#0", "legacy fact")}},
+		Generator:      legacyGen,
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 6000},
+		Fusion:         PassthroughFusion{},
+		AgentLoop: &AgentLoop{
+			Planner: &stubPlanner{actions: []AgentAction{
+				{Type: ActionRetrieve, Query: "a"}, {Type: ActionAnswer},
+			}},
+			Retriever: stubRetriever{chunks: []RetrievedChunk{chunk("loop#0", "loop fact")}},
+			Generator: loopGen,
+			Builder:   BudgetContextBuilder{MaxRunes: 6000},
+			Cfg:       AgentConfig{MaxSteps: 5},
+		},
+	}
+	ans, err := o.Answer(context.Background(), Query{Text: "q"})
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(ans.Citations) != 1 || ans.Citations[0] != "loop#0" {
+		t.Fatalf("expected delegation to agent loop (citation loop#0), got %+v", ans)
+	}
+	if legacyGen.calls != 0 {
+		t.Fatalf("legacy generator must not be called when delegating, calls=%d", legacyGen.calls)
+	}
+	if loopGen.calls != 1 {
+		t.Fatalf("loop generator should be called once, calls=%d", loopGen.calls)
+	}
+}
+
+func TestOrchestrator_Answer_LegacyPathWhenAgentLoopNil(t *testing.T) {
+	gen := &stubGenerator{text: "legacy [source:a#0]", cites: []string{"a#0"}}
+	o := &Orchestrator{
+		Retriever:      stubRetriever{chunks: []RetrievedChunk{chunk("a#0", "fact")}},
+		Generator:      gen,
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 6000},
+		Fusion:         PassthroughFusion{},
+		// AgentLoop nil → legacy path
+	}
+	if _, err := o.Answer(context.Background(), Query{Text: "q"}); err != nil {
+		t.Fatalf("legacy Answer: %v", err)
+	}
+	if gen.calls != 1 {
+		t.Fatalf("legacy path should call generator once, calls=%d", gen.calls)
+	}
+}
+
 func TestOrchestrator_Answer_Reinforces(t *testing.T) {
 	fs := &fakeStore{}
 	o := &Orchestrator{
