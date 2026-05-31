@@ -383,3 +383,33 @@ func TestLoadSeed_UnknownTypeIsError(t *testing.T) {
 		t.Fatalf("error should name the bad id and value, got %v", err)
 	}
 }
+
+func TestMeasureDedup_CountsNormalizedEqualPairs(t *testing.T) {
+	docs := []memory.RawDocument{
+		{ID: "a", Text: "user prefers tabs"},
+		{ID: "b", Text: "user   prefers tabs"}, // normalized-equal to a
+		{ID: "c", Text: "deploy target is AWS"},
+		{ID: "d", Text: "deploy target is GCP"}, // similar but NOT equal → not a collapse
+	}
+	n := memory.MeasureDedupCollapses(docs)
+	if n != 1 {
+		t.Fatalf("would-collapse count = %d, want 1", n)
+	}
+}
+
+func TestMeasureDedupCollapses_EdgeCases(t *testing.T) {
+	if got := memory.MeasureDedupCollapses(nil); got != 0 {
+		t.Errorf("nil slice: got %d, want 0", got)
+	}
+	if got := memory.MeasureDedupCollapses([]memory.RawDocument{}); got != 0 {
+		t.Errorf("empty slice: got %d, want 0", got)
+	}
+	all := []memory.RawDocument{
+		{ID: "a", Text: "same fact"},
+		{ID: "b", Text: "same   fact"},
+		{ID: "c", Text: "same fact "},
+	}
+	if got := memory.MeasureDedupCollapses(all); got != 2 {
+		t.Errorf("three normalized-equal docs: got %d, want 2 (one survivor, two collapses)", got)
+	}
+}

@@ -88,3 +88,17 @@ func TestMaybeStartSweep_EnabledWithoutDatabaseURLErrors(t *testing.T) {
 		t.Fatal("expected nil cleanup on the error path")
 	}
 }
+
+func TestSweeper_Run_SignalsDoneOnCancel(t *testing.T) {
+	sw := NewSweeper(nil, GCConfig{SweepInterval: time.Hour}) // ticker never fires within the test
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go sw.Run(ctx, done)
+	cancel()
+	select {
+	case <-done:
+		// ok: Run returned and closed done
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not signal done within 2s of cancel")
+	}
+}

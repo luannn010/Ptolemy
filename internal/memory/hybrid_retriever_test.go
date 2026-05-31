@@ -138,7 +138,7 @@ func TestHybridRetriever_PrefersFreshOverStale(t *testing.T) {
 	}
 	for _, rc := range got {
 		if rc.ID == "v1#0" {
-			t.Fatalf("v1#0 must be filtered by superseded_by IS NULL; got %+v", idsHybrid(got))
+			t.Fatalf("v1#0 must be excluded by the status='active' filter; got %+v", idsHybrid(got))
 		}
 	}
 	if len(got) == 0 {
@@ -219,6 +219,39 @@ func TestHybridRetriever_ExcludesNonActive(t *testing.T) {
 	}
 }
 
+func TestHybridRetriever_ExcludesSupersededByStatusAlone(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	// Two rows: one active, one superseded. Deliberately leave superseded_by NULL on the
+	// superseded row so the test proves status='active' (NOT superseded_by IS NULL) excludes it.
+	_ = s.Upsert(ctx, []Chunk{
+		{ID: "live", Content: "alpha bravo keyword", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now, Scope: "global"},
+		{ID: "stale", Content: "alpha bravo keyword", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now, Scope: "global"},
+	})
+	if _, err := conn.Exec(ctx, `UPDATE chunks SET status='superseded' WHERE id='stale'`); err != nil {
+		t.Fatal(err)
+	}
+	r := NewHybridRetriever(conn, fakeEmbedder{vecs: [][]float32{{1, 0, 0, 0}}}, 0.1, 30*24*time.Hour)
+	got, err := r.Retrieve(ctx, Query{Text: "keyword", K: 10}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seenLive := false
+	for _, c := range got {
+		if c.ID == "stale" {
+			t.Fatalf("retrieval returned superseded row 'stale'")
+		}
+		if c.ID == "live" {
+			seenLive = true
+		}
+	}
+	if !seenLive {
+		t.Fatal("active row 'live' was not returned (status filter must not exclude active rows)")
+	}
+}
+
 func TestHybridRetriever_RecencyParamsRespected(t *testing.T) {
 	// Two chunks identical except for published_at (10 days apart).
 	// Run with two different recency configs and assert the score
@@ -275,5 +308,57 @@ func TestHybridRetriever_RecencyParamsRespected(t *testing.T) {
 				t.Fatalf("score delta: got %v want %v (within 1e-3)", gotDelta, wantDelta)
 			}
 		})
+	}
+}
+
+func TestHybrid_DecayBlend_StaleProjectRowSinks(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	emb := fakeEmbedder{vecs: [][]float32{{1, 0, 0, 0}}}
+	r := NewHybridRetriever(conn, emb, 0.0, 30*24*time.Hour).WithDecayLambda(0.05)
+	subj := "userA"
+	now := time.Now().UTC()
+	mk := func(id string) Chunk {
+		ss, pp, sess, pr := subj, "factual", "s", "ptolemy"
+		return Chunk{ID: id, Content: "kafka retention policy detail", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now,
+			Scope: "project", Importance: 0.7, SubjectID: &ss, SessionID: &sess, ProjectID: &pr, Perspective: &pp}
+	}
+	if err := s.Upsert(context.Background(), []Chunk{mk("fresh"), mk("stale")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(context.Background(), `UPDATE chunks SET last_accessed_at = now() - interval '120 days' WHERE id='stale'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(context.Background(), `UPDATE chunks SET last_accessed_at = now() WHERE id='fresh'`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.Retrieve(context.Background(), Query{Text: "kafka retention", K: 10, SubjectID: &subj}, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both rows have identical content + embedding → identical base (RRF+recency)
+	// score, so the ONLY thing that can differentiate their returned Score is the
+	// project decay multiplier. Asserting a Score GAP isolates the decay blend:
+	// without it the two scores are equal (and this assertion fails), whereas the
+	// 6a recency tiebreak only reorders exact ties and could mask an order-only check.
+	var sFresh, sStale float64
+	var okFresh, okStale bool
+	for _, c := range got {
+		if c.ID == "fresh" {
+			sFresh, okFresh = c.Score, true
+		}
+		if c.ID == "stale" {
+			sStale, okStale = c.Score, true
+		}
+	}
+	if !okFresh || !okStale {
+		t.Fatalf("both rows should be retrieved; got %v", ids(got))
+	}
+	if !(sFresh > sStale) {
+		t.Fatalf("decay blend must drop the stale project row's score below the fresh one; fresh=%.6f stale=%.6f", sFresh, sStale)
+	}
+	// The 120-day-stale row should be sharply discounted, not marginally.
+	if sStale > sFresh/2 {
+		t.Fatalf("stale score %.6f not sufficiently decayed vs fresh %.6f", sStale, sFresh)
 	}
 }

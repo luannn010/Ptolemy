@@ -20,8 +20,11 @@ type Orchestrator struct {
 	Fusion         Fusion
 	ContextBuilder ContextBuilder
 	Generator      Generator
-	Depth          int
-	FinalK         int
+	// AgentLoop, when non-nil, is the rung-1 agentic path. NewModule sets it only
+	// when AGENT_LOOP_ENABLED=true; when nil, Answer runs the legacy pipeline.
+	AgentLoop *AgentLoop
+	Depth     int
+	FinalK    int
 }
 
 func (o *Orchestrator) Ingest(ctx context.Context, doc RawDocument) error {
@@ -60,16 +63,134 @@ func (o *Orchestrator) Ingest(ctx context.Context, doc RawDocument) error {
 	if raw, ok := doc.Metadata["scope"].(string); ok && raw != "" {
 		scope = raw
 	}
+	confidence := "normal"
+	if raw, ok := doc.Metadata["confidence"].(string); ok && raw != "" {
+		confidence = raw
+	}
+	factSubject, _ := doc.Metadata["fact_subject"].(string)
+	factPredicate, _ := doc.Metadata["fact_predicate"].(string)
 	for i := range chunks {
 		chunks[i].Scope = scope
+		chunks[i].Confidence = confidence
+		if factSubject != "" && factPredicate != "" {
+			fs, fp := factSubject, factPredicate
+			chunks[i].FactSubject = &fs
+			chunks[i].FactPredicate = &fp
+		}
 	}
+
 	if old, ok := doc.Metadata["supersedes"].(string); ok && old != "" {
 		return o.Store.SupersedeOnUpsert(ctx, chunks, old)
+	}
+
+	// Structured-fact ladder (SPEC §5 step 1, ~0ms, one indexed lookup).
+	if factSubject != "" && factPredicate != "" {
+		existing, found, err := o.Store.LookupFact(ctx, factSubject, factPredicate)
+		if err != nil {
+			return fmt.Errorf("lookup fact: %w", err)
+		}
+		if found {
+			if normalizeContent(existing.Content) == normalizeContent(chunks[0].Content) {
+				return o.Store.Reinforce(ctx, []string{existing.ID}) // duplicate
+			}
+			return o.Store.Supersede(ctx, chunks, existing.ID) // correction
+		}
 	}
 	return o.Store.Upsert(ctx, chunks)
 }
 
+// RecallResult is the retrieval-only output of Recall: the assembled context
+// (dual-circuit synthesis summary + supporting atoms, already budget-packed) and
+// the source ids — WITHOUT an LLM generation pass. This is the fast path for
+// "recall context" callers (hooks, MCP) who want the compressed context, not a
+// freshly-worded answer.
+type RecallResult struct {
+	Context   string
+	SourceIDs []string
+}
+
+// contextPacker is the optional capability a ContextBuilder may implement to
+// expose its ordering + budget packing without the prompt framing. Same-package
+// so MMRContextBuilder satisfies it via the unexported selectAndPack.
+type contextPacker interface {
+	selectAndPack(chunks []RetrievedChunk) (string, []string)
+}
+
+// Recall runs the retrieval path (retrieve → reinforce → fuse → select/pack)
+// and returns the assembled context directly, skipping Generator.Generate. It
+// shares ordering/budgeting with Answer's ContextBuilder so recalled context
+// matches what the LLM would have seen — just without the generation latency.
+func (o *Orchestrator) Recall(ctx context.Context, q Query) (RecallResult, error) {
+	depth := o.Depth
+	if depth <= 0 {
+		depth = 20
+	}
+	asOf := time.Now().UTC()
+	if q.AsOf != nil {
+		asOf = *q.AsOf
+	}
+	local := q
+	local.AsOf = &asOf
+
+	recallStart := time.Now()
+	retrieveStart := time.Now()
+	candidates, err := o.Retriever.Retrieve(ctx, local, depth)
+	if err != nil {
+		return RecallResult{}, fmt.Errorf("retrieve: %w", err)
+	}
+	log.Info().Str("stage", "retrieve").Int64("ms", time.Since(retrieveStart).Milliseconds()).Int("candidates", len(candidates)).Msg("recall: retrieve done")
+
+	if o.Store != nil && len(candidates) > 0 {
+		reinforceStart := time.Now()
+		ids := make([]string, len(candidates))
+		for i, c := range candidates {
+			ids[i] = c.ID
+		}
+		if err := o.Store.Reinforce(ctx, ids); err != nil {
+			log.Warn().Err(err).Msg("reinforce failed; serving recall anyway")
+		}
+		log.Info().Str("stage", "reinforce").Int64("ms", time.Since(reinforceStart).Milliseconds()).Int("ids", len(ids)).Msg("recall: reinforce done")
+	}
+	finalK := q.K
+	if finalK <= 0 {
+		finalK = o.FinalK
+	}
+	fused := o.Fusion.Fuse([][]RetrievedChunk{candidates}, finalK)
+
+	packStart := time.Now()
+	var packedIDs int
+	defer func() {
+		ev := log.Info()
+		if packedIDs == 0 {
+			ev = log.Warn()
+		}
+		ev.Str("stage", "pack").
+			Int64("pack_ms", time.Since(packStart).Milliseconds()).
+			Int64("total_ms", time.Since(recallStart).Milliseconds()).
+			Int("packed", packedIDs).
+			Msg("recall: select/pack done (no LLM)")
+	}()
+
+	if packer, ok := o.ContextBuilder.(contextPacker); ok {
+		body, sourceIDs := packer.selectAndPack(fused)
+		packedIDs = len(sourceIDs)
+		if log.Debug().Enabled() {
+			for i, id := range sourceIDs {
+				log.Debug().Str("stage", "recalled").Int("n", i).Str("id", id).Msg("recall: kept source")
+			}
+		}
+		return RecallResult{Context: body, SourceIDs: sourceIDs}, nil
+	}
+	// Fallback for builders without selectAndPack: derive context from the
+	// PromptContext the builder produces.
+	pc := o.ContextBuilder.Build(q, fused)
+	return RecallResult{Context: pc.User, SourceIDs: pc.SourceIDs}, nil
+}
+
 func (o *Orchestrator) Answer(ctx context.Context, q Query) (Answer, error) {
+	if o.AgentLoop != nil {
+		return o.AgentLoop.Run(ctx, q)
+	}
 	depth := o.Depth
 	if depth <= 0 {
 		depth = 20

@@ -42,7 +42,6 @@ func (r *Bm25Retriever) Retrieve(ctx context.Context, q Query, depth int) ([]Ret
 		       paradedb.score(id) AS score
 		FROM chunks
 		WHERE content @@@ $1
-		  AND superseded_by IS NULL
 		  AND status = 'active'
 		  AND published_at <= $2
 		ORDER BY paradedb.score(id) DESC

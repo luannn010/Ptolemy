@@ -8,9 +8,8 @@ build:
 	mkdir -p $(BIN_DIR)
 	go build -o $(BIN_DIR)/workerd ./cmd/workerd
 	go build -o $(BIN_DIR)/ptolemy-mcp ./cmd/ptolemy-mcp
-	go build -o $(BIN_DIR)/policy-demo ./cmd/policy-demo
-	go build -o $(BIN_DIR)/memory-demo ./cmd/memory-demo
-	go build -o $(BIN_DIR)/memory-eval ./cmd/memory-eval
+	go build -o $(BIN_DIR)/ptolemy ./cmd/ptolemy
+	go build -o $(BIN_DIR)/ptolemy-memory ./cmd/ptolemy-memory
 
 test:
 	go test -p 1 ./...
@@ -27,7 +26,7 @@ tidy:
 # Phase 0 memory smoke test. Overrides RAG_CHUNK_SIZE_TOKENS for the run so
 # small embedding servers (e.g. llama.cpp with --batch-size 64) don't reject
 # the input. Everything else (DATABASE_URL, EMBEDDING_*, BRAIN_*) is read
-# from .env via cmd/memory-demo's godotenv autoload.
+# from .env via cmd/ptolemy's godotenv autoload.
 SMOKE_TEST_CHUNK_SIZE ?= 50
 SMOKE_TEST_DOC        ?= /tmp/ptolemy-smoke.txt
 SMOKE_TEST_DOC_ID     ?= smoke-doc
@@ -39,11 +38,33 @@ smoke-memory: build
 	fi
 	@echo "--- ingest ($(SMOKE_TEST_DOC)) ---"
 	RAG_CHUNK_SIZE_TOKENS=$(SMOKE_TEST_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
-	  $(BIN_DIR)/memory-demo ingest $(SMOKE_TEST_DOC_ID) $(SMOKE_TEST_DOC)
+	  $(BIN_DIR)/ptolemy memory demo ingest $(SMOKE_TEST_DOC_ID) $(SMOKE_TEST_DOC)
 	@echo
 	@echo "--- ask ($(SMOKE_TEST_QUESTION)) ---"
 	RAG_CHUNK_SIZE_TOKENS=$(SMOKE_TEST_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
-	  $(BIN_DIR)/memory-demo ask "$(SMOKE_TEST_QUESTION)"
+	  $(BIN_DIR)/ptolemy memory demo ask "$(SMOKE_TEST_QUESTION)"
+
+# Phase 6a capture smoke: runs the REAL BRAIN_* extractor against a sample
+# exchange and logs the extracted entries. Requires .env (BRAIN_*).
+smoke-capture:
+	@set -a; . ./.env; set +a; \
+	  go test -p 1 -tags=smoke -run TestExtractorSmoke ./internal/memory/ -v
+
+# Phase 6b consolidation smoke: runs the REAL BRAIN_* LLM through the consolidator
+# synthesize step and logs the summary. Requires .env (BRAIN_*).
+smoke-consolidate:
+	@set -a; . ./.env; set +a; \
+	  go test -p 1 -tags=smoke -run TestConsolidatorSmoke ./internal/memory/ -v
+
+# Agent-loop smoke: runs the REAL agent loop end-to-end (NewModule + BRAIN +
+# embeddings + eval DB) on a known and an unanswerable seed question. Requires
+# .env (BRAIN_*/EMBEDDING_*/DATABASE_URL or MEMORY_EVAL_DATABASE_URL) and the
+# fixture corpus.
+smoke-agent:
+	@set -a; . ./.env; set +a; \
+	  RAG_FIXTURE_DIR=eval/testdata/corpus RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
+	  AGENT_LOOP_ENABLED=true AGENT_MAX_STEPS=3 \
+	  go test -p 1 -tags=smoke -run 'TestAgentLoopSmoke' ./internal/memory/ -v
 
 # Phase 3 memory eval. RAG_FIXTURE_DIR points the binary at the frozen
 # fixture corpus under internal/memory/eval/testdata/corpus/; eval.LoadFixtureCorpus
@@ -57,9 +78,26 @@ EVAL_CHUNK_SIZE   ?= 20
 eval-memory: build
 	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
 	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
-	  $(BIN_DIR)/memory-eval -seed $(EVAL_SEED)
+	  $(BIN_DIR)/ptolemy memory eval -seed $(EVAL_SEED)
+
+eval-memory-agent: build
+	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
+	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
+	AGENT_LOOP_ENABLED=true \
+	  $(BIN_DIR)/ptolemy memory eval -seed $(EVAL_SEED) -agent
 
 eval-memory-sweep: build
 	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
 	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
-	  $(BIN_DIR)/memory-eval -seed $(EVAL_SEED) -sweep
+	  $(BIN_DIR)/ptolemy memory eval -seed $(EVAL_SEED) -sweep
+
+eval-memory-dedup: build
+	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
+	  $(BIN_DIR)/ptolemy memory eval -seed $(EVAL_SEED) -dedup
+
+# Phase 6b synthesis eval (~12 seed scenarios, growable toward 20-40). Uses the
+# dedicated eval DB (MEMORY_EVAL_DATABASE_URL, falling back to DATABASE_URL) at the
+# real EMBEDDING_DIM. Needs .env (BRAIN_*, EMBEDDING_*).
+eval-synth: build
+	@set -a; . ./.env; set +a; \
+	  $(BIN_DIR)/ptolemy memory synth-eval -scenarios internal/memory/eval/testdata/synth_scenarios.json

@@ -1,7 +1,7 @@
-// memory-eval ingests the seed corpus into the live memory store and then
-// runs every question through the retriever, printing per-question hit/miss
-// and a mean recall@k summary. Intended for `make eval-memory`.
-package main
+// eval ingests the seed corpus into the live memory store and then runs every
+// question through the retriever, printing per-question hit/miss and a mean
+// recall@k summary. Exposed as `ptolemy memory eval` (see RunEval).
+package memory
 
 import (
 	"context"
@@ -13,37 +13,54 @@ import (
 	"strings"
 	"time"
 
-	// .env autoload (matches cmd/memory-demo).
-	_ "github.com/joho/godotenv/autoload"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/luannn010/ptolemy/internal/memory"
 	"github.com/luannn010/ptolemy/internal/memory/eval"
 )
 
-func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
-	}
-}
-
-func run(args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("memory-eval", flag.ContinueOnError)
+// RunEval is the `ptolemy memory eval` subcommand. It parses flags from args
+// (ContinueOnError, so a parse error returns rather than exiting), then runs
+// the retrieval eval, sweep, or dedup measurement against the live store.
+func RunEval(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("memory eval", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	seedPath := fs.String("seed", "internal/memory/eval/testdata/seed.json", "path to seed JSON")
 	skipIngest := fs.Bool("skip-ingest", false, "skip the corpus ingest step (use existing chunks)")
 	questionType := fs.String("question-type", "", "filter to a single QuestionType (paraphrase|exact_token|fresh_vs_stale|negative); empty = all")
 	sweep := fs.Bool("sweep", false, "3x3 recency sweep mode: ingest once, query nine times")
+	dedupFlag := fs.Bool("dedup", false, "dedup measurement mode: report would-collapse count over the fixture corpus (DB-free)")
+	agentMode := fs.Bool("agent", false, "run questions through the agent loop and score give-up/grounding (requires AGENT_LOOP_ENABLED=true)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if *dedupFlag {
+		fixtureDir := os.Getenv("RAG_FIXTURE_DIR")
+		if fixtureDir == "" {
+			return fmt.Errorf("-dedup requires RAG_FIXTURE_DIR to be set")
+		}
+		size, collapses, err := eval.MeasureDedup(fixtureDir)
+		if err != nil {
+			return fmt.Errorf("measure dedup: %w", err)
+		}
+		// Measured over the curated recall corpus: collapses>0 means dedup would
+		// merge docs the corpus treats as distinct — a recall risk, so keep it gated.
+		verdict := "no redundancy in the curated corpus; dedup is a no-op here (safe)"
+		if collapses > 0 {
+			verdict = "dedup would collapse curated rows; review before enabling (recall risk)"
+		}
+		fmt.Fprintf(stdout, "dedup-redundancy: corpus=%d would_collapse=%d (verdict: %s)\n",
+			size, collapses, verdict)
+		return nil
 	}
 
 	cfg, err := memory.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
-	ctx := context.Background()
+	if evalURL := strings.TrimSpace(os.Getenv("MEMORY_EVAL_DATABASE_URL")); evalURL != "" {
+		cfg.DatabaseURL = evalURL // eval runs against a dedicated DB so unit-test freshDB (dim=4) and eval (dim=768) stop clobbering each other
+	}
 	orch, conn, err := memory.NewModule(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("module: %w", err)
@@ -76,6 +93,24 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if err := ingestFixturesOrCorpus(ctx, orch, seed, stdout); err != nil {
 			return err
 		}
+	}
+
+	if *agentMode {
+		results, err := eval.RunAgentEval(ctx, orch, seed)
+		if err != nil {
+			return fmt.Errorf("agent eval: %w", err)
+		}
+		for _, r := range results {
+			verb := "ANSWER"
+			if r.GaveUp {
+				verb = "GIVEUP"
+			}
+			fmt.Fprintf(stdout, "[%s] %s  cites=%v\n", verb, r.Question.ID, r.Citations)
+		}
+		s := eval.SummarizeAgent(results)
+		fmt.Fprintf(stdout, "\ngive_up_correct = %d/%d   grounded = %d/%d answered\n",
+			s.GiveUpCorrect, s.Total, s.Grounded, s.Answered)
+		return nil
 	}
 
 	fmt.Fprintln(stdout, "--- running eval ---")

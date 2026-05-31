@@ -22,6 +22,24 @@ Before any implementation task:
 3. Confirm task scope and allowed files.
 4. Keep changes small, reversible, and task-scoped.
 5. Complete Section 1 (Startup Gate) in `docs/workflows/agent/agents-compliance-checklist.md`.
+6. Recall project context via the memory tools (`ptolemy_memory_recall`, or the `ptolemy-memory` CLI) before asking the user to re-explain; capture durable facts/decisions with `ptolemy_memory_capture` as they emerge. See CLAUDE.md §"Memory & context recall" for the full flow.
+
+### Memory Harness (Required)
+
+- At task start, run a quick memory preflight:
+  - `ptolemy_memory_recall` with `generate=false` and a short query to confirm retrieval path is reachable.
+  - `ptolemy_memory_capture` with a minimal exchange to confirm capture path is healthy.
+- During normal operation, default to retrieval-only memory:
+  - Always call `ptolemy_memory_recall` with `generate=false` unless the user explicitly asks for synthesized prose.
+- If recall fails:
+  - report the transport/config error immediately,
+  - continue the task, but do not ask the user to restate context until attempting one fallback path (`ptolemy-memory` CLI).
+- If capture fails:
+  - continue using recall-only mode,
+  - log decisions in-task and perform deferred capture at task end when memory dependencies recover.
+- Capture policy:
+  - Capture durable facts/decisions/constraints as they emerge (not chatter), and perform an end-of-task capture summary.
+- Memory capture dependencies are environment-backed (for example `DATABASE_URL`, embedding, and extractor/brain endpoints). Agents must surface which dependency failed instead of silently skipping capture.
 
 ## Branching and Commit Policy
 
