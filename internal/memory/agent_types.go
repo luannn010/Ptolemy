@@ -18,9 +18,11 @@ type AgentAction struct {
 }
 
 // AgentState carries everything the planner needs to decide the next step.
-// Invariant: StepCount == len(Steps) — the loop appends to Steps and increments
-// StepCount together each iteration. StepCount is kept as a field (not derived)
-// because the plan's loop reads it directly as the budget guard.
+// Across completed non-terminal iterations StepCount == len(Steps); on the
+// terminating iteration Steps has one more entry than StepCount (the loop
+// appends the terminal action, then returns before incrementing). StepCount is
+// kept as a field (not derived) because the loop reads it directly as the
+// budget guard.
 type AgentState struct {
 	Query             string
 	AccumulatedChunks []RetrievedChunk
