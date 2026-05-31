@@ -1,0 +1,15 @@
+root ::= ws object ws
+object ::= "{" ws
+           "\"type\"" ws ":" ws actiontype ws "," ws
+           "\"query\"" ws ":" ws string ws "," ws
+           "\"reason\"" ws ":" ws string
+           ws "}"
+actiontype ::= "\"retrieve\"" | "\"answer\"" | "\"give_up\""
+
+string ::= "\"" chars "\""
+chars ::= char*
+char ::= [^"\\\x00-\x1F] | escape
+escape ::= "\\" (["\\/bfnrt] | unicode)
+unicode ::= "u" hex hex hex hex
+hex ::= [0-9a-fA-F]
+ws ::= [ \t\n\r]*

@@ -20,8 +20,11 @@ type Orchestrator struct {
 	Fusion         Fusion
 	ContextBuilder ContextBuilder
 	Generator      Generator
-	Depth          int
-	FinalK         int
+	// AgentLoop, when non-nil, is the rung-1 agentic path. NewModule sets it only
+	// when AGENT_LOOP_ENABLED=true; when nil, Answer runs the legacy pipeline.
+	AgentLoop *AgentLoop
+	Depth     int
+	FinalK    int
 }
 
 func (o *Orchestrator) Ingest(ctx context.Context, doc RawDocument) error {
@@ -185,6 +188,9 @@ func (o *Orchestrator) Recall(ctx context.Context, q Query) (RecallResult, error
 }
 
 func (o *Orchestrator) Answer(ctx context.Context, q Query) (Answer, error) {
+	if o.AgentLoop != nil {
+		return o.AgentLoop.Run(ctx, q)
+	}
 	depth := o.Depth
 	if depth <= 0 {
 		depth = 20

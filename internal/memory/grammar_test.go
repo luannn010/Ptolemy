@@ -47,6 +47,37 @@ func TestGrammarMatchesAtomStruct(t *testing.T) {
 	}
 }
 
+func TestActionGrammarFile_ValidGBNF(t *testing.T) {
+	b, err := os.ReadFile("grammar/action.gbnf")
+	if err != nil {
+		t.Fatalf("read grammar: %v", err)
+	}
+	s := strings.ReplaceAll(string(b), `\"`, `"`)
+	for _, required := range []string{"root ::=", `"type"`, "actiontype ::=", `"retrieve"`, `"answer"`, `"give_up"`} {
+		if !strings.Contains(s, required) {
+			t.Fatalf("action grammar missing %q", required)
+		}
+	}
+}
+
+func TestActionGrammarMatchesAgentActionStruct(t *testing.T) {
+	b, err := os.ReadFile("grammar/action.gbnf")
+	if err != nil {
+		t.Fatalf("read grammar: %v", err)
+	}
+	s := strings.ReplaceAll(string(b), `\"`, `"`)
+	rt := reflect.TypeOf(AgentAction{})
+	for i := 0; i < rt.NumField(); i++ {
+		tag := rt.Field(i).Tag.Get("json")
+		if tag == "" {
+			continue
+		}
+		if !strings.Contains(s, `"`+tag+`"`) {
+			t.Fatalf("action grammar missing field %q from AgentAction json tag", tag)
+		}
+	}
+}
+
 func TestExtractor_SendsGrammarInRequest(t *testing.T) {
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

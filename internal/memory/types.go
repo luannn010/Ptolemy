@@ -79,6 +79,7 @@ type PromptContext struct {
 type Answer struct {
 	Text      string
 	Citations []string
+	GaveUp    bool // true when the loop produced an honest give_up (not a failure)
 }
 
 // Exchange is one full user+assistant turn, the unit of conversational capture.

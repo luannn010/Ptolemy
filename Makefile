@@ -56,6 +56,16 @@ smoke-consolidate:
 	@set -a; . ./.env; set +a; \
 	  go test -p 1 -tags=smoke -run TestConsolidatorSmoke ./internal/memory/ -v
 
+# Agent-loop smoke: runs the REAL agent loop end-to-end (NewModule + BRAIN +
+# embeddings + eval DB) on a known and an unanswerable seed question. Requires
+# .env (BRAIN_*/EMBEDDING_*/DATABASE_URL or MEMORY_EVAL_DATABASE_URL) and the
+# fixture corpus.
+smoke-agent:
+	@set -a; . ./.env; set +a; \
+	  RAG_FIXTURE_DIR=eval/testdata/corpus RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
+	  AGENT_LOOP_ENABLED=true AGENT_MAX_STEPS=3 \
+	  go test -p 1 -tags=smoke -run 'TestAgentLoopSmoke' ./internal/memory/ -v
+
 # Phase 3 memory eval. RAG_FIXTURE_DIR points the binary at the frozen
 # fixture corpus under internal/memory/eval/testdata/corpus/; eval.LoadFixtureCorpus
 # enumerates the dir and the orchestrator's ingest path chunks/embeds/upserts.
@@ -69,6 +79,12 @@ eval-memory: build
 	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
 	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
 	  $(BIN_DIR)/ptolemy memory eval -seed $(EVAL_SEED)
+
+eval-memory-agent: build
+	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
+	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
+	AGENT_LOOP_ENABLED=true \
+	  $(BIN_DIR)/ptolemy memory eval -seed $(EVAL_SEED) -agent
 
 eval-memory-sweep: build
 	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \

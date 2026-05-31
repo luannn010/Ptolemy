@@ -432,3 +432,40 @@ func TestLoadConfig_MMRLambdaRange(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfig_AgentDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://u:p@h:5432/d?sslmode=disable")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Agent.Enabled {
+		t.Fatal("AGENT_LOOP_ENABLED must default to false")
+	}
+	if cfg.Agent.MaxSteps != 5 {
+		t.Fatalf("AGENT_MAX_STEPS default = %d, want 5", cfg.Agent.MaxSteps)
+	}
+}
+
+func TestLoadConfig_AgentOverrides(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://u:p@h:5432/d?sslmode=disable")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("AGENT_LOOP_ENABLED", "true")
+	t.Setenv("AGENT_MAX_STEPS", "8")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !cfg.Agent.Enabled || cfg.Agent.MaxSteps != 8 {
+		t.Fatalf("agent overrides not applied: %+v", cfg.Agent)
+	}
+}

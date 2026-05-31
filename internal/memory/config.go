@@ -45,6 +45,9 @@ type MemoryConfig struct {
 	// Phase 6b knobs.
 	AliasExpansion bool // RAG_ALIAS_EXPANSION (default false; eval-affecting, measured)
 	Consolidate    ConsolidateConfig
+
+	// Agentic RAG (rung 1) knobs.
+	Agent AgentLoopConfig
 }
 
 // ConsolidateConfig holds the Phase-6b consolidation knobs.
@@ -53,6 +56,13 @@ type ConsolidateConfig struct {
 	Buffer   int           // CONSOLIDATE_BUFFER new atoms before a (subject,project) is consolidated (default 20)
 	Interval time.Duration // CONSOLIDATE_INTERVAL timer fallback (default 1h)
 	MinAtoms int           // CONSOLIDATE_MIN_ATOMS minimum atoms to bother summarizing (default 3)
+}
+
+// AgentLoopConfig holds the rung-1 agent-loop knobs. Default-off: when Enabled
+// is false, Orchestrator.Answer runs the legacy pipeline unchanged.
+type AgentLoopConfig struct {
+	Enabled  bool // AGENT_LOOP_ENABLED (default false)
+	MaxSteps int  // AGENT_MAX_STEPS (default 5, hard cap on loop iterations)
 }
 
 // GCConfig holds the garbage-collection knobs loaded from env vars.
@@ -156,6 +166,11 @@ func LoadConfig() (MemoryConfig, error) {
 	}
 	if cfg.Consolidate.Interval < time.Second {
 		return MemoryConfig{}, fmt.Errorf("CONSOLIDATE_INTERVAL must be >= 1s, got %v", cfg.Consolidate.Interval)
+	}
+
+	cfg.Agent = AgentLoopConfig{
+		Enabled:  boolEnv("AGENT_LOOP_ENABLED", false),
+		MaxSteps: intEnv("AGENT_MAX_STEPS", 5),
 	}
 
 	return cfg, nil

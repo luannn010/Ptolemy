@@ -31,7 +31,7 @@ func NewModule(ctx context.Context, cfg MemoryConfig) (*Orchestrator, *pgx.Conn,
 	// 100-overlap config maps to ~2800/400 runes — slightly conservative, which
 	// helps stay under embedding API per-request limits.
 	const runesPerToken = 4
-	return &Orchestrator{
+	orch := &Orchestrator{
 		Chunker: FixedSizeChunker{
 			MaxRunes: cfg.ChunkSizeTokens * runesPerToken,
 			Overlap:  cfg.ChunkOverlapTokens * runesPerToken,
@@ -44,7 +44,25 @@ func NewModule(ctx context.Context, cfg MemoryConfig) (*Orchestrator, *pgx.Conn,
 		Generator:      generator,
 		Depth:          20,
 		FinalK:         cfg.TopK,
-	}, conn, nil
+	}
+	if cfg.Agent.Enabled {
+		// The loop shares the orchestrator's Retriever/ContextBuilder/Generator
+		// instances, and reuses `generator` as the planner's ChatClient too. This
+		// is safe because all three (HybridRetriever, MMRContextBuilder,
+		// OpenAIGenerator) are stateless request handlers — no per-call mutable
+		// state — so concurrent legacy and loop calls cannot interfere. If any of
+		// them ever gains mutable per-request state, give the loop its own instances.
+		orch.AgentLoop = &AgentLoop{
+			Retriever: orch.Retriever,
+			Builder:   orch.ContextBuilder,
+			Generator: orch.Generator,
+			Planner:   NewBrainPlanner(generator),
+			Cfg:       AgentConfig{MaxSteps: cfg.Agent.MaxSteps},
+			Depth:     orch.Depth,
+			FinalK:    orch.FinalK,
+		}
+	}
+	return orch, conn, nil
 }
 
 // MaybeStartSweep loads MemoryConfig and, if GC_SWEEP_ENABLED is true AND a
