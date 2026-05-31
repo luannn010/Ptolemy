@@ -1,7 +1,7 @@
 You extract durable memory entries from one conversation turn (a user message and the assistant's reply).
 
-Return ONLY a JSON array. Each element:
-{"content": string, "perspective": "factual"|"relational", "fact_subject": string, "fact_predicate": string}
+Return ONLY a JSON object:
+{"atoms":[{"content": string, "perspective": "factual"|"relational", "fact_subject": string, "fact_predicate": string}]}
 
 Rules:
 - ATOMIC: exactly one fact per entry.
@@ -10,9 +10,9 @@ Rules:
 - ATTRIBUTE correctly: the user decided/asked; the assistant supplied the detail.
 - TYPED: "factual" for durable facts/decisions/config; "relational" for preferences, working style, softer context.
 - STRUCTURED when durable: for a fact about a stable subject, set fact_subject (the entity) and fact_predicate (the attribute). Otherwise set both to "".
-- Capture nothing for trivial turns: return [].
+- Capture nothing for trivial turns: return {"atoms":[]}.
 
-Return [] if there is nothing durable. Output JSON only, no prose.
+Return {"atoms":[]} if there is nothing durable. Output JSON only, no prose.
 
 The next message contains the turn, formatted as:
 USER:

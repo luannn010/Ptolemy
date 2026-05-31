@@ -42,6 +42,7 @@ type chatMessage struct {
 type chatRequest struct {
 	Model    string        `json:"model"`
 	Messages []chatMessage `json:"messages"`
+	Grammar  string        `json:"grammar,omitempty"`
 	// MaxTokens caps generation. Extraction/consolidation/answer all produce
 	// short, bounded output; without a cap a runaway model can generate for
 	// minutes. Omitted from JSON when zero.
@@ -134,13 +135,14 @@ var _ ChatClient = (*OpenAIGenerator)(nil)
 
 // Complete is a raw chat completion (no citation parsing). It satisfies the
 // ChatClient interface the Extractor and Consolidator depend on.
-func (g *OpenAIGenerator) Complete(ctx context.Context, system, user string) (string, error) {
+func (g *OpenAIGenerator) Complete(ctx context.Context, system, user string, opts CompleteOptions) (string, error) {
 	reqBody := chatRequest{
 		Model: g.Model,
 		Messages: []chatMessage{
 			{Role: "system", Content: system},
 			{Role: "user", Content: user},
 		},
+		Grammar:            opts.Grammar,
 		MaxTokens:          maxExtractTokens,
 		ChatTemplateKwargs: noThinking(),
 	}

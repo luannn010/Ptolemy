@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -11,8 +12,13 @@ import (
 // without the BRAIN LLM. (It implements ChatClient.Complete.)
 type cannedExtractor struct{}
 
-func (cannedExtractor) Complete(ctx context.Context, system, user string) (string, error) {
-	return `[{"content":"` + jsonEscape(user) + `","perspective":"factual","fact_subject":"","fact_predicate":""}]`, nil
+func (cannedExtractor) Complete(ctx context.Context, system, user string, opts CompleteOptions) (string, error) {
+	parts := strings.SplitN(user, "\n\nASSISTANT:\n", 2)
+	content := user
+	if len(parts) == 2 {
+		content = strings.TrimPrefix(parts[1], "ASSISTANT:\n")
+	}
+	return `{"atoms":[{"content":"` + jsonEscape(content) + `","perspective":"factual","fact_subject":"","fact_predicate":""}]}`, nil
 }
 
 func jsonEscape(s string) string {
@@ -34,9 +40,7 @@ func TestCaptureRecall_MultiSession(t *testing.T) {
 	conn := freshDB(t)
 	store := NewPgStore(conn)
 	emb := fakeEmbedder{vecs: [][]float32{{1, 0, 0, 0}}}
-	// MinGroundOverlap 0 so the echoed entry is always accepted (it equals the
-	// user text, which is in the grounding window anyway, but 0 removes any doubt).
-	hook := NewCaptureHook(&Extractor{Client: cannedExtractor{}, MinGroundOverlap: 0.0}, emb, store, 8)
+	hook := NewCaptureHook(NewExtractor(cannedExtractor{}), emb, store, 8)
 
 	// Note: turns must clear the gate's 16-rune minimum. (The dangling-pronoun
 	// filter runs on extracted *content*; here the canned extractor echoes the
