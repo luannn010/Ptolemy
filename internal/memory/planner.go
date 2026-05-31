@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed prompts/plan_v1.txt
@@ -31,6 +33,7 @@ func NewBrainPlanner(c ChatClient) *BrainPlanner {
 }
 
 func (p *BrainPlanner) NextAction(ctx context.Context, state AgentState) (AgentAction, error) {
+	log.Debug().Str("stage", "plan").Str("version", PlannerVersion).Int("step", state.StepCount).Int("budget", state.Budget).Msg("planner: deciding next action")
 	user := renderPlannerState(state)
 	raw, err := p.Client.Complete(ctx, planPromptTemplate, user, CompleteOptions{Grammar: p.Grammar})
 	if err != nil {
