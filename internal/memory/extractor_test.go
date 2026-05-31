@@ -64,3 +64,22 @@ func TestExtractor_HandlesEmptyAndFenced(t *testing.T) {
 		t.Fatalf("want empty, got %+v err=%v", got, err)
 	}
 }
+
+func TestExtractor_ParseError(t *testing.T) {
+	e := NewExtractor(fakeChat{resp: `{"atoms":[`})
+	_, err := e.Extract(context.Background(), Exchange{UserText: "u", AssistantText: "a"})
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+}
+
+func TestExtractor_NormalizesUnknownPerspective(t *testing.T) {
+	e := NewExtractor(fakeChat{resp: `{"atoms":[{"content":"x","perspective":"weird","fact_subject":"","fact_predicate":""}]}`})
+	got, err := e.Extract(context.Background(), Exchange{UserText: "x", AssistantText: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Perspective != "relational" {
+		t.Fatalf("expected fallback perspective relational, got %+v", got)
+	}
+}

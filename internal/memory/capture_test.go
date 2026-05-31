@@ -16,10 +16,20 @@ func (captureFakeEmbedder) Embed(ctx context.Context, texts []string) ([][]float
 	return out, nil
 }
 
+type shortVecEmbedder struct{}
+
+func (shortVecEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	return [][]float32{}, nil
+}
+
 // captureFakeStore records Upsert calls; implements just enough of Store.
 type captureFakeStore struct {
 	mu       sync.Mutex
 	upserted []Chunk
+	reinforced []string
+	superseded []string
+	lookupFound bool
+	lookupChunk Chunk
 }
 
 func (s *captureFakeStore) Upsert(ctx context.Context, c []Chunk) error {
@@ -30,12 +40,22 @@ func (s *captureFakeStore) Upsert(ctx context.Context, c []Chunk) error {
 }
 func (s *captureFakeStore) Get(context.Context, []string) ([]Chunk, error)           { return nil, nil }
 func (s *captureFakeStore) SupersedeOnUpsert(context.Context, []Chunk, string) error { return nil }
-func (s *captureFakeStore) Supersede(context.Context, []Chunk, string) error         { return nil }
 func (s *captureFakeStore) History(context.Context, string) ([]Chunk, error)         { return nil, nil }
 func (s *captureFakeStore) LookupFact(context.Context, string, string) (Chunk, bool, error) {
-	return Chunk{}, false, nil
+	return s.lookupChunk, s.lookupFound, nil
 }
-func (s *captureFakeStore) Reinforce(context.Context, []string) error         { return nil }
+func (s *captureFakeStore) Supersede(ctx context.Context, c []Chunk, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.superseded = append(s.superseded, id)
+	return nil
+}
+func (s *captureFakeStore) Reinforce(ctx context.Context, ids []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reinforced = append(s.reinforced, ids...)
+	return nil
+}
 func (s *captureFakeStore) Stats(context.Context) ([]ScopeStatusCount, error) { return nil, nil }
 
 func newTestHook(store Store) *PerTurnCaptureHook {
@@ -116,5 +136,37 @@ func TestExtractor_EndToEnd_StoresValid(t *testing.T) {
 	}
 	if len(store.upserted) != 1 {
 		t.Fatalf("valid atom should be stored, got %d rows", len(store.upserted))
+	}
+}
+
+func TestCapture_EmbedCountMismatchErrors(t *testing.T) {
+	store := &captureFakeStore{}
+	h := NewCaptureHook(NewExtractor(fakeChat{resp: `{"atoms":[{"content":"the sweep archives stale project rows below the threshold","perspective":"factual","fact_subject":"GC sweep","fact_predicate":"archives"}]}`}), shortVecEmbedder{}, store, 8)
+	ex := Exchange{
+		UserText:      "how does the GC archive?",
+		AssistantText: "the sweep archives stale project rows below the threshold",
+		SubjectID:     "userA", SessionID: "s1", ProjectID: "ptolemy",
+	}
+	if err := h.processTurn(context.Background(), ex); err == nil {
+		t.Fatal("expected embed count mismatch error")
+	}
+}
+
+func TestCapture_ReinforceWhenFactUnchanged(t *testing.T) {
+	store := &captureFakeStore{
+		lookupFound: true,
+		lookupChunk: Chunk{ID: "existing1", Content: "the sweep archives stale project rows below the threshold"},
+	}
+	h := NewCaptureHook(NewExtractor(fakeChat{resp: `{"atoms":[{"content":"the sweep archives stale project rows below the threshold","perspective":"factual","fact_subject":"GC sweep","fact_predicate":"archives"}]}`}), captureFakeEmbedder{}, store, 8)
+	ex := Exchange{
+		UserText:      "how does the GC archive?",
+		AssistantText: "the sweep archives stale project rows below the threshold",
+		SubjectID:     "userA", SessionID: "s1", ProjectID: "ptolemy",
+	}
+	if err := h.processTurn(context.Background(), ex); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.reinforced) != 1 || store.reinforced[0] != "existing1" {
+		t.Fatalf("expected reinforce on existing unchanged fact, got %+v", store.reinforced)
 	}
 }
