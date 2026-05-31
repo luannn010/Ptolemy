@@ -70,6 +70,12 @@ eval-memory: build
 	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
 	  $(BIN_DIR)/ptolemy memory eval -seed $(EVAL_SEED)
 
+eval-memory-agent: build
+	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
+	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \
+	AGENT_LOOP_ENABLED=true \
+	  $(BIN_DIR)/ptolemy memory eval -seed $(EVAL_SEED) -agent
+
 eval-memory-sweep: build
 	RAG_FIXTURE_DIR=$(EVAL_FIXTURE_DIR) \
 	RAG_CHUNK_SIZE_TOKENS=$(EVAL_CHUNK_SIZE) RAG_CHUNK_OVERLAP_TOKENS=10 \

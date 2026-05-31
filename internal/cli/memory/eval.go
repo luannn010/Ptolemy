@@ -29,6 +29,7 @@ func RunEval(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	questionType := fs.String("question-type", "", "filter to a single QuestionType (paraphrase|exact_token|fresh_vs_stale|negative); empty = all")
 	sweep := fs.Bool("sweep", false, "3x3 recency sweep mode: ingest once, query nine times")
 	dedupFlag := fs.Bool("dedup", false, "dedup measurement mode: report would-collapse count over the fixture corpus (DB-free)")
+	agentMode := fs.Bool("agent", false, "run questions through the agent loop and score give-up/grounding (requires AGENT_LOOP_ENABLED=true)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -92,6 +93,24 @@ func RunEval(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		if err := ingestFixturesOrCorpus(ctx, orch, seed, stdout); err != nil {
 			return err
 		}
+	}
+
+	if *agentMode {
+		results, err := eval.RunAgentEval(ctx, orch, seed)
+		if err != nil {
+			return fmt.Errorf("agent eval: %w", err)
+		}
+		for _, r := range results {
+			verb := "ANSWER"
+			if r.GaveUp {
+				verb = "GIVEUP"
+			}
+			fmt.Fprintf(stdout, "[%s] %s  cites=%v\n", verb, r.Question.ID, r.Citations)
+		}
+		s := eval.SummarizeAgent(results)
+		fmt.Fprintf(stdout, "\ngive_up_correct = %d/%d   grounded = %d/%d answered\n",
+			s.GiveUpCorrect, s.Total, s.Grounded, s.Answered)
+		return nil
 	}
 
 	fmt.Fprintln(stdout, "--- running eval ---")
