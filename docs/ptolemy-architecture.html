@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ptolemy — System Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0c0f16; --ink-2:#11151f; --ink-3:#161b27; --ink-4:#1c2230;
+    --line:rgba(227,179,78,0.13); --hair:rgba(255,255,255,0.07); --hair-2:rgba(255,255,255,0.12);
+    --gold:#e3b34e; --gold-dim:#b8893a;
+    --text:#eae6db; --text-2:#9ea3ad; --text-3:#686d79;
+    --purple:#b6a9ef; --teal:#6fd2b0; --amber:#e8b96a; --green:#a4d27c; --red:#e88a86; --blue:#7fb2ec;
+    --r:10px; --maxw:980px;
+    --mono:"JetBrains Mono",monospace; --body:"Hanken Grotesk",sans-serif; --disp:"Fraunces",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--ink); color:var(--text); font-family:var(--body);
+    line-height:1.65; font-size:16px; -webkit-font-smoothing:antialiased;
+    background-image:
+      linear-gradient(var(--line) 1px,transparent 1px),
+      linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:44px 44px; background-position:center top;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:0 28px}
+  ::selection{background:rgba(227,179,78,0.28); color:#fff}
+
+  /* ---------- header ---------- */
+  header{position:relative; overflow:hidden; padding:96px 0 64px; border-bottom:1px solid var(--hair)}
+  .orbit{position:absolute; top:-120px; right:-120px; width:460px; height:460px; opacity:.5; pointer-events:none}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.32em; text-transform:uppercase; color:var(--gold); margin-bottom:22px}
+  h1{font-family:var(--disp); font-weight:500; font-size:clamp(48px,9vw,92px); line-height:.96; letter-spacing:-.02em; margin-bottom:8px}
+  h1 .sub{display:block; font-size:clamp(15px,2.4vw,20px); font-weight:400; font-style:italic; color:var(--text-2); letter-spacing:0; margin-top:18px; max-width:560px; line-height:1.5}
+  .lede{margin-top:30px; max-width:600px; color:var(--text-2); font-size:17px}
+  .lede b{color:var(--text); font-weight:500}
+  .meta{display:flex; flex-wrap:wrap; gap:10px 26px; margin-top:34px; font-family:var(--mono); font-size:12px; color:var(--text-3)}
+  .meta span b{color:var(--gold-dim); font-weight:500}
+
+  /* ---------- section scaffolding ---------- */
+  section{padding:62px 0; border-bottom:1px solid var(--hair)}
+  .sec-head{display:flex; align-items:baseline; gap:16px; margin-bottom:8px}
+  .num{font-family:var(--mono); font-size:13px; color:var(--gold); letter-spacing:.1em}
+  h2{font-family:var(--disp); font-weight:500; font-size:clamp(26px,4vw,38px); letter-spacing:-.01em; line-height:1.1}
+  .sec-intro{color:var(--text-2); max-width:640px; margin:14px 0 36px; font-size:16.5px}
+  .sec-intro b{color:var(--text); font-weight:500}
+
+  /* ---------- chips / nodes ---------- */
+  .chip{position:relative; background:var(--ink-3); border:1px solid var(--hair); border-radius:var(--r); padding:14px 16px 14px 18px; transition:transform .25s ease, border-color .25s ease}
+  .chip:hover{transform:translateY(-2px); border-color:var(--hair-2)}
+  .chip::before{content:""; position:absolute; left:0; top:14px; bottom:14px; width:3px; border-radius:3px; background:var(--accent,var(--gold))}
+  .chip .t{font-weight:500; font-size:15px; letter-spacing:-.005em}
+  .chip .d{font-family:var(--mono); font-size:11.5px; color:var(--text-2); margin-top:3px; letter-spacing:.01em}
+  .c-control{--accent:var(--purple)} .c-sandbox{--accent:var(--teal)}
+  .c-integ{--accent:var(--amber)} .c-base{--accent:var(--green)}
+  .c-fail{--accent:var(--red)} .c-neutral{--accent:var(--text-3)} .c-event{--accent:var(--blue)}
+
+  /* ---------- the spine ---------- */
+  .band{background:var(--ink-2); border:1px solid var(--hair); border-radius:14px; padding:20px 22px; position:relative}
+  .band-label{display:flex; align-items:center; gap:12px; margin-bottom:16px}
+  .band-label .tag{font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--text-2)}
+  .band-label .mode{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; padding:3px 9px; border-radius:20px; border:1px solid var(--hair-2); color:var(--text-3)}
+  .mode.par{color:var(--teal); border-color:rgba(111,210,176,.4)}
+  .mode.ser{color:var(--amber); border-color:rgba(232,185,106,.4)}
+  .grid{display:grid; gap:12px}
+  .g2{grid-template-columns:1fr 1fr} .g3{grid-template-columns:repeat(3,1fr)}
+  .connector{display:flex; flex-direction:column; align-items:center; gap:6px; padding:13px 0}
+  .connector .lbl{font-family:var(--mono); font-size:11px; color:var(--text-3); letter-spacing:.08em}
+  .connector .ln{width:1px; height:20px; background:linear-gradient(var(--hair-2),transparent)}
+  .connector svg{display:block}
+
+  /* ---------- horizontal flow rows ---------- */
+  .flow{display:flex; align-items:stretch; gap:0; flex-wrap:wrap}
+  .flow .chip{flex:1 1 150px}
+  .arrow{flex:0 0 38px; display:flex; align-items:center; justify-content:center; color:var(--text-3)}
+  .arrow svg{width:22px;height:22px}
+  .branch{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px}
+
+  /* ---------- callout (principle) ---------- */
+  .principle{display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:start; background:linear-gradient(180deg,rgba(227,179,78,.06),transparent); border:1px solid var(--line); border-left:3px solid var(--gold); border-radius:0 var(--r) var(--r) 0; padding:16px 20px; margin-top:18px}
+  .principle .k{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); padding-top:3px; white-space:nowrap}
+  .principle p{font-size:15px; color:var(--text)}
+  .principle p b{color:#fff; font-weight:500}
+
+  /* ---------- decisions ---------- */
+  .deck{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px}
+  .card{background:var(--ink-2); border:1px solid var(--hair); border-radius:12px; padding:18px 20px}
+  .card h3{font-family:var(--body); font-weight:600; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--text-2); margin-bottom:14px; display:flex; align-items:center; gap:8px}
+  .card h3 .dot{width:7px;height:7px;border-radius:50%;background:var(--c,var(--gold))}
+  .h-high{--c:var(--red)} .h-mid{--c:var(--amber)} .h-low{--c:var(--text-3)}
+  .card ul{list-style:none; display:flex; flex-direction:column; gap:11px}
+  .card li{font-size:14.5px; color:var(--text); padding-left:18px; position:relative; line-height:1.5}
+  .card li::before{content:"›"; position:absolute; left:0; color:var(--gold-dim); font-family:var(--mono)}
+  .card li span{color:var(--text-2); font-size:13.5px}
+
+  /* ---------- stack strip ---------- */
+  .stack{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}
+  .pill{font-family:var(--mono); font-size:11.5px; color:var(--text-2); background:var(--ink-3); border:1px solid var(--hair); border-radius:6px; padding:6px 11px}
+  .pill b{color:var(--gold-dim); font-weight:500}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:30px; font-family:var(--mono); font-size:11.5px; color:var(--text-2)}
+  .legend i{display:inline-block; width:10px;height:10px;border-radius:2px; margin-right:7px; vertical-align:middle}
+
+  footer{padding:48px 0 80px; color:var(--text-3); font-family:var(--mono); font-size:12px; text-align:center}
+  footer b{color:var(--gold-dim);font-weight:500}
+
+  /* reveal animation */
+  .reveal{opacity:0; transform:translateY(14px)}
+  .seen .reveal{opacity:1; transform:none; transition:opacity .7s ease, transform .7s ease}
+  .seen .reveal:nth-child(2){transition-delay:.06s}
+  .seen .reveal:nth-child(3){transition-delay:.12s}
+  .seen .reveal:nth-child(4){transition-delay:.18s}
+  @media (prefers-reduced-motion:reduce){
+    .reveal{opacity:1;transform:none} .orbit .spin{animation:none!important}
+  }
+  @media (max-width:680px){
+    .g2,.g3{grid-template-columns:1fr} .branch{grid-template-columns:1fr}
+    .arrow{flex-basis:100%;height:30px;transform:rotate(90deg)}
+    header{padding:64px 0 48px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="orbit" viewBox="0 0 460 460" aria-hidden="true" fill="none">
+    <circle cx="230" cy="230" r="60"  stroke="var(--gold)" stroke-width="1" opacity=".35"/>
+    <circle cx="230" cy="230" r="120" stroke="var(--gold)" stroke-width="1" opacity=".25"/>
+    <circle cx="230" cy="230" r="185" stroke="var(--gold)" stroke-width="1" opacity=".16"/>
+    <g class="spin" style="transform-origin:230px 230px; animation:o1 38s linear infinite">
+      <circle cx="230" cy="110" r="4" fill="var(--gold)"/>
+    </g>
+    <g class="spin" style="transform-origin:230px 230px; animation:o2 22s linear infinite">
+      <circle cx="290" cy="230" r="3" fill="var(--gold)" opacity=".7"/>
+    </g>
+    <style>@keyframes o1{to{transform:rotate(360deg)}}@keyframes o2{to{transform:rotate(-360deg)}}</style>
+  </svg>
+  <div class="wrap">
+    <div class="eyebrow">System Architecture · v0.1 draft</div>
+    <h1>Ptolemy
+      <span class="sub">Orchestrating many workers through isolated sandboxes — cheap parallel verification, then a single serial check against reality.</span>
+    </h1>
+    <p class="lede">A small model assigns coding tasks to <b>4–8 workers running at once</b>, each in its own git-worktree sandbox. Workers develop against <b>HTTP mocks</b> in parallel, then survivors test <b>serially against the real environment</b> before merging. Every merge propagates back to the workers still in flight.</p>
+    <div class="meta">
+      <span><b>Stack</b> Go · HTTP/REST</span>
+      <span><b>Deploy</b> single VM</span>
+      <span><b>Isolation</b> git worktrees + containers</span>
+      <span><b>Mocks</b> record / derive · OpenAPI</span>
+    </div>
+  </div>
+</header>
+
+<!-- 01 SPINE -->
+<section id="spine">
+  <div class="wrap">
+    <div class="sec-head"><span class="num">01</span><h2>The promotion spine</h2></div>
+    <p class="sec-intro">Work travels <b>down</b> four layers, from the control plane to the base branch. The control plane splits cleanly in two: the model <b>decides</b>; a deterministic controller <b>does</b> the git and Docker plumbing.</p>
+
+    <div class="band reveal">
+      <div class="band-label"><span class="tag">Control plane</span></div>
+      <div class="grid g2">
+        <div class="chip c-control"><div class="t">Orchestrator</div><div class="d">small model + MCP · decides what / when</div></div>
+        <div class="chip c-neutral"><div class="t">Controller</div><div class="d">git + docker · deterministic, does</div></div>
+      </div>
+    </div>
+
+    <div class="connector reveal">
+      <span class="lbl">spawns · assigns</span>
+      <span class="ln"></span>
+      <svg width="13" height="9"><path d="M1 1L6.5 7L12 1" fill="none" stroke="var(--text-3)" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </div>
+
+    <div class="band reveal">
+      <div class="band-label"><span class="tag">Sandbox layer · Stage 1</span><span class="mode par">Parallel</span></div>
+      <div class="grid g3">
+        <div class="chip c-sandbox"><div class="t">Worker A</div><div class="d">worktree · app · mock</div></div>
+        <div class="chip c-sandbox"><div class="t">Worker B</div><div class="d">worktree · app · mock</div></div>
+        <div class="chip c-sandbox"><div class="t">Worker C</div><div class="d">worktree · app · mock</div></div>
+      </div>
+    </div>
+
+    <div class="connector reveal">
+      <span class="lbl">promote · stage-1 green</span>
+      <span class="ln"></span>
+      <svg width="13" height="9"><path d="M1 1L6.5 7L12 1" fill="none" stroke="var(--text-3)" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </div>
+
+    <div class="band reveal">
+      <div class="band-label"><span class="tag">Integration · Stage 2</span><span class="mode ser">Serial</span></div>
+      <div class="grid g2">
+        <div class="chip c-integ"><div class="t">Integration lock</div><div class="d">one worker at a time · lease + timeout</div></div>
+        <div class="chip c-integ"><div class="t">Real dev environment</div><div class="d">actual APIs · DB · microservices</div></div>
+      </div>
+    </div>
+
+    <div class="connector reveal">
+      <span class="lbl">merge · stage-2 green</span>
+      <span class="ln"></span>
+      <svg width="13" height="9"><path d="M1 1L6.5 7L12 1" fill="none" stroke="var(--text-3)" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </div>
+
+    <div class="band reveal" style="text-align:center">
+      <div class="chip c-base" style="display:inline-block; min-width:280px; text-align:left"><div class="t">Base branch</div><div class="d">parent · source of truth</div></div>
+    </div>
+
+    <div class="principle reveal"><span class="k">Principle</span><p><b>Keep the model out of the plumbing.</b> Git, Docker, locks and tests are deterministic Go. The model issues intents on top — so any failure is attributable to a decision or a controller bug, never a tangle of both.</p></div>
+
+    <div class="legend reveal">
+      <span><i style="background:var(--purple)"></i>control / agents</span>
+      <span><i style="background:var(--teal)"></i>sandbox · parallel</span>
+      <span><i style="background:var(--amber)"></i>integration · serial</span>
+      <span><i style="background:var(--green)"></i>base / pass</span>
+      <span><i style="background:var(--red)"></i>fail</span>
+      <span><i style="background:var(--blue)"></i>event</span>
+    </div>
+  </div>
+</section>
+
+<!-- 02 PLAN -->
+<section id="plan">
+  <div class="wrap">
+    <div class="sec-head"><span class="num">02</span><h2>Plan phase · two agents</h2></div>
+    <p class="sec-intro">A <b>task agent</b> defines and splits the work; a <b>resource agent</b> hands each worker its mock plus failing unit tests. Because a <i>different</i> agent writes the tests, the worker cannot game tests it authored itself — the tests become an external contract.</p>
+
+    <div class="flow reveal">
+      <div class="chip c-control"><div class="t">Task agent</div><div class="d">define + split sub-tasks</div></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chip c-sandbox"><div class="t">Resource agent</div><div class="d">mock API + failing tests</div></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chip c-neutral"><div class="t">Work package · per worker</div><div class="d">sub-task · mock · red tests</div></div>
+    </div>
+
+    <div class="principle reveal"><span class="k">Why split</span><p>Separating <b>test-author from implementer</b> is the main defense against an LLM coding to satisfy the mock rather than the real contract. The resource agent's failing tests are the spec the worker must earn.</p></div>
+  </div>
+</section>
+
+<!-- 03 TDD -->
+<section id="tdd">
+  <div class="wrap">
+    <div class="sec-head"><span class="num">03</span><h2>Execution · the TDD loop</h2></div>
+    <p class="sec-intro">Inside each sandbox the worker runs <b>red → green → refactor</b> against the mock. On a failed integration test, the gap is captured as a <b>new failing test</b> before looping back — this gives the loop a memory so it can't spin forever.</p>
+
+    <div class="flow reveal">
+      <div class="chip c-fail"><div class="t">Red</div><div class="d">provided tests fail</div></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chip c-base"><div class="t">Green</div><div class="d">write code to pass</div></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chip c-sandbox"><div class="t">Refactor</div><div class="d">align to sub-task · keep green</div></div>
+    </div>
+
+    <div class="connector reveal"><span class="lbl">stage-1 green → acquire lock → test vs real env</span></div>
+
+    <div class="branch reveal">
+      <div class="chip c-base"><div class="t">Pass → merge to base</div><div class="d">emits base_updated</div></div>
+      <div class="chip c-fail"><div class="t">Fail → add regression test</div><div class="d">↻ re-enters TDD as a new red</div></div>
+    </div>
+
+    <div class="principle reveal"><span class="k">Loop memory</span><p>A failed Stage 2 means the mock drifted or a real bug slipped through. <b>Encode it as a new red test, then go green again</b> — each pass through the loop is strictly more constrained than the last. That same regression test also signals the mock-update module to fix the mock for other workers.</p></div>
+  </div>
+</section>
+
+<!-- 04 FAN-OUT -->
+<section id="fanout">
+  <div class="wrap">
+    <div class="sec-head"><span class="num">04</span><h2>Propagation · the base_updated fan-out</h2></div>
+    <p class="sec-intro">A merge emits <b>one event with three independent subscribers</b>. The merge step stays ignorant of who listens, which is what lets you add or remove workers freely.</p>
+
+    <div class="band reveal" style="text-align:center; margin-bottom:0">
+      <div class="chip c-event" style="display:inline-block; min-width:260px; text-align:left"><div class="t">base_updated</div><div class="d">one event · many listeners</div></div>
+    </div>
+    <div class="connector reveal"><span class="ln"></span><svg width="13" height="9"><path d="M1 1L6.5 7L12 1" fill="none" stroke="var(--text-3)" stroke-width="1.3" stroke-linecap="round"/></svg></div>
+    <div class="grid g3 reveal">
+      <div class="chip c-sandbox"><div class="t">Code propagation</div><div class="d">siblings merge base in</div></div>
+      <div class="chip c-integ"><div class="t">Mock-update sender</div><div class="d">regen mocks from contract</div></div>
+      <div class="chip c-neutral"><div class="t">Re-test trigger</div><div class="d">queue stage-1 reruns</div></div>
+    </div>
+    <div class="connector reveal"><span class="lbl">converge → re-run stage 1 in affected sandboxes</span></div>
+    <div class="branch reveal">
+      <div class="chip c-base"><div class="t">Green → continue</div><div class="d">no human needed</div></div>
+      <div class="chip c-fail"><div class="t">Red → pause &amp; flag</div><div class="d">code or schema conflict</div></div>
+    </div>
+
+    <div class="principle reveal"><span class="k">Entry ticket</span><p>Before a worker may acquire the integration lock it must be <b>current with base</b>. If base moved while it waited in the queue, it is bounced back to sync + re-test first — so the one real environment never runs on stale code.</p></div>
+  </div>
+</section>
+
+<!-- 05 RELEVANCE -->
+<section id="relevance">
+  <div class="wrap">
+    <div class="sec-head"><span class="num">05</span><h2>Relevance filter · sender &amp; receiver</h2></div>
+    <p class="sec-intro">The sender <b>broadcasts</b>; each worker's receiver decides whether the change touches <i>its</i> work. This turns a global stall into a targeted one — only workers whose scope intersects the change ever pause.</p>
+
+    <div class="flow reveal">
+      <div class="chip c-integ"><div class="t">Mock-update sender</div><div class="d">broadcast: change + diff</div></div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="chip c-neutral"><div class="t">Sibling receiver</div><div class="d">in my loaded mocks?</div></div>
+    </div>
+    <div class="branch reveal">
+      <div class="chip c-neutral"><div class="t">No → ignore</div><div class="d">keep working · no stall</div></div>
+      <div class="chip c-integ"><div class="t">Yes → update mock</div><div class="d">regen affected · re-run stage 1</div></div>
+    </div>
+
+    <div class="principle reveal"><span class="k">Asymmetry</span><p>A false positive wastes one re-test; a false negative lets a worker code against a stale mock and fail expensively at Stage 2. So <b>err toward resyncing</b> — tune the filter slightly too eager, never too lazy. Relevance is computed deterministically from the worker's loaded-mock set, not a model judgment.</p></div>
+  </div>
+</section>
+
+<!-- 06 STACK -->
+<section id="stack">
+  <div class="wrap">
+    <div class="sec-head"><span class="num">06</span><h2>Concrete stack — Go over HTTP</h2></div>
+    <p class="sec-intro">HTTP services map cleanly onto record-and-replay mocks, and Go's tooling around git, Docker and OpenAPI is mature.</p>
+    <div class="deck">
+      <div class="card reveal"><h3>Controller</h3><div class="stack">
+        <span class="pill"><b>os/exec</b> → git worktree</span>
+        <span class="pill"><b>docker compose -p</b> per worker</span>
+        <span class="pill">Docker Engine API client</span>
+      </div></div>
+      <div class="card reveal"><h3>Mocks &amp; contracts</h3><div class="stack">
+        <span class="pill"><b>Hoverfly</b> capture / replay</span>
+        <span class="pill"><b>Prism</b> mock from OpenAPI</span>
+        <span class="pill"><b>kin-openapi</b> diff specs</span>
+        <span class="pill">oapi-codegen</span>
+      </div></div>
+      <div class="card reveal"><h3>Data &amp; events</h3><div class="stack">
+        <span class="pill"><b>golang-migrate</b> / goose</span>
+        <span class="pill">Postgres db-per-worker</span>
+        <span class="pill"><b>Go channels</b> in-process bus</span>
+      </div></div>
+      <div class="card reveal"><h3>Routing</h3><div class="stack">
+        <span class="pill"><b>Caddy / Traefik</b> path routing</span>
+        <span class="pill">/worker-a → :4001</span>
+        <span class="pill">httputil.ReverseProxy</span>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 DECISIONS -->
+<section id="decisions">
+  <div class="wrap">
+    <div class="sec-head"><span class="num">07</span><h2>Open decisions &amp; status</h2></div>
+    <p class="sec-intro">The architecture is sound; these are the <b>policy choices</b> it implies but hasn't fixed. Closing them is the prerequisite to building.</p>
+    <div class="deck">
+      <div class="card reveal h-high"><h3><span class="dot"></span>High impact</h3><ul>
+        <li>Code conflict policy <span>— human resolves, or worker re-tasked?</span></li>
+        <li>Schema / migration conflicts <span>— allow in v1, or defer?</span></li>
+        <li>Mock generation mode <span>— derive-from-contract for v1; re-capture later</span></li>
+      </ul></div>
+      <div class="card reveal h-mid"><h3><span class="dot"></span>Prevent silent breakage</h3><ul>
+        <li>Integration entry-ticket <span>— current with base before the lock</span></li>
+        <li>Lock lease / timeout <span>— crashed worker can't hold the env</span></li>
+        <li>Real-env state reset <span>— who resets the DB between serial runs</span></li>
+      </ul></div>
+      <div class="card reveal h-low"><h3><span class="dot"></span>Deferred (name now)</h3><ul>
+        <li>Review UI <span>— live app + diff + logs + FEATURE.md</span></li>
+        <li>Worker crash / retry semantics</li>
+        <li>Secrets in the real environment <span>— a security boundary</span></li>
+      </ul></div>
+    </div>
+
+    <div class="principle reveal"><span class="k">Build order</span><p>Worktree + stack lifecycle → review artifacts → mock layer + Stage 1 → integration lock + Stage 2 → base_updated propagation → relevance receiver → <b>wire in the model last</b>, on proven plumbing.</p></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">Ptolemy · system architecture · v0.1 draft — <b>keep the model out of the plumbing</b></div>
+</footer>
+
+<script>
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('seen'); io.unobserve(e.target);} });
+  },{threshold:.12});
+  document.querySelectorAll('section').forEach(s=>io.observe(s));
+  document.querySelector('header').classList.add('seen');
+</script>
+</body>
+</html>
