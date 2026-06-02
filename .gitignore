@@ -50,4 +50,7 @@ tmp-kb-reset.json
 /.worktrees/
 coverage
 coverage.out
+/mem
+/memcov
+/memcov.out
 /.cache/*
