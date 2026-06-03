@@ -12,7 +12,7 @@ Ptolemy v2 is a **clean-room rebuild** following the bootstrap plan in conversat
 
 The `internal/policy/` harness is the trust root. Every side-effecting adapter (`shellcmd`, `terminal`, `fileops`, `gitops`, `worktree`, `workspace`, `inspect`) must be reachable from services **only** via a Guarded* wrapper. `GuardedRunner` exists today; `GuardedFileOps` / `GuardedGit` / `GuardedWorktree` are the next scope per plan §4 step 4.
 
-`navigator` is the only side-effecting package that intentionally bypasses the harness — it is read-only knowledge-base access.
+`navigator` is the only side-effecting package that intentionally bypasses the harness — it is read-only knowledge-base access. The `internal/memory` package shares this carve-out: it is reached in-process by the memory MCP tools and the `ptolemy-memory` CLI, and its only writes land in the **memory Postgres DB** (never the guarded workspace, shell, or git), so it is exempt from the `Guarded*` rule. No other package may claim this exemption.
 
 ## Superpowers skill harness
 
@@ -54,6 +54,18 @@ It does **not** apply to:
 
 When unsure whether something counts as "new implementation", ask.
 
+## Memory & context recall (via MCP)
+
+Ptolemy has a working conversational memory/RAG system (`internal/memory`) exposed through three MCP tools and a CLI. Use it instead of asking the user to paste context.
+
+- **Recall before you ask.** At the start of a task — or when you need project background you don't have — call `ptolemy_memory_recall` with a focused query. It returns a compact synthesis summary plus a few supporting atoms and citations, not a context dump. Prefer this over re-reading large swaths of the repo or asking the user to re-explain.
+- **Capture what you learn.** When a durable fact, decision, or constraint emerges (a port number, an architectural choice, a gotcha), call `ptolemy_memory_capture` with the relevant user/assistant exchange so it survives into future sessions.
+- **Consolidate periodically.** At task end (or after several captures) call `ptolemy_memory_consolidate` to fold loose atoms into a single reconciled summary for the subject/project.
+
+Scope (`subject_id` / `project_id`) defaults from `PTOLEMY_MEMORY_SUBJECT` / `PTOLEMY_MEMORY_PROJECT`; pass args only to override. The tools call `internal/memory` **in-process** (no workerd hop) under the carve-out noted above. If `DATABASE_URL` is unset the memory tools are simply absent — the rest of the MCP surface still works.
+
+Hooks in `.claude/settings.local.json` (host-specific, gitignored) automate the common path: `SessionStart` runs `ptolemy-memory recall` to seed project context, and `Stop` runs `ptolemy-memory capture` on the last exchange.
+
 ## Policy & safety guardrails
 
 - **Never** loosen a `deny` rule in `.ptolemy/policy.json`. Add `allow` or `ask` rules; leave denies and the two self-protection rules (`deny-policy-write`, `deny-secret-*`) untouched.
@@ -67,7 +79,7 @@ When unsure whether something counts as "new implementation", ask.
 
 - Module path: `github.com/luannn010/ptolemy`. Go 1.25.
 - Four-table schema only: `sessions`, `command_logs`, `policy_decisions`, `schema_migrations`. Do not add tables without a written plan.
-- Build: `make build` produces `workerd`, `ptolemy-mcp`, `policy-demo`.
+- Build: `make build` produces `workerd`, `ptolemy-mcp`, `ptolemy`, and `ptolemy-memory` (a thin alias for `ptolemy memory recall|capture`). The former `policy-demo` and `memory-*` demo/eval binaries are now subcommands: `ptolemy policy check` and `ptolemy memory demo|eval|synth-eval`.
 - Tests: `make test` (uses `-p 1`). Policy bypass suite lives at [internal/policy/engine_test.go](internal/policy/engine_test.go).
 - Audit: every `Authorize` result is logged via zerolog and persisted to `policy_decisions` from inside the guard, before any side effect.
 

@@ -56,6 +56,35 @@ func TestNewModule_DefaultRetrieverIsHybrid(t *testing.T) {
 	}
 }
 
+// TestNewModule_AgentLoopWiredWhenEnabled verifies that when cfg.Agent.Enabled
+// is true, NewModule wires the AgentLoop onto the orchestrator. Requires a
+// real DB (requirePG skip guard).
+func TestNewModule_AgentLoopWiredWhenEnabled(t *testing.T) {
+	url := requirePG(t)
+	cfg := MemoryConfig{
+		DatabaseURL:        url,
+		EmbeddingBaseURL:   "http://example.invalid",
+		EmbeddingModel:     "fake",
+		EmbeddingDim:       4,
+		LLMBaseURL:         "http://example.invalid",
+		LLMModel:           "fake",
+		TopK:               5,
+		ChunkSizeTokens:    50,
+		ChunkOverlapTokens: 10,
+		RecencyWeight:      0.1,
+		RecencyHalfLife:    30 * 24 * time.Hour,
+		Agent:              AgentLoopConfig{Enabled: true, MaxSteps: 3},
+	}
+	orch, conn, err := NewModule(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("NewModule with agent enabled: %v", err)
+	}
+	defer conn.Close(context.Background())
+	if orch.AgentLoop == nil {
+		t.Fatal("expected AgentLoop to be wired when cfg.Agent.Enabled=true")
+	}
+}
+
 func TestMaybeStartSweep_DisabledWhenUnset(t *testing.T) {
 	// No GC_SWEEP_ENABLED → disabled, regardless of DATABASE_URL.
 	t.Setenv("GC_SWEEP_ENABLED", "false")
@@ -86,5 +115,19 @@ func TestMaybeStartSweep_EnabledWithoutDatabaseURLErrors(t *testing.T) {
 	}
 	if cleanup != nil {
 		t.Fatal("expected nil cleanup on the error path")
+	}
+}
+
+func TestSweeper_Run_SignalsDoneOnCancel(t *testing.T) {
+	sw := NewSweeper(nil, GCConfig{SweepInterval: time.Hour}) // ticker never fires within the test
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go sw.Run(ctx, done)
+	cancel()
+	select {
+	case <-done:
+		// ok: Run returned and closed done
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not signal done within 2s of cancel")
 	}
 }

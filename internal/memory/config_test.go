@@ -264,6 +264,80 @@ func TestLoadConfig_GCEnvParsed(t *testing.T) {
 	}
 }
 
+func TestGCConfig_DedupDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://x")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://x")
+	t.Setenv("BRAIN_MODEL", "m")
+	// Clear the dedup vars so an ambient shell value can't mask the defaults.
+	for _, k := range []string{"GC_DEDUP_ENABLED", "GC_DEDUP_THRESHOLD", "GC_DEDUP_LOOKBACK"} {
+		t.Setenv(k, "")
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.GC.DedupEnabled {
+		t.Errorf("DedupEnabled default = true, want false")
+	}
+	if cfg.GC.DedupThreshold != 0.7 {
+		t.Errorf("DedupThreshold default = %v, want 0.7", cfg.GC.DedupThreshold)
+	}
+	if cfg.GC.DedupLookback != 24*time.Hour {
+		t.Errorf("DedupLookback default = %v, want 24h", cfg.GC.DedupLookback)
+	}
+}
+
+func TestGCConfig_RejectsBadDedup(t *testing.T) {
+	base := func() {
+		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("EMBEDDING_BASE_URL", "http://x")
+		t.Setenv("EMBEDDING_MODEL", "m")
+		t.Setenv("EMBEDDING_DIM", "768")
+		t.Setenv("BRAIN_BASE_URL", "http://x")
+		t.Setenv("BRAIN_MODEL", "m")
+	}
+	base()
+	t.Setenv("GC_DEDUP_THRESHOLD", "1.5")
+	if _, err := LoadConfig(); err == nil {
+		t.Error("expected error for GC_DEDUP_THRESHOLD > 1")
+	}
+	base()
+	t.Setenv("GC_DEDUP_THRESHOLD", "0")
+	if _, err := LoadConfig(); err == nil {
+		t.Error("expected error for GC_DEDUP_THRESHOLD = 0")
+	}
+	base()
+	t.Setenv("GC_DEDUP_THRESHOLD", "0.7")
+	t.Setenv("GC_DEDUP_LOOKBACK", "30s")
+	if _, err := LoadConfig(); err == nil {
+		t.Error("expected error for GC_DEDUP_LOOKBACK < 1m")
+	}
+}
+
+func TestLoadConfig_CaptureAndMMRDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("CAPTURE_BUFFER_SIZE", "")
+	t.Setenv("RAG_MMR_LAMBDA", "")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.CaptureBufferSize != 256 {
+		t.Errorf("CaptureBufferSize default = %d, want 256", cfg.CaptureBufferSize)
+	}
+	if cfg.MMRLambda != 0.7 {
+		t.Errorf("MMRLambda default = %v, want 0.7", cfg.MMRLambda)
+	}
+}
+
 func TestLoadConfig_GCRejectsBadValues(t *testing.T) {
 	base := func() {
 		t.Setenv("DATABASE_URL", "postgres://x")
@@ -290,5 +364,124 @@ func TestLoadConfig_GCRejectsBadValues(t *testing.T) {
 				t.Fatalf("%s: expected error", name)
 			}
 		})
+	}
+}
+
+func TestLoadConfig_Phase6bDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AliasExpansion {
+		t.Error("AliasExpansion must default false (eval-affecting)")
+	}
+	if cfg.Consolidate.Enabled {
+		t.Error("Consolidate.Enabled must default false")
+	}
+	if cfg.Consolidate.Buffer != 20 || cfg.Consolidate.MinAtoms != 3 || cfg.Consolidate.Interval != time.Hour {
+		t.Errorf("consolidate defaults wrong: %+v", cfg.Consolidate)
+	}
+}
+
+func TestLoadConfig_RejectsBadConsolidateInterval(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("CONSOLIDATE_INTERVAL", "500ms") // < 1s floor
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("CONSOLIDATE_INTERVAL=500ms: expected error")
+	}
+}
+
+func TestLoadConfig_MMRLambdaRange(t *testing.T) {
+	base := func() {
+		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("EMBEDDING_BASE_URL", "http://e")
+		t.Setenv("EMBEDDING_MODEL", "m")
+		t.Setenv("EMBEDDING_DIM", "1024")
+		t.Setenv("BRAIN_BASE_URL", "http://l")
+		t.Setenv("BRAIN_MODEL", "lm")
+	}
+	reject := []string{"-0.1", "1.5"}
+	for _, v := range reject {
+		t.Run("reject "+v, func(t *testing.T) {
+			base()
+			t.Setenv("RAG_MMR_LAMBDA", v)
+			if _, err := LoadConfig(); err == nil {
+				t.Fatalf("RAG_MMR_LAMBDA=%s: expected error", v)
+			}
+		})
+	}
+	accept := []string{"0", "1"}
+	for _, v := range accept {
+		t.Run("accept "+v, func(t *testing.T) {
+			base()
+			t.Setenv("RAG_MMR_LAMBDA", v)
+			if _, err := LoadConfig(); err != nil {
+				t.Fatalf("RAG_MMR_LAMBDA=%s: unexpected error %v", v, err)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_AgentDefaults(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://u:p@h:5432/d?sslmode=disable")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Agent.Enabled {
+		t.Fatal("AGENT_LOOP_ENABLED must default to false")
+	}
+	if cfg.Agent.MaxSteps != 5 {
+		t.Fatalf("AGENT_MAX_STEPS default = %d, want 5", cfg.Agent.MaxSteps)
+	}
+}
+
+func TestLoadConfig_AgentOverrides(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://u:p@h:5432/d?sslmode=disable")
+	t.Setenv("EMBEDDING_BASE_URL", "http://e")
+	t.Setenv("EMBEDDING_MODEL", "m")
+	t.Setenv("EMBEDDING_DIM", "768")
+	t.Setenv("BRAIN_BASE_URL", "http://l")
+	t.Setenv("BRAIN_MODEL", "lm")
+	t.Setenv("AGENT_LOOP_ENABLED", "true")
+	t.Setenv("AGENT_MAX_STEPS", "8")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !cfg.Agent.Enabled || cfg.Agent.MaxSteps != 8 {
+		t.Fatalf("agent overrides not applied: %+v", cfg.Agent)
+	}
+}
+
+func TestFloatEnv_InvalidValueReturnsFallback(t *testing.T) {
+	t.Setenv("TEST_PTOLEMY_FLOAT_ENV_XYZ", "not-a-number")
+	got := floatEnv("TEST_PTOLEMY_FLOAT_ENV_XYZ", 3.14)
+	if got != 3.14 {
+		t.Fatalf("floatEnv with invalid value: got %v, want fallback 3.14", got)
+	}
+}
+
+func TestBoolEnv_InvalidValueReturnsFallback(t *testing.T) {
+	t.Setenv("TEST_PTOLEMY_BOOL_ENV_XYZ", "not-a-bool")
+	got := boolEnv("TEST_PTOLEMY_BOOL_ENV_XYZ", true)
+	if !got {
+		t.Fatalf("boolEnv with invalid value: got %v, want fallback true", got)
 	}
 }

@@ -58,7 +58,7 @@ func TestDecayScore_GoMatchesSQL(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := conn.Exec(context.Background(), `
-		UPDATE chunks SET scope='project', importance=0.8, access_count=3, last_accessed_at=$1
+		UPDATE chunks SET scope='project', subject_id='userT', importance=0.8, access_count=3, last_accessed_at=$1
 		WHERE id='d1'
 	`, tenDaysAgo)
 	if err != nil {

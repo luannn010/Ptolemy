@@ -73,3 +73,35 @@ func TestTmuxRunner_RunFallsBackWhenTmuxMissing(t *testing.T) {
 		t.Fatalf("expected fallback runner output, got %q", res.Output)
 	}
 }
+
+func TestTmuxRunner_CaptureSession_NoTmux(t *testing.T) {
+	orig := lookPath
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	defer func() { lookPath = orig }()
+
+	tr := NewTmuxRunner()
+	_, err := tr.CaptureSession(context.Background(), "no-tmux-sess")
+	if err == nil {
+		t.Fatal("expected ErrTmuxUnavailable when tmux not found")
+	}
+}
+
+func TestTmuxRunner_HasSession_NoTmux(t *testing.T) {
+	orig := lookPath
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	defer func() { lookPath = orig }()
+
+	tr := NewTmuxRunner()
+	if tr.HasSession(context.Background(), "no-tmux-sess") {
+		t.Fatal("HasSession must return false when tmux unavailable")
+	}
+}
+
+func TestTmuxRunner_KillSession_NoTmux(t *testing.T) {
+	orig := lookPath
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	defer func() { lookPath = orig }()
+
+	// Must not panic when tmux is unavailable.
+	KillSession("no-tmux-sess")
+}

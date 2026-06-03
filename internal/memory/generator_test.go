@@ -120,3 +120,31 @@ func TestOpenAIGenerator_AuthHeader(t *testing.T) {
 		t.Fatalf("auth header: %q", gotAuth)
 	}
 }
+
+func TestOpenAIGenerator_CompleteIncludesGrammar(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"atoms\":[]}"}}]}`))
+	}))
+	defer srv.Close()
+	g := NewOpenAIGenerator(srv.URL, "m", "")
+	_, err := g.Complete(context.Background(), "sys", "usr", CompleteOptions{Grammar: "root ::= \"x\""})
+	if err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if got["grammar"] == nil {
+		t.Fatal("expected grammar in complete request")
+	}
+}
+
+func TestOpenAIGenerator_CompleteNoChoices(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[]}`))
+	}))
+	defer srv.Close()
+	g := NewOpenAIGenerator(srv.URL, "m", "")
+	if _, err := g.Complete(context.Background(), "sys", "usr", CompleteOptions{}); err == nil {
+		t.Fatal("expected no choices error")
+	}
+}

@@ -37,6 +37,32 @@ type MemoryConfig struct {
 	// GC knobs (Phase 4). Defaults are placeholders to be tuned against real
 	// chat volume once Phase 6 lands.
 	GC GCConfig
+
+	// Phase 6a capture/recall knobs.
+	CaptureBufferSize int     // CAPTURE_BUFFER_SIZE (default 256; 0/garbage → default)
+	MMRLambda         float64 // RAG_MMR_LAMBDA (default 0.7; must be in [0,1])
+
+	// Phase 6b knobs.
+	AliasExpansion bool // RAG_ALIAS_EXPANSION (default false; eval-affecting, measured)
+	Consolidate    ConsolidateConfig
+
+	// Agentic RAG (rung 1) knobs.
+	Agent AgentLoopConfig
+}
+
+// ConsolidateConfig holds the Phase-6b consolidation knobs.
+type ConsolidateConfig struct {
+	Enabled  bool          // CONSOLIDATE_ENABLED (default false)
+	Buffer   int           // CONSOLIDATE_BUFFER new atoms before a (subject,project) is consolidated (default 20)
+	Interval time.Duration // CONSOLIDATE_INTERVAL timer fallback (default 1h)
+	MinAtoms int           // CONSOLIDATE_MIN_ATOMS minimum atoms to bother summarizing (default 3)
+}
+
+// AgentLoopConfig holds the rung-1 agent-loop knobs. Default-off: when Enabled
+// is false, Orchestrator.Answer runs the legacy pipeline unchanged.
+type AgentLoopConfig struct {
+	Enabled  bool // AGENT_LOOP_ENABLED (default false)
+	MaxSteps int  // AGENT_MAX_STEPS (default 5, hard cap on loop iterations)
 }
 
 // GCConfig holds the garbage-collection knobs loaded from env vars.
@@ -47,6 +73,11 @@ type GCConfig struct {
 	ArchiveThreshold float64       // GC_ARCHIVE_THRESHOLD (default 0.1)
 	PurgeEnabled     bool          // GC_PURGE_ENABLED (default false)
 	PurgeGraceDays   float64       // GC_PURGE_GRACE_DAYS (default 30)
+
+	// Phase 5 dedup knobs (placeholders — tune against real volume).
+	DedupEnabled   bool          // GC_DEDUP_ENABLED (default false)
+	DedupThreshold float64       // GC_DEDUP_THRESHOLD trigram candidate prefilter (default 0.7)
+	DedupLookback  time.Duration // GC_DEDUP_LOOKBACK recent-row window (default 24h)
 }
 
 func LoadConfig() (MemoryConfig, error) {
@@ -97,6 +128,9 @@ func LoadConfig() (MemoryConfig, error) {
 		ArchiveThreshold: floatEnv("GC_ARCHIVE_THRESHOLD", 0.1),
 		PurgeEnabled:     boolEnv("GC_PURGE_ENABLED", false),
 		PurgeGraceDays:   floatEnv("GC_PURGE_GRACE_DAYS", 30),
+		DedupEnabled:     boolEnv("GC_DEDUP_ENABLED", false),
+		DedupThreshold:   floatEnv("GC_DEDUP_THRESHOLD", 0.7),
+		DedupLookback:    durationEnv("GC_DEDUP_LOOKBACK", 24*time.Hour),
 	}
 	if cfg.GC.DecayLambda < 0 {
 		return MemoryConfig{}, fmt.Errorf("GC_DECAY_LAMBDA must be >= 0, got %v", cfg.GC.DecayLambda)
@@ -109,6 +143,34 @@ func LoadConfig() (MemoryConfig, error) {
 	}
 	if cfg.GC.PurgeGraceDays < 1 {
 		return MemoryConfig{}, fmt.Errorf("GC_PURGE_GRACE_DAYS must be >= 1, got %v", cfg.GC.PurgeGraceDays)
+	}
+	if cfg.GC.DedupThreshold <= 0 || cfg.GC.DedupThreshold > 1 {
+		return MemoryConfig{}, fmt.Errorf("GC_DEDUP_THRESHOLD must be in (0,1], got %v", cfg.GC.DedupThreshold)
+	}
+	if cfg.GC.DedupLookback < time.Minute {
+		return MemoryConfig{}, fmt.Errorf("GC_DEDUP_LOOKBACK must be >= 1m, got %v", cfg.GC.DedupLookback)
+	}
+
+	cfg.CaptureBufferSize = intEnv("CAPTURE_BUFFER_SIZE", 256)
+	cfg.MMRLambda = floatEnv("RAG_MMR_LAMBDA", 0.7)
+	if cfg.MMRLambda < 0 || cfg.MMRLambda > 1 {
+		return MemoryConfig{}, fmt.Errorf("RAG_MMR_LAMBDA must be in [0,1], got %v", cfg.MMRLambda)
+	}
+
+	cfg.AliasExpansion = boolEnv("RAG_ALIAS_EXPANSION", false)
+	cfg.Consolidate = ConsolidateConfig{
+		Enabled:  boolEnv("CONSOLIDATE_ENABLED", false),
+		Buffer:   intEnv("CONSOLIDATE_BUFFER", 20),
+		Interval: durationEnv("CONSOLIDATE_INTERVAL", time.Hour),
+		MinAtoms: intEnv("CONSOLIDATE_MIN_ATOMS", 3),
+	}
+	if cfg.Consolidate.Interval < time.Second {
+		return MemoryConfig{}, fmt.Errorf("CONSOLIDATE_INTERVAL must be >= 1s, got %v", cfg.Consolidate.Interval)
+	}
+
+	cfg.Agent = AgentLoopConfig{
+		Enabled:  boolEnv("AGENT_LOOP_ENABLED", false),
+		MaxSteps: intEnv("AGENT_MAX_STEPS", 5),
 	}
 
 	return cfg, nil

@@ -63,6 +63,27 @@ func TestHandleRoutesRequests(t *testing.T) {
 	}
 }
 
+func TestHandleGitStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/git/status" {
+			t.Fatalf("unexpected route %s %s", r.Method, r.URL.Path)
+		}
+		_, _ = w.Write([]byte("clean"))
+	}))
+	defer srv.Close()
+
+	got, handled, err := Handle("ptolemy_git_status", map[string]any{"session_id": "s"}, mcp.NewWorkerClient(srv.URL))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !handled {
+		t.Fatal("expected handled=true for ptolemy_git_status")
+	}
+	if got["content"] == nil {
+		t.Fatalf("expected text result, got %#v", got)
+	}
+}
+
 func TestHandleUnknownTool(t *testing.T) {
 	got, handled, err := Handle("unknown", map[string]any{}, mcp.NewWorkerClient("http://example.com"))
 	if err != nil {

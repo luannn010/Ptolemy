@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/apitypes"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/domain"
+	"github.com/luannn010/ptolemy/internal/health"
 	"github.com/luannn010/ptolemy/internal/policy"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
@@ -56,6 +58,71 @@ func TestHealthEndpoint(t *testing.T) {
 	_ = json.NewDecoder(resp.Body).Decode(&body)
 	if body["status"] != "ok" {
 		t.Fatalf("expected status ok, got %+v", body)
+	}
+}
+
+func TestHealth_DeepOK(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer up.Close()
+
+	agg := &health.Aggregator{Checkers: []health.Checker{
+		health.NewHTTPChecker("brain", up.URL, "/v1/models", true),
+		health.NewHTTPChecker("embedder", up.URL, "/v1/models", true),
+		health.NewPgChecker("postgres", nil),               // disabled
+		health.NewHTTPChecker("mcp", "", "/health", false), // disabled
+	}}
+	router := NewRouter(RouterDeps{Health: agg})
+
+	srv := httptest.NewServer(router)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("code = %d, want 200", resp.StatusCode)
+	}
+	var report health.Report
+	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "ok" || report.Service != "workerd" || len(report.Checks) != 4 {
+		t.Fatalf("report = %+v", report)
+	}
+}
+
+func TestHealth_RequiredDown503(t *testing.T) {
+	agg := &health.Aggregator{Checkers: []health.Checker{
+		health.NewHTTPChecker("brain", "", "/v1/models", true), // required, not configured -> down
+	}}
+	router := NewRouter(RouterDeps{Health: agg})
+
+	srv := httptest.NewServer(router)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("code = %d, want 503", resp.StatusCode)
+	}
+}
+
+func TestHealth_NilFallback(t *testing.T) {
+	router := NewRouter(RouterDeps{}) // no Health wired
+	srv := httptest.NewServer(router)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("code = %d, want 200", resp.StatusCode)
 	}
 }
 
@@ -235,6 +302,34 @@ func TestApproveRouter_ApprovesLoopback(t *testing.T) {
 	}
 	if !approvals.ConsumeApproved("pid2") {
 		t.Fatalf("expected approval to be consumable after Approve")
+	}
+}
+
+// TestAsDenied_* tests the unexported helper directly — package httpapi has access.
+func TestAsDenied_NilError(t *testing.T) {
+	var denied policy.ErrDenied
+	if asDenied(nil, &denied) {
+		t.Fatal("asDenied(nil) must return false")
+	}
+}
+
+func TestAsDenied_NonErrDenied(t *testing.T) {
+	var denied policy.ErrDenied
+	if asDenied(fmt.Errorf("plain error"), &denied) {
+		t.Fatal("asDenied with a plain error must return false")
+	}
+}
+
+func TestRunCommand_GeneralError_Returns500(t *testing.T) {
+	h, sessions := newTestRouter(t, stubRunner{err: fmt.Errorf("general boom")})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	s, _ := sessions.Create(context.Background(), session.CreateSessionRequest{Name: "s"})
+
+	body, _ := json.Marshal(apitypes.RunCommandRequest{Command: "echo hi"})
+	resp, _ := http.Post(srv.URL+"/sessions/"+s.ID+"/commands", "application/json", bytes.NewReader(body))
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for general error, got %d", resp.StatusCode)
 	}
 }
 

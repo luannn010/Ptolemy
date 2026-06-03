@@ -161,6 +161,61 @@ function answer(query):
 The orchestrator must read components from config/DI so swapping an implementation is a
 configuration change, not a code edit. **Do not** hard-code the retriever or fusion.
 
+## Agentic query path (rung 1, behind `AGENT_LOOP_ENABLED`)
+
+The pipeline above is single-pass: the LLM only runs on the data path (generation). The
+**agent loop** (`agent_loop.go`) puts the LLM in the *control* path. When
+`AGENT_LOOP_ENABLED=true`, `Orchestrator.Answer` delegates to `AgentLoop.Run` instead of
+the pipeline; when false (the default) the legacy path above is unchanged. The loop is the
+rollback seatbelt — flip the flag, nothing else moves.
+
+```text
+# Agentic query path (AGENT_LOOP_ENABLED=true)
+function run(query):
+    state = {query, chunks: [], steps: 0, budget: AGENT_MAX_STEPS}   # default 5
+    while state.steps < state.budget:
+        action = planner.next_action(state)        # grammar-constrained LLM call
+        switch action.type:
+            "retrieve": state.chunks += retriever.retrieve(action.query); state.steps++
+            "answer":   return do_answer(state)     # build → generate → grounding gate
+            "give_up":  return give_up(action.reason)
+    return give_up("step budget exhausted")          # budget always forces a terminal
+```
+
+Key components and invariants:
+
+- **`Planner` (`planner.go`)** reuses the extractor's pattern exactly: an embedded GBNF
+  grammar (`grammar/action.gbnf`) constrains the BRAIN output to `{type, query, reason}`,
+  a struct-drift test guards the grammar against `AgentAction`, and a deterministic
+  `validateAction` chain rejects unknown types / empty retrieve queries / empty give-up
+  reasons. Same `enable_thinking=false` as every other memory LLM call.
+- **Step budget is mandatory.** `AGENT_MAX_STEPS` (default 5) hard-caps iterations; a
+  planner that never returns a terminal hits `give_up("step budget exhausted")`. This
+  bounds both runaway loops and latency (each step is one BRAIN call).
+- **Terminal actions are `answer` and `give_up`.** `give_up` is **not failure** — "I don't
+  know based on what I found" is a valid, honest answer and is preferable to a hallucinated
+  one.
+- **Grounding gate (`do_answer` → `isGrounded`).** After generation, every `[source:id]`
+  citation in the answer *text* must reference a chunk that was actually retrieved
+  (`pc.SourceIDs`); an answer with zero citations, or any citation outside the set, is
+  rejected and converted to `give_up("answer ungrounded")`. This scans the prose, so it
+  catches body-level hallucinations the generator's structured-citation filter misses. It
+  is the single highest-quality lift of the rung.
+- **Components are shared, not re-plumbed.** The loop invokes the existing `Retriever`,
+  `ContextBuilder`, and `Generator` as tools (all stateless), and reuses the answer
+  `Generator` as the planner's `ChatClient`. The loop is a new *caller*, not new plumbing.
+
+**Eval.** Because the recall@k harness (`eval.RunRetrieval`) is retrieval-only and never
+calls the generator, the loop's answer/give-up/grounding value is invisible to recall@5
+(already 1.000 on the fixture set). A separate `-agent` eval mode (`make eval-memory-agent`,
+`eval/agent.go`) runs each seed question through `AgentLoop.Run` and scores **give-up
+correctness** (negative questions must give up; answerable must answer) and **grounding
+rate** (answered questions must carry ≥1 valid citation). Retrieval recall@5 stays a
+no-regression guard. Out-of-scope follow-up rungs: query rewriting, multi-hop
+`judge_sufficient`, memory-vs-docs routing, external tool use.
+
+Latest on-record results: see [RUNG1_EVAL_RESULTS.md](RUNG1_EVAL_RESULTS.md).
+
 ---
 
 ## Design rules (do not violate)

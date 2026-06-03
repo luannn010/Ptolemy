@@ -1,8 +1,11 @@
-package main
+package memory
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -181,5 +184,48 @@ func TestSweepMode_IngestsCorpusOnce(t *testing.T) {
 	runSweep(f, &buf)
 	if f.ingests != 1 {
 		t.Fatalf("ingest must run exactly once across the sweep, got %d", f.ingests)
+	}
+}
+
+// TestRunEval_BadFlagReturnsError exercises the flag-parse guard in RunEval
+// (the exported function). Passing an unknown flag triggers fs.Parse before any
+// DB is opened.
+func TestRunEval_BadFlagReturnsError(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	err := RunEval(context.Background(), []string{"--no-such-flag"}, &out, &errBuf)
+	if err == nil {
+		t.Fatal("expected error for unknown flag")
+	}
+}
+
+// TestRunEval_DedupRequiresFixtureDir exercises the dedup-only path in RunEval.
+// With --dedup set but RAG_FIXTURE_DIR unset, RunEval returns an error before
+// touching the DB.
+func TestRunEval_DedupRequiresFixtureDir(t *testing.T) {
+	t.Setenv("RAG_FIXTURE_DIR", "")
+	var out, errBuf bytes.Buffer
+	err := RunEval(context.Background(), []string{"--dedup"}, &out, &errBuf)
+	if err == nil {
+		t.Fatal("expected error when --dedup is set without RAG_FIXTURE_DIR")
+	}
+	if !strings.Contains(err.Error(), "RAG_FIXTURE_DIR") {
+		t.Fatalf("expected RAG_FIXTURE_DIR in error, got: %v", err)
+	}
+}
+
+// TestRunEval_DedupWithDir exercises the full --dedup output path, pointing at a
+// temp dir with one markdown fixture. No DB or LLM required.
+func TestRunEval_DedupWithDir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte("fact about ptolemy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RAG_FIXTURE_DIR", dir)
+	var out bytes.Buffer
+	if err := RunEval(context.Background(), []string{"--dedup"}, &out, &bytes.Buffer{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out.String(), "dedup-redundancy") {
+		t.Fatalf("expected dedup-redundancy in output, got: %q", out.String())
 	}
 }

@@ -1,6 +1,8 @@
 package fileops
 
 import (
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -44,5 +46,67 @@ func TestWriteFile_CreatesParentDirs(t *testing.T) {
 	}
 	if !strings.Contains(out, "hi") {
 		t.Fatalf("unexpected content %q", out)
+	}
+}
+
+func TestResolveRipgrep_NotFoundWhenNoRgAndNoFallbacks(t *testing.T) {
+	origLook := lookPath
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	defer func() { lookPath = origLook }()
+
+	origFallbacks := ripgrepFallbackPaths
+	ripgrepFallbackPaths = []string{}
+	defer func() { ripgrepFallbackPaths = origFallbacks }()
+
+	_, err := resolveRipgrep()
+	if err == nil {
+		t.Fatal("expected error when rg not in PATH and no fallbacks")
+	}
+	if !strings.Contains(err.Error(), "ripgrep") {
+		t.Fatalf("error should mention ripgrep, got: %v", err)
+	}
+}
+
+func TestResolveRipgrep_FoundInPath(t *testing.T) {
+	origLook := lookPath
+	lookPath = func(name string) (string, error) {
+		if name == "rg" {
+			return "/usr/bin/rg", nil
+		}
+		return "", exec.ErrNotFound
+	}
+	defer func() { lookPath = origLook }()
+
+	path, err := resolveRipgrep()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "/usr/bin/rg" {
+		t.Fatalf("expected /usr/bin/rg, got %q", path)
+	}
+}
+
+func TestResolveRipgrep_FallbackPath(t *testing.T) {
+	origLook := lookPath
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	defer func() { lookPath = origLook }()
+
+	// Write a real file that the fallback stat check will find.
+	tmp := t.TempDir()
+	fakeRg := tmp + "/rg"
+	if err := os.WriteFile(fakeRg, []byte("fake"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	origFallbacks := ripgrepFallbackPaths
+	ripgrepFallbackPaths = []string{fakeRg}
+	defer func() { ripgrepFallbackPaths = origFallbacks }()
+
+	path, err := resolveRipgrep()
+	if err != nil {
+		t.Fatalf("expected fallback path, got error: %v", err)
+	}
+	if path != fakeRg {
+		t.Fatalf("expected %q, got %q", fakeRg, path)
 	}
 }

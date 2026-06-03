@@ -1,5 +1,27 @@
 {
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bin/ptolemy-memory recall --quiet 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v jq >/dev/null || exit 0; input=$(cat); tp=$(printf '%s' \"$input\" | jq -r '.transcript_path // empty'); [ -f \"$tp\" ] || exit 0; user=$(jq -rs '[.[]|select(.type==\"user\")]|last|.message.content|if type==\"string\" then . else (map(select(.type==\"text\").text)|join(\"\\n\")) end' \"$tp\" 2>/dev/null); asst=$(jq -rs '[.[]|select(.type==\"assistant\")]|last|.message.content|if type==\"string\" then . else (map(select(.type==\"text\").text)|join(\"\\n\")) end' \"$tp\" 2>/dev/null); [ -n \"$user$asst\" ] || exit 0; bin/ptolemy-memory capture --quiet --user \"$user\" --assistant \"$asst\" --session \"$(printf '%s' \"$input\" | jq -r '.session_id // empty')\" >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
   }
 }

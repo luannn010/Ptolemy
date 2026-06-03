@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/pgvector/pgvector-go"
 )
 
 func freshDB(t *testing.T) *pgx.Conn {
@@ -51,23 +52,121 @@ func TestPgStore_UpsertAndGet(t *testing.T) {
 	}
 }
 
-func TestPgStore_MarkSuperseded(t *testing.T) {
+func TestPgStore_Supersede_HidesOldShowsNew(t *testing.T) {
 	conn := freshDB(t)
+	ctx := context.Background()
 	s := NewPgStore(conn)
 	now := time.Now().UTC()
-	chunks := []Chunk{
-		{ID: "a", Content: "old", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now.Add(-time.Hour)},
-		{ID: "b", Content: "new", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now},
-	}
-	if err := s.Upsert(context.Background(), chunks); err != nil {
+	if err := s.Upsert(ctx, []Chunk{
+		{ID: "f1", Content: "deploy target is AWS", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now,
+			Scope: "global", FactSubject: ptr("deploy"), FactPredicate: ptr("target")},
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkSuperseded(context.Background(), "a", "b"); err != nil {
-		t.Fatalf("MarkSuperseded: %v", err)
+	newChunk := Chunk{ID: "f2", Content: "deploy target is GCP", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now,
+		Scope: "global", FactSubject: ptr("deploy"), FactPredicate: ptr("target")}
+	if err := s.Supersede(ctx, []Chunk{newChunk}, "f1"); err != nil {
+		t.Fatalf("Supersede: %v", err)
 	}
-	got, _ := s.Get(context.Background(), []string{"a"})
-	if got[0].SupersededBy == nil || *got[0].SupersededBy != "b" {
-		t.Fatalf("expected SupersededBy=b, got %+v", got[0].SupersededBy)
+
+	got, err := s.Get(ctx, []string{"f1", "f2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Chunk{}
+	for _, c := range got {
+		byID[c.ID] = c
+	}
+	if byID["f1"].Status != "superseded" {
+		t.Errorf("old f1 status=%q, want superseded", byID["f1"].Status)
+	}
+	if byID["f1"].SupersededBy == nil || *byID["f1"].SupersededBy != "f2" {
+		t.Errorf("old f1 superseded_by=%v, want f2", byID["f1"].SupersededBy)
+	}
+	if byID["f2"].Status != "active" {
+		t.Errorf("new f2 status=%q, want active", byID["f2"].Status)
+	}
+	if byID["f2"].Supersedes == nil || *byID["f2"].Supersedes != "f1" {
+		t.Errorf("new f2 supersedes=%v, want f1", byID["f2"].Supersedes)
+	}
+	if byID["f2"].Version != 2 {
+		t.Errorf("new f2 version=%d, want 2", byID["f2"].Version)
+	}
+
+	var auditReason string
+	if err := conn.QueryRow(ctx,
+		`SELECT reason FROM chunk_audit WHERE chunk_id='f1' AND new_status='superseded'`).Scan(&auditReason); err != nil {
+		t.Fatalf("expected audit row for f1: %v", err)
+	}
+}
+
+func TestPgStore_History_WalksChain(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	if err := s.Upsert(ctx, []Chunk{{ID: "v1", Content: "one", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now, Scope: "global"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Supersede(ctx, []Chunk{{ID: "v2", Content: "two", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now, Scope: "global"}}, "v1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Supersede(ctx, []Chunk{{ID: "v3", Content: "three", Embedding: []float32{0, 0, 1, 0}, PublishedAt: now, Scope: "global"}}, "v2"); err != nil {
+		t.Fatal(err)
+	}
+	hist, err := s.History(ctx, "v3")
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(hist) != 3 {
+		t.Fatalf("History len=%d, want 3", len(hist))
+	}
+	if hist[0].ID != "v1" || hist[1].ID != "v2" || hist[2].ID != "v3" {
+		t.Errorf("History order = %s,%s,%s, want v1,v2,v3", hist[0].ID, hist[1].ID, hist[2].ID)
+	}
+}
+
+func TestPgStore_Supersede_Reversible(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	_ = s.Upsert(ctx, []Chunk{{ID: "r1", Content: "old", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now, Scope: "global"}})
+	_ = s.Supersede(ctx, []Chunk{{ID: "r2", Content: "new", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now, Scope: "global"}}, "r1")
+	// Rollback is a single UPDATE.
+	if _, err := conn.Exec(ctx, `UPDATE chunks SET status='active', superseded_by=NULL WHERE id='r1'`); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Get(ctx, []string{"r1"})
+	if len(got) != 1 || got[0].Status != "active" {
+		t.Fatalf("r1 not restored to active: %+v", got)
+	}
+}
+
+func TestPgStore_SupersedeOnUpsert_StampsUnifiedModel(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	// Old doc has two chunks under the "doc1#" id prefix.
+	if err := s.Upsert(ctx, []Chunk{
+		{ID: "doc1#0", Content: "old a", Embedding: []float32{1, 0, 0, 0}, PublishedAt: now, Scope: "global"},
+		{ID: "doc1#1", Content: "old b", Embedding: []float32{0, 1, 0, 0}, PublishedAt: now, Scope: "global"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	newChunks := []Chunk{{ID: "doc2#0", Content: "new a", Embedding: []float32{0, 0, 1, 0}, PublishedAt: now, Scope: "global"}}
+	if err := s.SupersedeOnUpsert(ctx, newChunks, "doc1"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.Get(ctx, []string{"doc1#0", "doc1#1"})
+	for _, c := range got {
+		if c.Status != "superseded" {
+			t.Errorf("%s status=%q, want superseded", c.ID, c.Status)
+		}
+		if c.SupersededBy == nil || *c.SupersededBy != "doc2#0" {
+			t.Errorf("%s superseded_by=%v, want doc2#0", c.ID, c.SupersededBy)
+		}
 	}
 }
 
@@ -236,7 +335,7 @@ func TestPgStore_Stats_CountsByScopeStatus(t *testing.T) {
 	}
 	// Force a project+archived row directly.
 	_, err := conn.Exec(context.Background(),
-		`UPDATE chunks SET scope='project', status='archived' WHERE id='g2'`)
+		`UPDATE chunks SET scope='project', subject_id='userT', status='archived' WHERE id='g2'`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,5 +349,123 @@ func TestPgStore_Stats_CountsByScopeStatus(t *testing.T) {
 	}
 	if got["global/active"] != 1 || got["project/archived"] != 1 {
 		t.Fatalf("stats wrong: %+v", got)
+	}
+}
+
+func TestPgStore_Supersede_UnknownOldIDErrors(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	err := s.Supersede(ctx, []Chunk{{ID: "x", Content: "c", Embedding: []float32{1, 0, 0, 0}, PublishedAt: time.Now().UTC(), Scope: "global"}}, "nonexistent")
+	if err == nil {
+		t.Fatal("expected error superseding a non-existent oldID")
+	}
+	got, _ := s.Get(ctx, []string{"x"})
+	if len(got) != 0 {
+		t.Fatalf("expected rollback; row x should not exist, got %+v", got)
+	}
+}
+
+func TestPgStore_Supersede_ProjectFactCarriesSubject(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	subj, sess, proj, persp := "userA", "s1", "ptolemy", "factual"
+	fsub, fpred := "archive threshold", "value"
+	mk := func(id, content string) Chunk {
+		ss, se, pr, pe, fs, fp := subj, sess, proj, persp, fsub, fpred
+		return Chunk{ID: id, Content: content, Embedding: []float32{1, 0, 0, 0}, PublishedAt: time.Now().UTC(),
+			Scope: "project", Importance: 0.7, SubjectID: &ss, SessionID: &se, ProjectID: &pr, Perspective: &pe,
+			FactSubject: &fs, FactPredicate: &fp}
+	}
+	old := mk("oldfact", "the archive threshold is 0.2")
+	if err := s.Upsert(context.Background(), []Chunk{old}); err != nil {
+		t.Fatalf("seed upsert: %v", err)
+	}
+	newc := mk("newfact", "the archive threshold is 0.1")
+	if err := s.Supersede(context.Background(), []Chunk{newc}, "oldfact"); err != nil {
+		t.Fatalf("Supersede project fact: %v", err) // currently FAILS: chunks_project_owned_chk violation
+	}
+	got, err := s.Get(context.Background(), []string{"newfact", "oldfact"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]Chunk{}
+	for _, c := range got {
+		byID[c.ID] = c
+	}
+	if byID["newfact"].SubjectID == nil || *byID["newfact"].SubjectID != "userA" {
+		t.Fatalf("superseding row lost subject_id: %+v", byID["newfact"])
+	}
+	if byID["oldfact"].Status != "superseded" {
+		t.Fatalf("old fact should be superseded, got %q", byID["oldfact"].Status)
+	}
+}
+
+func TestOrchestrator_Confidence_NewsFlow(t *testing.T) {
+	conn := freshDB(t)
+	ctx := context.Background()
+	s := NewPgStore(conn)
+	now := time.Now().UTC()
+	// low-confidence first report
+	if err := s.Upsert(ctx, []Chunk{{ID: "n1", Content: "quake magnitude 5.0", Embedding: []float32{1, 0, 0, 0},
+		PublishedAt: now, Scope: "global", Confidence: "low", FactSubject: ptr("quake"), FactPredicate: ptr("magnitude")}}); err != nil {
+		t.Fatal(err)
+	}
+	// high-confidence verified correction supersedes it
+	if err := s.Supersede(ctx, []Chunk{{ID: "n2", Content: "quake magnitude 5.4", Embedding: []float32{0, 1, 0, 0},
+		PublishedAt: now, Scope: "global", Confidence: "high", FactSubject: ptr("quake"), FactPredicate: ptr("magnitude")}}, "n1"); err != nil {
+		t.Fatal(err)
+	}
+
+	hist, err := s.History(ctx, "n2")
+	if err != nil || len(hist) != 2 {
+		t.Fatalf("History len=%d err=%v, want 2", len(hist), err)
+	}
+	// original kept + linked, only the high-confidence row is active
+	got, _ := s.Get(ctx, []string{"n1", "n2"})
+	for _, c := range got {
+		if c.ID == "n1" && c.Status != "superseded" {
+			t.Errorf("low report n1 status=%q, want superseded", c.Status)
+		}
+		if c.ID == "n2" && c.Status != "active" {
+			t.Errorf("high correction n2 status=%q, want active", c.Status)
+		}
+	}
+}
+
+func ptr(s string) *string { return &s }
+
+func TestPgStore_SubjectColumnsRoundTrip(t *testing.T) {
+	conn := freshDB(t)
+	s := NewPgStore(conn)
+	subj, sess, proj, persp := "userA", "sess1", "ptolemy", "factual"
+	in := Chunk{
+		ID: "p1", Content: "the GC sweep archives stale rows",
+		Embedding: []float32{1, 0, 0, 0}, PublishedAt: time.Now().UTC(),
+		Scope: "project", Importance: 0.7,
+		SubjectID: &subj, SessionID: &sess, ProjectID: &proj, Perspective: &persp,
+	}
+	if err := s.Upsert(context.Background(), []Chunk{in}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	got, err := s.Get(context.Background(), []string{"p1"})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("Get: %v len=%d", err, len(got))
+	}
+	if got[0].SubjectID == nil || *got[0].SubjectID != "userA" ||
+		got[0].SessionID == nil || *got[0].SessionID != "sess1" ||
+		got[0].ProjectID == nil || *got[0].ProjectID != "ptolemy" ||
+		got[0].Perspective == nil || *got[0].Perspective != "factual" {
+		t.Fatalf("scoping columns not round-tripped: %+v", got[0])
+	}
+}
+
+func TestPgStore_ProjectRowRequiresSubject(t *testing.T) {
+	conn := freshDB(t)
+	_, err := conn.Exec(context.Background(),
+		`INSERT INTO chunks (id, content, embedding, published_at, scope) VALUES ($1,$2,$3,$4,'project')`,
+		"leak", "x", pgvector.NewVector([]float32{1, 0, 0, 0}), time.Now().UTC())
+	if err == nil {
+		t.Fatal("expected chunks_project_owned_chk to reject scope=project with subject_id=NULL")
 	}
 }

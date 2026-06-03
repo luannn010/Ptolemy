@@ -8,10 +8,13 @@ import (
 )
 
 type fakeStore struct {
-	upserted       []Chunk
-	supersedeCalls []supersedeCall
-	reinforced     [][]string // records each Reinforce call's ids
-	statsCalls     int
+	upserted          []Chunk
+	supersedeCalls    []supersedeCall
+	reinforced        [][]string // records each Reinforce call's ids
+	statsCalls        int
+	rowSupersedeCalls []string    // records each Supersede(newChunks, oldID) call's oldID
+	factHit           *Chunk      // when non-nil, LookupFact returns it as found
+	lookupArgs        [][2]string // records each LookupFact (subject, predicate) call
 }
 
 type supersedeCall struct {
@@ -24,13 +27,24 @@ func (f *fakeStore) Upsert(_ context.Context, chunks []Chunk) error {
 	return nil
 }
 func (f *fakeStore) Get(_ context.Context, _ []string) ([]Chunk, error) { return nil, nil }
-func (f *fakeStore) MarkSuperseded(_ context.Context, _, _ string) error {
-	return nil
-}
 func (f *fakeStore) SupersedeOnUpsert(_ context.Context, chunks []Chunk, oldDocID string) error {
 	f.upserted = append(f.upserted, chunks...)
 	f.supersedeCalls = append(f.supersedeCalls, supersedeCall{OldDocID: oldDocID, NewChunks: chunks})
 	return nil
+}
+
+func (f *fakeStore) Supersede(_ context.Context, newChunks []Chunk, oldID string) error {
+	f.upserted = append(f.upserted, newChunks...)
+	f.rowSupersedeCalls = append(f.rowSupersedeCalls, oldID)
+	return nil
+}
+func (f *fakeStore) History(_ context.Context, _ string) ([]Chunk, error) { return nil, nil }
+func (f *fakeStore) LookupFact(_ context.Context, subject, predicate string) (Chunk, bool, error) {
+	f.lookupArgs = append(f.lookupArgs, [2]string{subject, predicate})
+	if f.factHit != nil {
+		return *f.factHit, true, nil
+	}
+	return Chunk{}, false, nil
 }
 
 func (f *fakeStore) Reinforce(_ context.Context, ids []string) error {
@@ -410,6 +424,146 @@ func TestOrchestrator_Ingest_ScopeFromMetadata(t *testing.T) {
 	}
 	if len(fs.upserted) == 0 || fs.upserted[0].Scope != "project" {
 		t.Fatalf("expected scope 'project', got %+v", fs.upserted)
+	}
+}
+
+func newFactOrch(fs *fakeStore) *Orchestrator {
+	return &Orchestrator{
+		Chunker:  FixedSizeChunker{MaxRunes: 100},
+		Embedder: fakeEmbedder{vecs: [][]float32{{1}}}, // one chunk → one vec
+		Store:    fs,
+	}
+}
+
+func TestOrchestrator_Ingest_NoFact_Upserts(t *testing.T) {
+	fs := &fakeStore{}
+	if err := newFactOrch(fs).Ingest(context.Background(), RawDocument{ID: "d1", Text: "hello world"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.upserted) == 0 {
+		t.Error("expected Upsert for non-fact doc")
+	}
+	if len(fs.rowSupersedeCalls) != 0 || len(fs.reinforced) != 0 {
+		t.Error("non-fact doc must not Supersede or Reinforce")
+	}
+}
+
+func TestOrchestrator_Ingest_FactDuplicate_Reinforces(t *testing.T) {
+	fs := &fakeStore{factHit: &Chunk{ID: "old", Content: "deploy target is AWS"}}
+	err := newFactOrch(fs).Ingest(context.Background(), RawDocument{
+		ID:       "d2",
+		Text:     "deploy target is AWS",
+		Metadata: map[string]any{"fact_subject": "deploy", "fact_predicate": "target"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.reinforced) != 1 || len(fs.reinforced[0]) != 1 || fs.reinforced[0][0] != "old" {
+		t.Errorf("expected Reinforce([old]) for duplicate fact, got %v", fs.reinforced)
+	}
+	if len(fs.upserted) != 0 || len(fs.rowSupersedeCalls) != 0 {
+		t.Error("duplicate fact must not Upsert or Supersede")
+	}
+	if len(fs.lookupArgs) != 1 || fs.lookupArgs[0] != [2]string{"deploy", "target"} {
+		t.Errorf("LookupFact called with %v, want one call (deploy, target)", fs.lookupArgs)
+	}
+}
+
+func TestOrchestrator_Ingest_FactContradiction_Supersedes(t *testing.T) {
+	fs := &fakeStore{factHit: &Chunk{ID: "old", Content: "deploy target is AWS"}}
+	err := newFactOrch(fs).Ingest(context.Background(), RawDocument{
+		ID:       "d3",
+		Text:     "deploy target is GCP",
+		Metadata: map[string]any{"fact_subject": "deploy", "fact_predicate": "target"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.rowSupersedeCalls) != 1 || fs.rowSupersedeCalls[0] != "old" {
+		t.Errorf("expected Supersede(old), got %v", fs.rowSupersedeCalls)
+	}
+	if len(fs.upserted) == 0 {
+		t.Error("contradiction path must still store the new chunks (via Supersede)")
+	}
+	if len(fs.lookupArgs) != 1 || fs.lookupArgs[0] != [2]string{"deploy", "target"} {
+		t.Errorf("LookupFact called with %v, want one call (deploy, target)", fs.lookupArgs)
+	}
+}
+
+func TestOrchestrator_Ingest_NewFact_Upserts(t *testing.T) {
+	fs := &fakeStore{} // factHit nil → LookupFact returns found=false
+	err := newFactOrch(fs).Ingest(context.Background(), RawDocument{
+		ID:       "d4",
+		Text:     "deploy target is Azure",
+		Metadata: map[string]any{"fact_subject": "deploy", "fact_predicate": "target"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.upserted) == 0 {
+		t.Error("expected Upsert for a new (not-yet-seen) fact")
+	}
+	if len(fs.reinforced) != 0 || len(fs.rowSupersedeCalls) != 0 {
+		t.Error("new fact must not Reinforce or Supersede")
+	}
+	if fs.upserted[0].FactSubject == nil || *fs.upserted[0].FactSubject != "deploy" ||
+		fs.upserted[0].FactPredicate == nil || *fs.upserted[0].FactPredicate != "target" {
+		t.Errorf("new-fact chunk must carry fact_subject/predicate, got subj=%v pred=%v",
+			fs.upserted[0].FactSubject, fs.upserted[0].FactPredicate)
+	}
+}
+
+func TestOrchestrator_Answer_DelegatesToAgentLoopWhenSet(t *testing.T) {
+	// Distinct generators per path so the test can tell which one produced the
+	// answer. If Answer delegates to the loop, the citation is "loop#0"; if the
+	// legacy path runs instead, it would be "legacy#0" — so this test fails if
+	// the delegation guard regresses.
+	legacyGen := &stubGenerator{text: "legacy [source:legacy#0]", cites: []string{"legacy#0"}}
+	loopGen := &stubGenerator{text: "loop [source:loop#0]", cites: []string{"loop#0"}}
+	o := &Orchestrator{
+		Retriever:      stubRetriever{chunks: []RetrievedChunk{chunk("legacy#0", "legacy fact")}},
+		Generator:      legacyGen,
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 6000},
+		Fusion:         PassthroughFusion{},
+		AgentLoop: &AgentLoop{
+			Planner: &stubPlanner{actions: []AgentAction{
+				{Type: ActionRetrieve, Query: "a"}, {Type: ActionAnswer},
+			}},
+			Retriever: stubRetriever{chunks: []RetrievedChunk{chunk("loop#0", "loop fact")}},
+			Generator: loopGen,
+			Builder:   BudgetContextBuilder{MaxRunes: 6000},
+			Cfg:       AgentConfig{MaxSteps: 5},
+		},
+	}
+	ans, err := o.Answer(context.Background(), Query{Text: "q"})
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if len(ans.Citations) != 1 || ans.Citations[0] != "loop#0" {
+		t.Fatalf("expected delegation to agent loop (citation loop#0), got %+v", ans)
+	}
+	if legacyGen.calls != 0 {
+		t.Fatalf("legacy generator must not be called when delegating, calls=%d", legacyGen.calls)
+	}
+	if loopGen.calls != 1 {
+		t.Fatalf("loop generator should be called once, calls=%d", loopGen.calls)
+	}
+}
+
+func TestOrchestrator_Answer_LegacyPathWhenAgentLoopNil(t *testing.T) {
+	gen := &stubGenerator{text: "legacy [source:a#0]", cites: []string{"a#0"}}
+	o := &Orchestrator{
+		Retriever:      stubRetriever{chunks: []RetrievedChunk{chunk("a#0", "fact")}},
+		Generator:      gen,
+		ContextBuilder: BudgetContextBuilder{MaxRunes: 6000},
+		Fusion:         PassthroughFusion{},
+		// AgentLoop nil → legacy path
+	}
+	if _, err := o.Answer(context.Background(), Query{Text: "q"}); err != nil {
+		t.Fatalf("legacy Answer: %v", err)
+	}
+	if gen.calls != 1 {
+		t.Fatalf("legacy path should call generator once, calls=%d", gen.calls)
 	}
 }
 

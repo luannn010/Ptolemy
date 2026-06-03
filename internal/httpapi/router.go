@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/luannn010/ptolemy/internal/apitypes"
 	"github.com/luannn010/ptolemy/internal/command"
+	"github.com/luannn010/ptolemy/internal/health"
 	"github.com/luannn010/ptolemy/internal/policy"
 	"github.com/luannn010/ptolemy/internal/session"
 )
@@ -17,16 +18,22 @@ type RouterDeps struct {
 	Sessions  *session.Store
 	Commands  *command.Service
 	CommandDB *command.Store
+	Health    *health.Aggregator
 }
 
 func NewRouter(deps RouterDeps) http.Handler {
 	r := chi.NewRouter()
-	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"status":    "ok",
-			"service":   "workerd",
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
-		})
+	r.Get("/health", func(w http.ResponseWriter, req *http.Request) {
+		if deps.Health == nil {
+			writeJSON(w, http.StatusOK, map[string]any{
+				"status":    "ok",
+				"service":   "workerd",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
+			})
+			return
+		}
+		report, code := deps.Health.Run(req.Context())
+		writeJSON(w, code, report)
 	})
 
 	r.Post("/sessions", func(w http.ResponseWriter, r *http.Request) {

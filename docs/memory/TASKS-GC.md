@@ -41,24 +41,24 @@ Mark items `[x]` as you complete them. Keep `internal/memory/score_test.go` pass
 
 ## Phase 4 · Supersession
 
-- [ ] Implement `Supersede()` in `store.go`: transactional — insert new row with `supersedes` +
+- [x] Implement `Supersede()` in `store.go`: transactional — insert new row with `supersedes` +
       `version+1`, mark old `superseded` with `superseded_by`, log to audit. (See SPEC §5.)
-- [ ] Implement `History()`: the recursive version-chain query.
-- [ ] At ingest, if `fact_subject`+`fact_predicate` are set, check for an existing fact with the
+- [x] Implement `History()`: the recursive version-chain query.
+- [x] At ingest, if `fact_subject`+`fact_predicate` are set, check for an existing fact with the
       same subject+predicate: same value → treat as duplicate (reinforce); different value →
       `Supersede()`. This is the zero-cost structured path.
-- [ ] Wire `confidence` for the news/verification flow (low on first report, high on verify).
-- [ ] Tests: supersede a row → assert old hidden from `Retrieve`, new visible, chain walkable,
+- [x] Wire `confidence` for the news/verification flow (low on first report, high on verify).
+- [x] Tests: supersede a row → assert old hidden from `Retrieve`, new visible, chain walkable,
       and the whole thing reversible.
 
 ## Phase 5 · Dedup in the sweep  — WHEN NEEDED
 
-- [ ] Implement `dedupRecent()` in `gc.go`: trigram (`%` / `similarity()`) over rows inserted
+- [x] Implement `dedupRecent()` in `gc.go`: trigram (`%` / `similarity()`) over rows inserted
       since last sweep, WITHIN scope. Above threshold (config, default 0.7):
       - structured/clear duplicate → reinforce survivor, mark loser `dead` reason `'duplicate'`.
       - ambiguous (possible contradiction) → DO NOT collapse; keep both (safe fallback).
-- [ ] Add to the `Run()` pass order: dedup → supersession → archive → purge.
-- [ ] Tests: insert near-identical project rows → run dedup → assert one survivor reinforced,
+- [x] Add to the `Run()` pass order: dedup → archive → purge.
+- [x] Tests: insert near-identical project rows → run dedup → assert one survivor reinforced,
       loser dead; insert a contradiction pair → assert BOTH kept.
 
 ---

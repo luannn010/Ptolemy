@@ -2,12 +2,20 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/rs/zerolog/log"
 )
+
+// ErrMemoryConfig wraps any failure to load MemoryConfig from the environment.
+// Callers (and tests) should match it with errors.Is rather than inspecting the
+// error string.
+var ErrMemoryConfig = errors.New("memory config")
 
 // NewModule wires a production Orchestrator from MemoryConfig. It opens a pgx
 // connection, applies migrations, and constructs every concrete implementation.
@@ -29,20 +37,38 @@ func NewModule(ctx context.Context, cfg MemoryConfig) (*Orchestrator, *pgx.Conn,
 	// 100-overlap config maps to ~2800/400 runes — slightly conservative, which
 	// helps stay under embedding API per-request limits.
 	const runesPerToken = 4
-	return &Orchestrator{
+	orch := &Orchestrator{
 		Chunker: FixedSizeChunker{
 			MaxRunes: cfg.ChunkSizeTokens * runesPerToken,
 			Overlap:  cfg.ChunkOverlapTokens * runesPerToken,
 		},
 		Embedder:       embedder,
 		Store:          NewPgStore(conn),
-		Retriever:      NewHybridRetriever(conn, embedder, cfg.RecencyWeight, cfg.RecencyHalfLife),
+		Retriever:      NewHybridRetriever(conn, embedder, cfg.RecencyWeight, cfg.RecencyHalfLife).WithDecayLambda(cfg.GC.DecayLambda).WithAliasExpansion(cfg.AliasExpansion),
 		Fusion:         PassthroughFusion{},
-		ContextBuilder: BudgetContextBuilder{MaxRunes: 6000},
+		ContextBuilder: MMRContextBuilder{Lambda: cfg.MMRLambda, K: cfg.TopK, MaxRunes: 6000},
 		Generator:      generator,
 		Depth:          20,
 		FinalK:         cfg.TopK,
-	}, conn, nil
+	}
+	if cfg.Agent.Enabled {
+		// The loop shares the orchestrator's Retriever/ContextBuilder/Generator
+		// instances, and reuses `generator` as the planner's ChatClient too. This
+		// is safe because all three (HybridRetriever, MMRContextBuilder,
+		// OpenAIGenerator) are stateless request handlers — no per-call mutable
+		// state — so concurrent legacy and loop calls cannot interfere. If any of
+		// them ever gains mutable per-request state, give the loop its own instances.
+		orch.AgentLoop = &AgentLoop{
+			Retriever: orch.Retriever,
+			Builder:   orch.ContextBuilder,
+			Generator: orch.Generator,
+			Planner:   NewBrainPlanner(generator),
+			Cfg:       AgentConfig{MaxSteps: cfg.Agent.MaxSteps},
+			Depth:     orch.Depth,
+			FinalK:    orch.FinalK,
+		}
+	}
+	return orch, conn, nil
 }
 
 // MaybeStartSweep loads MemoryConfig and, if GC_SWEEP_ENABLED is true AND a
@@ -65,7 +91,7 @@ func MaybeStartSweep(ctx context.Context) (cleanup func(), enabled bool, err err
 	}
 	cfg, err := LoadConfig()
 	if err != nil {
-		return nil, true, fmt.Errorf("memory config: %w", err)
+		return nil, true, fmt.Errorf("%w: %w", ErrMemoryConfig, err)
 	}
 	conn, err := pgx.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -76,6 +102,66 @@ func MaybeStartSweep(ctx context.Context) (cleanup func(), enabled bool, err err
 		return nil, true, fmt.Errorf("migrate: %w", err)
 	}
 	sw := NewSweeper(conn, cfg.GC)
-	go sw.Run(ctx)
-	return func() { _ = conn.Close(context.Background()) }, true, nil
+	sweepCtx, cancelSweep := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go sw.Run(sweepCtx, done)
+	cleanup = func() {
+		cancelSweep()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			log.Error().Msg("memory sweep did not stop within 5s; closing connection anyway (may interrupt an in-flight write)")
+		}
+		_ = conn.Close(context.Background())
+	}
+	return cleanup, true, nil
+}
+
+// MaybeStartConsolidator mirrors MaybeStartSweep: if CONSOLIDATE_ENABLED and a
+// DATABASE_URL is set, it starts the batch consolidation loop bound to ctx.
+// Returns a cleanup func (cancel + wait, then close conn) and an enabled flag.
+func MaybeStartConsolidator(ctx context.Context) (cleanup func(), enabled bool, err error) {
+	if !boolEnv("CONSOLIDATE_ENABLED", false) {
+		return nil, false, nil
+	}
+	if strings.TrimSpace(os.Getenv("DATABASE_URL")) == "" {
+		return nil, true, fmt.Errorf("CONSOLIDATE_ENABLED=true but DATABASE_URL is not set")
+	}
+	cfg, err := LoadConfig()
+	if err != nil {
+		return nil, true, fmt.Errorf("%w: %w", ErrMemoryConfig, err)
+	}
+	conn, err := pgx.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, true, fmt.Errorf("connect postgres: %w", err)
+	}
+	if err := ApplyMigrations(ctx, conn, cfg.EmbeddingDim); err != nil {
+		_ = conn.Close(ctx)
+		return nil, true, fmt.Errorf("migrate: %w", err)
+	}
+	cons := NewConsolidator(conn, NewPgStore(conn),
+		NewOpenAIGenerator(cfg.LLMBaseURL, cfg.LLMModel, ""), cfg.Consolidate).
+		WithEmbedder(NewOpenAIEmbedder(cfg.EmbeddingBaseURL, cfg.EmbeddingModel, cfg.EmbeddingAPIKey))
+	cctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go cons.Run(cctx, done)
+	cleanup = func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			log.Error().Msg("consolidator did not stop within 5s; closing connection anyway")
+		}
+		_ = conn.Close(context.Background())
+	}
+	return cleanup, true, nil
+}
+
+// NewCaptureHookFromConfig builds (but does not start) the per-turn capture hook,
+// constructing the BRAIN_* extractor from config. The caller starts it with
+// hook.Start(ctx) and feeds it via hook.Enqueue. Wiring into the agent loop is
+// out of 6a scope.
+func NewCaptureHookFromConfig(cfg MemoryConfig, store Store, embedder Embedder) *PerTurnCaptureHook {
+	chat := NewOpenAIGenerator(cfg.LLMBaseURL, cfg.LLMModel, "")
+	return NewCaptureHook(NewExtractor(chat), embedder, store, cfg.CaptureBufferSize)
 }
