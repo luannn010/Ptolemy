@@ -114,3 +114,23 @@ func TestRunCapturePropagatesError(t *testing.T) {
 		t.Fatal("expected capture error to propagate")
 	}
 }
+
+// TestRunRecall_BadFlagReturnsError exercises the flag-parse guard in RunRecall
+// (the exported function). Passing an unknown flag triggers fs.Parse to return
+// an error before any DB is opened.
+func TestRunRecall_BadFlagReturnsError(t *testing.T) {
+	var out, errBuf strings.Builder
+	err := RunRecall(context.Background(), []string{"--no-such-flag"}, &out, &errBuf)
+	if err == nil {
+		t.Fatal("expected error for unknown flag")
+	}
+}
+
+// TestRunCapture_BadFlagReturnsError exercises the flag-parse guard in RunCapture.
+func TestRunCapture_BadFlagReturnsError(t *testing.T) {
+	var out, errBuf strings.Builder
+	err := RunCapture(context.Background(), []string{"--no-such-flag"}, &out, &errBuf)
+	if err == nil {
+		t.Fatal("expected error for unknown flag")
+	}
+}

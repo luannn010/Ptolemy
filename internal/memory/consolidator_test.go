@@ -7,6 +7,27 @@ import (
 	"time"
 )
 
+// TestConsolidator_Run_CancellationClosesDone verifies that cancelling the
+// context causes Consolidator.Run to close the done channel promptly.
+// Uses freshDB so the migrations are applied; skips locally without DATABASE_URL.
+func TestConsolidator_Run_CancellationClosesDone(t *testing.T) {
+	conn := freshDB(t)
+	c := NewConsolidator(conn, NewPgStore(conn), fakeChat{resp: "{}"}, ConsolidateConfig{
+		Interval: time.Millisecond,
+		Buffer:   99, MinAtoms: 99,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before Run so runLoop exits on the first select
+	done := make(chan struct{})
+	c.Run(ctx, done)
+	select {
+	case <-done:
+		// expected
+	default:
+		t.Fatal("done channel was not closed after Run returned")
+	}
+}
+
 // TestConsolidator_BuildSynthChunk exercises the pure helper that constructs the
 // synthesis Chunk from a Synthesis struct without any DB or LLM calls.
 func TestConsolidator_BuildSynthChunk_Shape(t *testing.T) {
