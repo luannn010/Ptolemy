@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -235,6 +236,34 @@ func TestApproveRouter_ApprovesLoopback(t *testing.T) {
 	}
 	if !approvals.ConsumeApproved("pid2") {
 		t.Fatalf("expected approval to be consumable after Approve")
+	}
+}
+
+// TestAsDenied_* tests the unexported helper directly — package httpapi has access.
+func TestAsDenied_NilError(t *testing.T) {
+	var denied policy.ErrDenied
+	if asDenied(nil, &denied) {
+		t.Fatal("asDenied(nil) must return false")
+	}
+}
+
+func TestAsDenied_NonErrDenied(t *testing.T) {
+	var denied policy.ErrDenied
+	if asDenied(fmt.Errorf("plain error"), &denied) {
+		t.Fatal("asDenied with a plain error must return false")
+	}
+}
+
+func TestRunCommand_GeneralError_Returns500(t *testing.T) {
+	h, sessions := newTestRouter(t, stubRunner{err: fmt.Errorf("general boom")})
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	s, _ := sessions.Create(context.Background(), session.CreateSessionRequest{Name: "s"})
+
+	body, _ := json.Marshal(apitypes.RunCommandRequest{Command: "echo hi"})
+	resp, _ := http.Post(srv.URL+"/sessions/"+s.ID+"/commands", "application/json", bytes.NewReader(body))
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for general error, got %d", resp.StatusCode)
 	}
 }
 

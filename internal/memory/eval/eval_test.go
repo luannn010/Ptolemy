@@ -367,6 +367,37 @@ func TestLoadSeed_TagsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMeasureDedup_RoundTripsFixtureDir(t *testing.T) {
+	dir := t.TempDir()
+	// Two normalized-equal docs → 1 would-collapse; one distinct doc stays.
+	for name, body := range map[string]string{
+		"a.md": "same fact about the sweep",
+		"b.md": "same   fact about the sweep", // normalizes equal to a.md
+		"c.md": "different fact about billing",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	corpusSize, wouldCollapse, err := MeasureDedup(dir)
+	if err != nil {
+		t.Fatalf("MeasureDedup: %v", err)
+	}
+	if corpusSize != 3 {
+		t.Fatalf("corpusSize = %d, want 3", corpusSize)
+	}
+	if wouldCollapse != 1 {
+		t.Fatalf("wouldCollapse = %d, want 1", wouldCollapse)
+	}
+}
+
+func TestMeasureDedup_InvalidDirReturnsError(t *testing.T) {
+	_, _, err := MeasureDedup("/no/such/dir/at/all")
+	if err == nil {
+		t.Fatal("expected error for nonexistent fixture dir")
+	}
+}
+
 func TestLoadSeed_UnknownTypeIsError(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "seed.json")
