@@ -32,7 +32,7 @@ func (p *pingChecker) Name() string   { return p.name }
 func (p *pingChecker) Required() bool { return p.required }
 
 func (p *pingChecker) Check(ctx context.Context) Check {
-	c := Check{Name: p.name, Required: p.required}
+	c := Check{Name: p.name} // Required is stamped by Aggregator.Run from Required()
 	if p.db == nil {
 		c.Status = StatusDown
 		c.Error = "not configured"
@@ -67,7 +67,7 @@ func (p *pgChecker) Name() string   { return p.name }
 func (p *pgChecker) Required() bool { return false }
 
 func (p *pgChecker) Check(ctx context.Context) Check {
-	c := Check{Name: p.name, Required: false}
+	c := Check{Name: p.name} // Required is stamped by Aggregator.Run from Required()
 	if p.pool == nil {
 		c.Status = StatusDisabled
 		return c

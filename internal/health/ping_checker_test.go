@@ -15,9 +15,13 @@ type fakePG struct{ err error }
 func (f fakePG) Ping(_ context.Context) error { return f.err }
 
 func TestSQLChecker_Up(t *testing.T) {
-	c := NewSQLChecker("workerd", fakeSQL{nil}, true).Check(context.Background())
-	if c.Status != StatusUp || !c.Required {
-		t.Fatalf("got %+v, want up/required", c)
+	chk := NewSQLChecker("workerd", fakeSQL{nil}, true)
+	c := chk.Check(context.Background())
+	if c.Status != StatusUp {
+		t.Fatalf("got %+v, want up", c)
+	}
+	if !chk.Required() {
+		t.Fatal("Required() should be true")
 	}
 }
 
@@ -36,9 +40,13 @@ func TestSQLChecker_NilDown(t *testing.T) {
 }
 
 func TestPgChecker_Up(t *testing.T) {
-	c := NewPgChecker("postgres", fakePG{nil}).Check(context.Background())
-	if c.Status != StatusUp || c.Required {
-		t.Fatalf("got %+v, want up/optional", c)
+	chk := NewPgChecker("postgres", fakePG{nil})
+	c := chk.Check(context.Background())
+	if c.Status != StatusUp {
+		t.Fatalf("got %+v, want up", c)
+	}
+	if chk.Required() {
+		t.Fatal("Required() should be false (postgres is optional)")
 	}
 }
 
