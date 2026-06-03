@@ -93,3 +93,4 @@ synthesis layer (inspired by the StructMem paper).
 | `DATA_MODEL.md` | PostgreSQL schema (tables, indexes, columns). |
 | `RETRIEVAL.md` | The hybrid + recency + supersession query and fusion logic. |
 | `IMPLEMENTATION_PLAN.md` | Ordered, checkboxed tasks and acceptance criteria per phase. |
+| `RUNG1_EVAL_RESULTS.md` | On-record baseline-vs-agent-loop eval delta for the rung-1 agentic RAG path. |

@@ -214,6 +214,8 @@ rate** (answered questions must carry ≥1 valid citation). Retrieval recall@5 s
 no-regression guard. Out-of-scope follow-up rungs: query rewriting, multi-hop
 `judge_sufficient`, memory-vs-docs routing, external tool use.
 
+Latest on-record results: see [RUNG1_EVAL_RESULTS.md](RUNG1_EVAL_RESULTS.md).
+
 ---
 
 ## Design rules (do not violate)
