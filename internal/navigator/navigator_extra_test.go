@@ -146,3 +146,114 @@ func TestCommandsArchitectureEnvConventions_GenerateMarkdown(t *testing.T) {
 		}
 	}
 }
+
+// --- Direct unit tests for unexported navigator helpers ---
+
+func TestCommands_EmptyDir(t *testing.T) {
+	root := t.TempDir()
+	out := commands(root)
+	if !strings.Contains(out, "Add project-specific") {
+		t.Fatalf("empty dir should contain fallback hint, got: %q", out)
+	}
+}
+
+func TestCommands_WithHintFiles(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "Makefile", "")
+	writeTestFile(t, root, "go.mod", "module x\n")
+	writeTestFile(t, root, "package.json", "{}\n")
+	out := commands(root)
+	if !strings.Contains(out, "make test") {
+		t.Fatalf("expected make test hint, got: %q", out)
+	}
+	if !strings.Contains(out, "go test") {
+		t.Fatalf("expected go test hint, got: %q", out)
+	}
+	if !strings.Contains(out, "package manager") {
+		t.Fatalf("expected package manager hint, got: %q", out)
+	}
+}
+
+func TestArchitecture_EmptyDir(t *testing.T) {
+	root := t.TempDir()
+	out := architecture(root)
+	if !strings.Contains(out, "Architecture") {
+		t.Fatalf("expected Architecture section header, got: %q", out)
+	}
+	// no go.mod / cmd / internal — none of the optional lines should appear
+	if strings.Contains(out, "Go project") {
+		t.Fatalf("should not contain 'Go project' for empty dir, got: %q", out)
+	}
+}
+
+func TestArchitecture_WithGoMod(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, "go.mod", "module x\n")
+	if err := os.MkdirAll(filepath.Join(root, "cmd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "internal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out := architecture(root)
+	if !strings.Contains(out, "Go project") {
+		t.Fatalf("expected 'Go project', got: %q", out)
+	}
+	if !strings.Contains(out, "cmd/") {
+		t.Fatalf("expected 'cmd/' entry, got: %q", out)
+	}
+	if !strings.Contains(out, "internal/") {
+		t.Fatalf("expected 'internal/' entry, got: %q", out)
+	}
+}
+
+func TestEnvNotes_NoEnvFiles(t *testing.T) {
+	root := t.TempDir()
+	out := envNotes(root)
+	if !strings.Contains(out, "Heavy/generated") {
+		t.Fatalf("expected default note, got: %q", out)
+	}
+	if strings.Contains(out, ".env.example") {
+		t.Fatalf("should not mention .env.example when absent, got: %q", out)
+	}
+}
+
+func TestEnvNotes_WithEnvFiles(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, root, ".env.example", "KEY=\n")
+	writeTestFile(t, root, ".env", "KEY=secret\n")
+	out := envNotes(root)
+	if !strings.Contains(out, ".env.example") {
+		t.Fatalf("expected .env.example note, got: %q", out)
+	}
+	if !strings.Contains(out, "Do not copy secrets") {
+		t.Fatalf("expected secrets warning, got: %q", out)
+	}
+}
+
+func TestConventions_NonEmpty(t *testing.T) {
+	out := conventions()
+	if !strings.Contains(out, "Conventions") {
+		t.Fatalf("expected Conventions header, got: %q", out)
+	}
+	if !strings.Contains(out, "Search") {
+		t.Fatalf("expected a search guideline, got: %q", out)
+	}
+	if len(out) < 20 {
+		t.Fatalf("conventions output suspiciously short: %q", out)
+	}
+}
+
+func TestExists_ExistingAndMissing(t *testing.T) {
+	root := t.TempDir()
+	presentFile := filepath.Join(root, "present.txt")
+	if err := os.WriteFile(presentFile, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(presentFile) {
+		t.Fatalf("exists() should return true for an existing file")
+	}
+	if exists(filepath.Join(root, "no-such-file")) {
+		t.Fatalf("exists() should return false for a missing file")
+	}
+}

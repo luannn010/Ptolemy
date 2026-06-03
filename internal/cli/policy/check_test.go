@@ -2,6 +2,7 @@ package policy
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -38,5 +39,21 @@ func TestRunCheckPrintsOneLinePerSample(t *testing.T) {
 	}
 	if !strings.Contains(lines[2], "default") {
 		t.Errorf("line 2 (unmatched) should hit default rule: %q", lines[2])
+	}
+}
+
+// TestRunCheck_RejectsArgs exercises the args-validation guard in RunCheck without
+// depending on the working directory (the guard fires before policy.json is read).
+func TestRunCheck_RejectsArgs(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	err := RunCheck(context.Background(), []string{"extra-arg"}, &out, &errBuf)
+	if err == nil {
+		t.Fatal("expected error when args are supplied to policy check")
+	}
+	if !strings.Contains(err.Error(), "no arguments") {
+		t.Fatalf("expected 'no arguments' in error, got: %v", err)
+	}
+	if !strings.Contains(errBuf.String(), "usage") {
+		t.Fatalf("expected usage hint on stderr, got: %q", errBuf.String())
 	}
 }

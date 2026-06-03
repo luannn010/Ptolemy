@@ -469,3 +469,19 @@ func TestLoadConfig_AgentOverrides(t *testing.T) {
 		t.Fatalf("agent overrides not applied: %+v", cfg.Agent)
 	}
 }
+
+func TestFloatEnv_InvalidValueReturnsFallback(t *testing.T) {
+	t.Setenv("TEST_PTOLEMY_FLOAT_ENV_XYZ", "not-a-number")
+	got := floatEnv("TEST_PTOLEMY_FLOAT_ENV_XYZ", 3.14)
+	if got != 3.14 {
+		t.Fatalf("floatEnv with invalid value: got %v, want fallback 3.14", got)
+	}
+}
+
+func TestBoolEnv_InvalidValueReturnsFallback(t *testing.T) {
+	t.Setenv("TEST_PTOLEMY_BOOL_ENV_XYZ", "not-a-bool")
+	got := boolEnv("TEST_PTOLEMY_BOOL_ENV_XYZ", true)
+	if !got {
+		t.Fatalf("boolEnv with invalid value: got %v, want fallback true", got)
+	}
+}

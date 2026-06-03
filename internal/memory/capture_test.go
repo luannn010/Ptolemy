@@ -152,6 +152,26 @@ func TestCapture_EmbedCountMismatchErrors(t *testing.T) {
 	}
 }
 
+func TestDeref_NilPointer(t *testing.T) {
+	if got := deref(nil); got != "<nil>" {
+		t.Fatalf("deref(nil) = %q, want \"<nil>\"", got)
+	}
+}
+
+func TestDeref_EmptyString(t *testing.T) {
+	s := ""
+	if got := deref(&s); got != "<nil>" {
+		t.Fatalf("deref(&\"\") = %q, want \"<nil>\"", got)
+	}
+}
+
+func TestDeref_NonEmpty(t *testing.T) {
+	s := "project-x"
+	if got := deref(&s); got != "project-x" {
+		t.Fatalf("deref(&\"project-x\") = %q, want \"project-x\"", got)
+	}
+}
+
 func TestCapture_ReinforceWhenFactUnchanged(t *testing.T) {
 	store := &captureFakeStore{
 		lookupFound: true,

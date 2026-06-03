@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -52,8 +53,8 @@ func TestMaybeStartConsolidator_InvalidMemoryConfigErrorsBeforeConnect(t *testin
 	if !enabled {
 		t.Fatal("expected enabled=true when CONSOLIDATE_ENABLED=true")
 	}
-	if !strings.Contains(err.Error(), "memory config") {
-		t.Fatalf("expected wrapped memory config error, got %v", err)
+	if !errors.Is(err, ErrMemoryConfig) {
+		t.Fatalf("expected wrapped ErrMemoryConfig, got %v", err)
 	}
 }
 
@@ -70,8 +71,8 @@ func TestMaybeStartSweep_InvalidMemoryConfigErrorsBeforeConnect(t *testing.T) {
 	if !enabled {
 		t.Fatal("expected enabled=true when GC_SWEEP_ENABLED=true")
 	}
-	if !strings.Contains(err.Error(), "memory config") {
-		t.Fatalf("expected wrapped memory config error, got %v", err)
+	if !errors.Is(err, ErrMemoryConfig) {
+		t.Fatalf("expected wrapped ErrMemoryConfig, got %v", err)
 	}
 }
 
@@ -121,6 +122,11 @@ func TestPerTurnCaptureHook_StartProcessesEnqueuedExchange(t *testing.T) {
 	ex := NewExtractor(fakeChat{resp: `{"atoms":[{"content":"sweep archives stale rows","perspective":"factual"}]}`})
 	store := &fakeStore{}
 	hook := NewCaptureHook(ex, fakeEmbedder{vecs: [][]float32{{1, 0, 0, 0}}}, store, 1)
+
+	// Signal completion deterministically from the worker instead of polling.
+	processed := make(chan error, 1)
+	hook.onProcessed = func(err error) { processed <- err }
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	hook.Start(ctx)
@@ -133,14 +139,17 @@ func TestPerTurnCaptureHook_StartProcessesEnqueuedExchange(t *testing.T) {
 		ProjectID:     "p1",
 	})
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if hook.Metrics().Captured() > 0 {
-			return
+	select {
+	case err := <-processed:
+		if err != nil {
+			t.Fatalf("Start worker processTurn failed: %v", err)
 		}
-		time.Sleep(10 * time.Millisecond)
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for Start worker to process enqueued exchange")
 	}
-	t.Fatalf("expected Start worker to process enqueued exchange")
+	if hook.Metrics().Captured() == 0 {
+		t.Fatalf("expected exchange to be captured, got %d", hook.Metrics().Captured())
+	}
 }
 
 func TestConsolidator_WithEmbedder_SetsAndReturnsSelf(t *testing.T) {
@@ -178,6 +187,27 @@ func TestMeasureDedupCollapses_NormalizedDuplicatesOnly(t *testing.T) {
 	got := MeasureDedupCollapses(docs)
 	if got != 2 {
 		t.Fatalf("expected 2 collapses, got %d", got)
+	}
+}
+
+func TestMeasureDedupCollapses_EmptyReturnsZero(t *testing.T) {
+	if got := MeasureDedupCollapses(nil); got != 0 {
+		t.Fatalf("expected 0 collapses for nil slice, got %d", got)
+	}
+	if got := MeasureDedupCollapses([]RawDocument{}); got != 0 {
+		t.Fatalf("expected 0 collapses for empty slice, got %d", got)
+	}
+}
+
+func TestMeasureDedupCollapses_AllDuplicatesCollapseToOne(t *testing.T) {
+	docs := []RawDocument{
+		{ID: "1", Text: "User prefers tabs"},
+		{ID: "2", Text: "User   prefers   tabs"},
+		{ID: "3", Text: "User prefers tabs"},
+	}
+	got := MeasureDedupCollapses(docs)
+	if want := len(docs) - 1; got != want {
+		t.Fatalf("expected %d collapses, got %d", want, got)
 	}
 }
 

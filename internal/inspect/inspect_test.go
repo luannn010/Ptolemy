@@ -54,6 +54,39 @@ func TestInspectWorkspaceDetectsNodeProject(t *testing.T) {
 	}
 }
 
+func TestInspectWorkspaceDetectsPythonProject(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "requirements.txt"), []byte("flask\n"), 0644); err != nil {
+		t.Fatalf("write requirements.txt: %v", err)
+	}
+	snapshot := InspectWorkspace(root)
+	if !contains(snapshot.ProjectTypes, "python") {
+		t.Fatalf("expected python project type, got %v", snapshot.ProjectTypes)
+	}
+}
+
+func TestInspectWorkspaceDetectsDockerProject(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "Dockerfile"), []byte("FROM scratch\n"), 0644); err != nil {
+		t.Fatalf("write Dockerfile: %v", err)
+	}
+	snapshot := InspectWorkspace(root)
+	if !contains(snapshot.ProjectTypes, "docker") {
+		t.Fatalf("expected docker project type, got %v", snapshot.ProjectTypes)
+	}
+}
+
+func TestInspectWorkspaceDetectsJavaProject(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pom.xml"), []byte("<project/>\n"), 0644); err != nil {
+		t.Fatalf("write pom.xml: %v", err)
+	}
+	snapshot := InspectWorkspace(root)
+	if !contains(snapshot.ProjectTypes, "java") {
+		t.Fatalf("expected java project type, got %v", snapshot.ProjectTypes)
+	}
+}
+
 func contains(items []string, target string) bool {
 	for _, item := range items {
 		if item == target {

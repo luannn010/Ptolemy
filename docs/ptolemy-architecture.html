@@ -108,9 +108,9 @@
   footer{padding:48px 0 80px; color:var(--text-3); font-family:var(--mono); font-size:12px; text-align:center}
   footer b{color:var(--gold-dim);font-weight:500}
 
-  /* reveal animation */
-  .reveal{opacity:0; transform:translateY(14px)}
-  .seen .reveal{opacity:1; transform:none; transition:opacity .7s ease, transform .7s ease}
+  /* reveal animation — gated behind .has-io so content stays visible if JS/IO is unavailable */
+  .has-io .reveal{opacity:0; transform:translateY(14px)}
+  .has-io .seen .reveal{opacity:1; transform:none; transition:opacity .7s ease, transform .7s ease}
   .seen .reveal:nth-child(2){transition-delay:.06s}
   .seen .reveal:nth-child(3){transition-delay:.12s}
   .seen .reveal:nth-child(4){transition-delay:.18s}
@@ -371,11 +371,16 @@
 </footer>
 
 <script>
-  const io = new IntersectionObserver((entries)=>{
-    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('seen'); io.unobserve(e.target);} });
-  },{threshold:.12});
-  document.querySelectorAll('section').forEach(s=>io.observe(s));
-  document.querySelector('header').classList.add('seen');
+  if ('IntersectionObserver' in window) {
+    document.body.classList.add('has-io');
+    const io = new IntersectionObserver((entries)=>{
+      entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('seen'); io.unobserve(e.target);} });
+    },{threshold:.12});
+    document.querySelectorAll('section').forEach(s=>io.observe(s));
+    document.querySelector('header').classList.add('seen');
+  } else {
+    document.querySelectorAll('section, header').forEach(el=>el.classList.add('seen'));
+  }
 </script>
 </body>
 </html>

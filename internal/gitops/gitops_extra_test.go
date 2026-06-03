@@ -152,6 +152,54 @@ func TestEnsureBranchIdempotent(t *testing.T) {
 	}
 }
 
+// --- guard-path tests that don't require a real git repo ---
+
+func TestStageFiles_AllBlankNames_Fails(t *testing.T) {
+	g := New(".")
+	res := g.StageFiles(context.Background(), []string{"  ", "", "\t"})
+	if res.Success {
+		t.Fatal("expected failure when all file names are blank")
+	}
+	if !strings.Contains(res.Output, "no files provided") {
+		t.Fatalf("expected 'no files provided', got: %q", res.Output)
+	}
+}
+
+func TestCommitStagedConventional_RejectsInvalidMessage(t *testing.T) {
+	g := New(".")
+	res := g.CommitStagedConventional(context.Background(), "no conventional prefix")
+	if res.Success {
+		t.Fatal("expected failure for invalid conventional commit message")
+	}
+	if !strings.Contains(res.Output, "invalid") {
+		t.Fatalf("expected 'invalid' in output, got: %q", res.Output)
+	}
+}
+
+func TestCreatePullRequest_EmptyHead_Fails(t *testing.T) {
+	g := New(".")
+	res := g.CreatePullRequest(context.Background(), "main", "", "a title", "")
+	if res.Success {
+		t.Fatal("expected failure for empty head branch")
+	}
+	if !strings.Contains(res.Output, "head branch is required") {
+		t.Fatalf("expected 'head branch is required', got: %q", res.Output)
+	}
+}
+
+func TestPush_EmptyRemoteDefaultsToOrigin(t *testing.T) {
+	repo := setupGitRepo(t)
+	g := New(repo)
+	// push to a non-existent "origin" — the call exercises the empty-remote
+	// defaulting branch; failure from git is expected and acceptable.
+	res := g.Push(context.Background(), "", "main")
+	// Result may succeed or fail depending on git config; we only assert the
+	// function ran (no panic / crash) and the command includes "origin".
+	if !strings.Contains(res.Command, "origin") {
+		t.Fatalf("expected 'origin' in command after defaulting, got: %q", res.Command)
+	}
+}
+
 func TestMergeNoFFAcrossBranches(t *testing.T) {
 	repo := setupGitRepo(t)
 	git := New(repo)

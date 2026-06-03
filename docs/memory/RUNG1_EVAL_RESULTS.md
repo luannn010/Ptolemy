@@ -33,7 +33,7 @@ eval is where the loop earns its place.
 - **"Overall recall@5 must not regress by more than 1pp."** ✓ Held trivially — recall@5 is a
   retrieval-only metric and the agent loop reuses the same retriever. Baseline 1.000 is
   unchanged; the agent path does not touch the retrieval harness.
-- **"For at least one question type (likely negative) agent loop should show measurable
+- **"For at least one question type (likely negative) the agent loop should show measurable
   improvement, because `give_up` is now an available terminal."** ✓ Both negative seeds
   (`n01-no-grpc`, `n02-no-billing`) produced `give_up` with a coherent reason citing the
   retrieved chunks' irrelevance. The legacy pipeline has no give-up terminal — it would
