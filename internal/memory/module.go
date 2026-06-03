@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -10,6 +11,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 )
+
+// ErrMemoryConfig wraps any failure to load MemoryConfig from the environment.
+// Callers (and tests) should match it with errors.Is rather than inspecting the
+// error string.
+var ErrMemoryConfig = errors.New("memory config")
 
 // NewModule wires a production Orchestrator from MemoryConfig. It opens a pgx
 // connection, applies migrations, and constructs every concrete implementation.
@@ -85,7 +91,7 @@ func MaybeStartSweep(ctx context.Context) (cleanup func(), enabled bool, err err
 	}
 	cfg, err := LoadConfig()
 	if err != nil {
-		return nil, true, fmt.Errorf("memory config: %w", err)
+		return nil, true, fmt.Errorf("%w: %w", ErrMemoryConfig, err)
 	}
 	conn, err := pgx.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -123,7 +129,7 @@ func MaybeStartConsolidator(ctx context.Context) (cleanup func(), enabled bool, 
 	}
 	cfg, err := LoadConfig()
 	if err != nil {
-		return nil, true, fmt.Errorf("memory config: %w", err)
+		return nil, true, fmt.Errorf("%w: %w", ErrMemoryConfig, err)
 	}
 	conn, err := pgx.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {

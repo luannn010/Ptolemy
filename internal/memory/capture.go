@@ -37,6 +37,11 @@ type PerTurnCaptureHook struct {
 	ch        chan Exchange
 	metrics   *CaptureMetrics
 	startOnce sync.Once
+
+	// onProcessed, if non-nil, is invoked after the Start worker finishes each
+	// dequeued exchange (with the processTurn error, if any). Test-only seam so
+	// tests can observe the async worker deterministically instead of polling.
+	onProcessed func(error)
 }
 
 func NewCaptureHook(ex *Extractor, emb Embedder, st Store, buf int) *PerTurnCaptureHook {
@@ -63,8 +68,12 @@ func (h *PerTurnCaptureHook) Start(ctx context.Context) {
 				case <-ctx.Done():
 					return
 				case ex := <-h.ch:
-					if err := h.processTurn(ctx, ex); err != nil {
+					err := h.processTurn(ctx, ex)
+					if err != nil {
 						log.Warn().Err(err).Msg("capture processTurn failed; dropping exchange")
+					}
+					if h.onProcessed != nil {
+						h.onProcessed(err)
 					}
 				}
 			}
