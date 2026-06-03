@@ -7,7 +7,6 @@ package health
 import (
 	"context"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -28,10 +27,14 @@ type Check struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// Checker probes a single dependency. Implementations must not block past the
-// context deadline the Aggregator supplies.
+// Checker probes a single dependency. Implementations should honor the context
+// deadline the Aggregator supplies; Run enforces a hard ceiling regardless, so a
+// misbehaving checker degrades to a synthesized "down" rather than hanging /health.
+// Required reports whether a down result makes the whole report unhealthy — it is
+// queried independently of Check so Run can verdict an abandoned check correctly.
 type Checker interface {
 	Name() string
+	Required() bool
 	Check(ctx context.Context) Check
 }
 
@@ -50,24 +53,57 @@ type Aggregator struct {
 }
 
 // Run probes every checker concurrently and returns the composed report and the
-// HTTP status code the handler should write.
+// HTTP status code the handler should write. Each checker runs under a per-check
+// timeout; Run additionally enforces a hard overall ceiling so a checker that
+// ignores its context cannot block /health forever — any slot not reported by the
+// ceiling is synthesized as a "check timed out" down (still honoring Required).
 func (a *Aggregator) Run(ctx context.Context) (Report, int) {
-	checks := make([]Check, len(a.Checkers))
-	var wg sync.WaitGroup
+	n := len(a.Checkers)
+	checks := make([]Check, n)
+
+	type result struct {
+		i int
+		c Check
+	}
+	// Buffered to n so a goroutine abandoned past the ceiling can still send its
+	// (late) result and exit instead of leaking blocked on the channel.
+	results := make(chan result, n)
 	for i, c := range a.Checkers {
-		wg.Add(1)
 		go func(i int, c Checker) {
-			defer wg.Done()
 			cctx := ctx
 			if a.Timeout > 0 {
 				var cancel context.CancelFunc
 				cctx, cancel = context.WithTimeout(ctx, a.Timeout)
 				defer cancel()
 			}
-			checks[i] = c.Check(cctx)
+			results <- result{i, c.Check(cctx)}
 		}(i, c)
 	}
-	wg.Wait()
+
+	timer := time.NewTimer(a.ceiling())
+	defer timer.Stop()
+
+	filled := make([]bool, n)
+	for got := 0; got < n; {
+		select {
+		case r := <-results:
+			checks[r.i] = r.c
+			filled[r.i] = true
+			got++
+		case <-timer.C:
+			for i := range checks {
+				if !filled[i] {
+					checks[i] = Check{
+						Name:     a.Checkers[i].Name(),
+						Required: a.Checkers[i].Required(),
+						Status:   StatusDown,
+						Error:    "check timed out",
+					}
+				}
+			}
+			got = n
+		}
+	}
 
 	status, code := overall(checks)
 	return Report{
@@ -76,6 +112,17 @@ func (a *Aggregator) Run(ctx context.Context) (Report, int) {
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Checks:    checks,
 	}, code
+}
+
+// ceiling bounds the whole Run. It allows each honest checker to hit its own
+// per-check timeout (a.Timeout) and report a clean "down" before Run abandons it;
+// the grace covers scheduling slack. With no per-check timeout configured it falls
+// back to a fixed bound so Run is never unbounded.
+func (a *Aggregator) ceiling() time.Duration {
+	if a.Timeout > 0 {
+		return a.Timeout + 500*time.Millisecond
+	}
+	return 5 * time.Second
 }
 
 // overall maps a set of checks to an aggregate status string and HTTP code:

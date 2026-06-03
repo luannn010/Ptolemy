@@ -18,6 +18,12 @@ type httpChecker struct {
 	client   *http.Client
 }
 
+// httpClientBackstop bounds a probe even if the per-check context somehow carries
+// no deadline (e.g. Aggregator.Timeout <= 0 and a deadline-less request context),
+// so a hung server cannot leak the goroutine indefinitely. The context remains the
+// primary, shorter bound in normal operation.
+const httpClientBackstop = 30 * time.Second
+
 // NewHTTPChecker builds a GET-based liveness checker. Used for Brain and Embedder
 // (path "/v1/models") and MCP (path "/health").
 func NewHTTPChecker(name, baseURL, path string, required bool) Checker {
@@ -26,11 +32,12 @@ func NewHTTPChecker(name, baseURL, path string, required bool) Checker {
 		baseURL:  baseURL,
 		path:     path,
 		required: required,
-		client:   &http.Client{},
+		client:   &http.Client{Timeout: httpClientBackstop},
 	}
 }
 
-func (h *httpChecker) Name() string { return h.name }
+func (h *httpChecker) Name() string   { return h.name }
+func (h *httpChecker) Required() bool { return h.required }
 
 func (h *httpChecker) Check(ctx context.Context) Check {
 	c := Check{Name: h.name, Required: h.required}

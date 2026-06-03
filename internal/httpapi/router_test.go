@@ -71,7 +71,7 @@ func TestHealth_DeepOK(t *testing.T) {
 		health.NewHTTPChecker("brain", up.URL, "/v1/models", true),
 		health.NewHTTPChecker("embedder", up.URL, "/v1/models", true),
 		health.NewPgChecker("postgres", nil),               // disabled
-		health.NewHTTPChecker("mcp", "", "/health", false),  // disabled
+		health.NewHTTPChecker("mcp", "", "/health", false), // disabled
 	}}
 	router := NewRouter(RouterDeps{Health: agg})
 

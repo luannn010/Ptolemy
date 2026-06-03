@@ -94,7 +94,7 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:         ":" + cfg.HTTPPort,
+		Addr: ":" + cfg.HTTPPort,
 		Handler: httpapi.NewRouter(httpapi.RouterDeps{
 			Sessions:  sessionStore,
 			Commands:  commandService,

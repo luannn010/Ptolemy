@@ -28,7 +28,8 @@ func NewSQLChecker(name string, db sqlPinger, required bool) Checker {
 	return &pingChecker{name: name, db: db, required: required}
 }
 
-func (p *pingChecker) Name() string { return p.name }
+func (p *pingChecker) Name() string   { return p.name }
+func (p *pingChecker) Required() bool { return p.required }
 
 func (p *pingChecker) Check(ctx context.Context) Check {
 	c := Check{Name: p.name, Required: p.required}
@@ -62,7 +63,8 @@ func NewPgChecker(name string, pool pgPinger) Checker {
 	return &pgChecker{name: name, pool: pool}
 }
 
-func (p *pgChecker) Name() string { return p.name }
+func (p *pgChecker) Name() string   { return p.name }
+func (p *pgChecker) Required() bool { return false }
 
 func (p *pgChecker) Check(ctx context.Context) Check {
 	c := Check{Name: p.name, Required: false}
