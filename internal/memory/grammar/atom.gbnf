@@ -5,9 +5,10 @@ atom ::= "{" ws
          "\"content\"" ws ":" ws string ws "," ws
          "\"perspective\"" ws ":" ws perspective ws "," ws
          "\"fact_subject\"" ws ":" ws string ws "," ws
-         "\"fact_predicate\"" ws ":" ws string
+         "\"fact_predicate\"" ws ":" ws factpredicate
          ws "}"
 perspective ::= "\"factual\"" | "\"relational\""
+factpredicate ::= "\"\"" | "\"uses\"" | "\"requires\"" | "\"runs_on\"" | "\"stores_in\"" | "\"listens_on\"" | "\"decides\"" | "\"prefers\"" | "\"archives\"" | "\"implements\"" | "\"configured_as\""
 
 string ::= "\"" chars "\""
 chars ::= char*
