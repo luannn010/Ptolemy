@@ -10,9 +10,9 @@ import (
 
 // ExtractorVersion is stamped into every captured row's metadata so entries are
 // auditable and selectively re-extractable when the prompt changes.
-const ExtractorVersion = "extract_v1"
+const ExtractorVersion = "extract_v2"
 
-//go:embed prompts/extract_v1.txt
+//go:embed prompts/extract_v2.txt
 var extractPromptTemplate string
 
 //go:embed grammar/atom.gbnf
