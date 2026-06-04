@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -70,6 +71,60 @@ func TestAgentLoop_Trace_Nil_WhenNotRequested(t *testing.T) {
 	}
 	if ans.Trace != nil {
 		t.Fatalf("expected nil trace when not requested, got %+v", ans.Trace)
+	}
+}
+
+// Guards the spec's headline property: each retrieve step records the chunks
+// THAT step fetched (the per-step delta), not the cumulative AccumulatedChunks.
+// countingRetriever (agent_loop_test.go) returns a distinct chunk per call.
+func TestAgentLoop_Trace_MultiRetrieve_PerStepDelta(t *testing.T) {
+	loop := &AgentLoop{
+		Planner: &stubPlanner{actions: []AgentAction{
+			{Type: ActionRetrieve, Query: "first"},
+			{Type: ActionRetrieve, Query: "second"},
+			{Type: ActionGiveUp, Reason: "stop"},
+		}},
+		Retriever: &countingRetriever{},
+		Cfg:       AgentConfig{MaxSteps: 5},
+	}
+	ans, err := loop.Run(context.Background(), Query{Text: "q", Trace: true})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(ans.Trace.Steps) != 3 {
+		t.Fatalf("expected 3 steps (retrieve, retrieve, give_up), got %d: %+v", len(ans.Trace.Steps), ans.Trace.Steps)
+	}
+	s0, s1 := ans.Trace.Steps[0], ans.Trace.Steps[1]
+	if len(s0.Retrieved) != 1 || len(s1.Retrieved) != 1 {
+		t.Fatalf("each retrieve step must record only its own delta, got %d and %d", len(s0.Retrieved), len(s1.Retrieved))
+	}
+	if s0.Retrieved[0].ID == s1.Retrieved[0].ID {
+		t.Fatalf("retrieve steps must hold distinct per-step chunks, both = %q (cumulative leak?)", s0.Retrieved[0].ID)
+	}
+}
+
+// Guards that the trace path actually runs retrieved content through snippet():
+// long, multiline content must arrive single-lined and rune-truncated.
+func TestAgentLoop_Trace_SnippetTruncatedAndSingleLined(t *testing.T) {
+	content := strings.Repeat("a", 60) + "\n" + strings.Repeat("b", 80) // 141 runes, one newline
+	loop := &AgentLoop{
+		Planner:   &stubPlanner{actions: []AgentAction{{Type: ActionRetrieve, Query: "q"}, {Type: ActionGiveUp, Reason: "stop"}}},
+		Retriever: stubRetriever{chunks: []RetrievedChunk{scoredChunk("a#0", content, 1)}},
+		Cfg:       AgentConfig{MaxSteps: 5},
+	}
+	ans, err := loop.Run(context.Background(), Query{Text: "q", Trace: true})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	snip := ans.Trace.Steps[0].Retrieved[0].Snippet
+	if strings.ContainsAny(snip, "\n\r") {
+		t.Fatalf("snippet must be single-lined, got %q", snip)
+	}
+	if !strings.HasSuffix(snip, "…") {
+		t.Fatalf("over-long snippet must end with ellipsis, got %q", snip)
+	}
+	if n := len([]rune(snip)); n != 121 { // 120 runes + the ellipsis rune
+		t.Fatalf("expected 120-rune cut + ellipsis (121 runes), got %d", n)
 	}
 }
 

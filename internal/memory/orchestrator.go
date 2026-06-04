@@ -228,6 +228,9 @@ func (o *Orchestrator) Answer(ctx context.Context, q Query) (Answer, error) {
 		return Answer{}, err
 	}
 	if q.Trace {
+		// Legacy retrieve step intentionally reports `fused` (post-fusion, finalK-capped)
+		// — i.e. what actually reached the prompt and grounding — rather than the raw
+		// retrieval delta the agentic path records. Single-shot has no per-step notion.
 		ans.Trace = &RecallTrace{
 			Mode: "legacy",
 			Steps: []TraceStep{
