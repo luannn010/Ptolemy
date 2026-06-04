@@ -1,0 +1,48 @@
+# Ptolemy workerd — systemd unit (HTTP API on :HTTP_PORT + loopback approval server)
+#
+# workerd is the only long-running Ptolemy daemon. The MCP server (ptolemy-mcp)
+# is NOT a service — it is stdio-only and is spawned per-session by the MCP
+# client (Codex). systemd's job here is to keep workerd (and, via After=/Wants=,
+# its dependencies) up so the in-process memory tools and the session/executor
+# tools have a live backend.
+#
+# Install:
+#   sudo cp deploy/ptolemy-workerd.service /etc/systemd/system/
+#   sudo cp .env.example /etc/ptolemy/ptolemy.env   # then edit secrets
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now ptolemy-workerd
+#   systemctl status ptolemy-workerd
+#   curl -s localhost:8080/health | jq
+#
+# Adjust WorkingDirectory / ExecStart / EnvironmentFile paths to your install.
+
+[Unit]
+Description=Ptolemy workerd (HTTP API + approval server)
+Documentation=https://github.com/luannn010/Ptolemy
+After=network-online.target postgresql.service
+Wants=network-online.target
+# If the brain LLM / embedding servers are systemd units, order after them too:
+# After=postgresql.service brain.service embeddings.service
+
+[Service]
+Type=simple
+# Directory that contains the built binaries (and optionally a .env, which
+# workerd also autoloads via godotenv if present). EnvironmentFile below is the
+# authoritative source of configuration.
+WorkingDirectory=/opt/ptolemy
+EnvironmentFile=/etc/ptolemy/ptolemy.env
+ExecStart=/opt/ptolemy/bin/workerd
+Restart=on-failure
+RestartSec=2
+
+# --- light hardening (optional; relax if it interferes with your STATE_DIR) ---
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+# workerd writes its SQLite execution store under STATE_DIR (default ./state).
+# If STATE_DIR is outside WorkingDirectory, grant it explicitly:
+# ReadWritePaths=/var/lib/ptolemy
+
+[Install]
+WantedBy=multi-user.target

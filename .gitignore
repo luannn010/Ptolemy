@@ -40,6 +40,9 @@ Thumbs.db
 /docs/tasks/packs/
 /docs/plans/*
 /deploy/*
+# ...but track committed templates (real, secret-bearing deploy files stay ignored)
+!/deploy/*.service
+!/deploy/*.example
 .env
 
 .ptolemy/sessions/
