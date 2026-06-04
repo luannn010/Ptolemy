@@ -18,7 +18,9 @@ const (
 	StatusDisabled Status = "disabled"
 )
 
-// Check is one dependency's result.
+// Check is one dependency's result. Required is authoritative-stamped by
+// Aggregator.Run from Checker.Required(); a Checker's own Check method need not
+// (and should not) set it — Run overwrites it so the two cannot diverge.
 type Check struct {
 	Name      string `json:"name"`
 	Status    Status `json:"status"`
@@ -87,6 +89,9 @@ func (a *Aggregator) Run(ctx context.Context) (Report, int) {
 	for got := 0; got < n; {
 		select {
 		case r := <-results:
+			// Required() is the single source of truth — stamp it onto every
+			// result so a Check() implementation cannot diverge from it.
+			r.c.Required = a.Checkers[r.i].Required()
 			checks[r.i] = r.c
 			filled[r.i] = true
 			got++

@@ -18,10 +18,16 @@ type httpChecker struct {
 	client   *http.Client
 }
 
-// httpClientBackstop bounds a probe even if the per-check context somehow carries
-// no deadline (e.g. Aggregator.Timeout <= 0 and a deadline-less request context),
-// so a hung server cannot leak the goroutine indefinitely. The context remains the
-// primary, shorter bound in normal operation.
+// httpClientBackstop is a last-resort goroutine-leak guard, NOT a functional
+// timeout. The per-check context deadline supplied by Aggregator.Run (from the
+// configured per-check timeout, default 1500ms) is the primary bound and fires
+// first in normal operation; even when no per-check timeout is configured,
+// Aggregator.ceiling() bounds the user-visible /health response (5s fallback),
+// so this value never determines response latency and cannot mask a missing
+// per-check timeout. It only caps the lifetime of a goroutine that Run has
+// already abandoned, in the pathological case of a deadline-less context. It is
+// therefore set deliberately generous — it must exceed any plausible configured
+// per-check timeout so it never preempts the context bound it backstops.
 const httpClientBackstop = 30 * time.Second
 
 // NewHTTPChecker builds a GET-based liveness checker. Used for Brain and Embedder
@@ -40,7 +46,7 @@ func (h *httpChecker) Name() string   { return h.name }
 func (h *httpChecker) Required() bool { return h.required }
 
 func (h *httpChecker) Check(ctx context.Context) Check {
-	c := Check{Name: h.name, Required: h.required}
+	c := Check{Name: h.name} // Required is stamped by Aggregator.Run from Required()
 	if h.baseURL == "" {
 		if h.required {
 			c.Status = StatusDown

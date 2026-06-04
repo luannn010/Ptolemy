@@ -19,4 +19,5 @@ are optional — down yields `degraded` (200) and an unset endpoint yields `disa
 the package needs no `Guarded*` wrapper, consistent with the harness rules. The
 checkers and the optional Postgres pool are constructed in `cmd/workerd/main.go`
 and injected into the router via `httpapi.RouterDeps.Health`; when that field is
-nil (e.g. in tests) `/health` falls back to a static `{"status":"ok"}`.
+nil (e.g. in tests) `/health` falls back to a static
+`{"status":"ok","service":"workerd","timestamp":"<RFC3339>"}` (no `checks` array).

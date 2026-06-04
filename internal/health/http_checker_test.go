@@ -13,9 +13,13 @@ func TestHTTPChecker_Up(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewHTTPChecker("brain", srv.URL, "/v1/models", true).Check(context.Background())
-	if c.Status != StatusUp || c.Name != "brain" || !c.Required {
-		t.Fatalf("got %+v, want up/brain/required", c)
+	chk := NewHTTPChecker("brain", srv.URL, "/v1/models", true)
+	c := chk.Check(context.Background())
+	if c.Status != StatusUp || c.Name != "brain" {
+		t.Fatalf("got %+v, want up/brain", c)
+	}
+	if !chk.Required() {
+		t.Fatal("Required() should be true")
 	}
 }
 

@@ -121,6 +121,28 @@ func TestAggregatorRun_AbandonsHungChecker(t *testing.T) {
 	}
 }
 
+// stampChecker.Check deliberately returns the WRONG Required to prove that Run
+// stamps Check.Required from Checker.Required() (the single source of truth),
+// not from whatever the Check result happens to carry.
+type stampChecker struct{}
+
+func (stampChecker) Name() string   { return "stamp" }
+func (stampChecker) Required() bool { return true }
+func (stampChecker) Check(_ context.Context) Check {
+	return Check{Name: "stamp", Status: StatusDown, Required: false} // lies about Required
+}
+
+func TestAggregatorRun_RequiredFromCheckerNotResult(t *testing.T) {
+	agg := &Aggregator{Checkers: []Checker{stampChecker{}}}
+	report, code := agg.Run(context.Background())
+	if !report.Checks[0].Required {
+		t.Fatalf("Run must stamp Required from Checker.Required(); got %+v", report.Checks[0])
+	}
+	if code != http.StatusServiceUnavailable || report.Status != "unhealthy" {
+		t.Fatalf("a down required check must be unhealthy/503, got %s/%d", report.Status, code)
+	}
+}
+
 func TestAggregatorRun_Empty(t *testing.T) {
 	agg := &Aggregator{}
 	report, code := agg.Run(context.Background())
