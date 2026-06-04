@@ -36,3 +36,15 @@ path) and `Orchestrator.Answer` (legacy path), and serialized to `steps` by the
 `memorytools` recall handler. There is no live streaming or MCP notification —
 the trace is returned in the single tool result, consistent with MCP's
 request/response model.
+
+## Capture extractor tuning (`internal/memory`)
+
+The capture extractor is grammar-constrained and prompt-versioned. `fact_predicate`
+is pinned by `grammar/atom.gbnf` to the fixed taxonomy in `validators.go`
+(`allowedPredicates`) — the model cannot emit an out-of-taxonomy predicate
+(`TestPredicateGrammarMatchesTaxonomy` guards the two lists against drift, mirroring
+the `action.gbnf` precedent). The `extract_v2` prompt (`prompts/extract_v2.txt`,
+stamped as `ExtractorVersion`) lists that vocabulary, extracts less conservatively,
+and requires `content` to be copied from the source turn (trim filler, no paraphrase)
+so atoms survive `EvidenceInSourceValidator`; the resolved entity goes in
+`fact_subject`. No validator was changed.
