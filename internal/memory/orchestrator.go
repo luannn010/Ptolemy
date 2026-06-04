@@ -223,5 +223,18 @@ func (o *Orchestrator) Answer(ctx context.Context, q Query) (Answer, error) {
 	}
 	fused := o.Fusion.Fuse([][]RetrievedChunk{candidates}, finalK)
 	prompt := o.ContextBuilder.Build(q, fused)
-	return o.Generator.Generate(ctx, q, prompt)
+	ans, err := o.Generator.Generate(ctx, q, prompt)
+	if err != nil {
+		return Answer{}, err
+	}
+	if q.Trace {
+		ans.Trace = &RecallTrace{
+			Mode: "legacy",
+			Steps: []TraceStep{
+				retrieveStep(0, AgentAction{Query: q.Text}, fused),
+				{Index: 1, Action: ActionAnswer, GroundingOK: isGrounded(ans.Text, prompt.SourceIDs)},
+			},
+		}
+	}
+	return ans, nil
 }
