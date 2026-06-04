@@ -282,6 +282,82 @@ func TestHandleConsolidate(t *testing.T) {
 	}
 }
 
+// --- recall trace ------------------------------------------------------------
+
+func TestHandleRecallTraceReturnsSteps(t *testing.T) {
+	rec := &fakeRecaller{answer: memory.Answer{
+		Text:      "prose [source:a#0]",
+		Citations: []string{"a#0"},
+		Trace: &memory.RecallTrace{
+			Mode: "agentic",
+			Steps: []memory.TraceStep{
+				{Index: 0, Action: "retrieve", Query: "terms", Retrieved: []memory.TraceChunk{{ID: "a#0", Score: 0.5, Snippet: "fact"}}},
+				{Index: 1, Action: "answer", GroundingOK: true},
+			},
+		},
+	}}
+	h := NewHandler(Deps{Recall: rec, Subject: "luan", Project: "ptolemy"})
+
+	res, _, err := h("ptolemy_memory_recall", map[string]any{"query": "q", "trace": true}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// trace=true must route through Answer (the generate path) and set Query.Trace.
+	if rec.answerCalls != 1 || rec.recallCalls != 0 {
+		t.Fatalf("trace=true must use Answer, got recall=%d answer=%d", rec.recallCalls, rec.answerCalls)
+	}
+	if !rec.gotQuery.Trace {
+		t.Fatal("expected Query.Trace=true passed through")
+	}
+	var out struct {
+		Text  string `json:"text"`
+		Mode  string `json:"mode"`
+		Steps []struct {
+			Action    string `json:"action"`
+			Query     string `json:"query"`
+			Retrieved []struct {
+				ID      string  `json:"id"`
+				Score   float64 `json:"score"`
+				Snippet string  `json:"snippet"`
+			} `json:"retrieved"`
+			GroundingOK bool `json:"grounding_ok"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal([]byte(textOf(t, res)), &out); err != nil {
+		t.Fatalf("result not JSON: %v", err)
+	}
+	if out.Mode != "agentic" || len(out.Steps) != 2 {
+		t.Fatalf("unexpected steps payload: %#v", out)
+	}
+	if out.Steps[0].Action != "retrieve" || len(out.Steps[0].Retrieved) != 1 || out.Steps[0].Retrieved[0].ID != "a#0" {
+		t.Fatalf("step0 wrong: %#v", out.Steps[0])
+	}
+	if !out.Steps[1].GroundingOK {
+		t.Fatalf("step1 grounding flag missing: %#v", out.Steps[1])
+	}
+}
+
+func TestHandleRecallNoTraceOmitsSteps(t *testing.T) {
+	rec := &fakeRecaller{recall: memory.RecallResult{Context: "ctx", SourceIDs: []string{"a#0"}}}
+	h := NewHandler(Deps{Recall: rec, Subject: "luan", Project: "ptolemy"})
+
+	res, _, err := h("ptolemy_memory_recall", map[string]any{"query": "q"}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Regression: default path unchanged — retrieval-only, no steps key.
+	if rec.recallCalls != 1 || rec.answerCalls != 0 {
+		t.Fatalf("default must stay retrieval-only, got recall=%d answer=%d", rec.recallCalls, rec.answerCalls)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(textOf(t, res)), &raw); err != nil {
+		t.Fatalf("result not JSON: %v", err)
+	}
+	if _, ok := raw["steps"]; ok {
+		t.Fatalf("steps must be absent without trace=true, got %#v", raw)
+	}
+}
+
 // --- routing -----------------------------------------------------------------
 
 func TestHandleUnknownTool(t *testing.T) {

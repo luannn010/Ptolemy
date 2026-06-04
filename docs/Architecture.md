@@ -21,3 +21,18 @@ checkers and the optional Postgres pool are constructed in `cmd/workerd/main.go`
 and injected into the router via `httpapi.RouterDeps.Health`; when that field is
 nil (e.g. in tests) `/health` falls back to a static
 `{"status":"ok","service":"workerd","timestamp":"<RFC3339>"}` (no `checks` array).
+
+## Recall reasoning trace (`internal/memory`)
+
+`ptolemy_memory_recall` accepts an opt-in `trace` boolean (which implies
+`generate`). When set, the result carries `mode` (`agentic`|`legacy`) and a
+`steps` array: one entry per recall step with the planner action, the query it
+issued, the chunks it retrieved (id, score, ~120-rune snippet), and the terminal
+outcome (grounding result or give-up reason). The trace is built in-memory from
+data the loop already holds, is `nil`/absent by default, and never alters the
+answer text or citations. Types `RecallTrace`/`TraceStep`/`TraceChunk` live in
+`internal/memory/trace.go`; the trace is emitted by `AgentLoop.Run` (agentic
+path) and `Orchestrator.Answer` (legacy path), and serialized to `steps` by the
+`memorytools` recall handler. There is no live streaming or MCP notification —
+the trace is returned in the single tool result, consistent with MCP's
+request/response model.
