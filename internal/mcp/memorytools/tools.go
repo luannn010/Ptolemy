@@ -59,6 +59,7 @@ func Tools() []mcp.Tool {
 					"subject_id": map[string]any{"type": "string", "description": "Owner scope; defaults to the configured subject."},
 					"project_id": map[string]any{"type": "string", "description": "Project scope; defaults to the configured project."},
 					"generate":   map[string]any{"type": "boolean", "description": "Synthesize a prose answer via the LLM (slower). Default false returns retrieval-only context."},
+					"trace":      map[string]any{"type": "boolean", "description": "Return a step-by-step reasoning trace (retrieval queries, retrieved chunks with id/score/snippet, planner decisions, grounding). Implies generate=true. Default false."},
 				},
 				"required": []string{"query"},
 			}),
@@ -119,12 +120,20 @@ func (d Deps) handleRecall(args map[string]any) (map[string]any, bool, error) {
 	if project != "" {
 		q.ProjectID = &project
 	}
-	if gen, _ := args["generate"].(bool); gen {
+	gen, _ := args["generate"].(bool)
+	trace, _ := args["trace"].(bool)
+	q.Trace = trace
+	if gen || trace {
 		ans, err := d.Recall.Answer(context.Background(), q)
 		if err != nil {
 			return nil, true, err
 		}
-		return jsonResult(map[string]any{"text": ans.Text, "citations": ans.Citations}), true, nil
+		payload := map[string]any{"text": ans.Text, "citations": ans.Citations}
+		if ans.Trace != nil {
+			payload["mode"] = ans.Trace.Mode
+			payload["steps"] = ans.Trace.Steps
+		}
+		return jsonResult(payload), true, nil
 	}
 	res, err := d.Recall.Recall(context.Background(), q)
 	if err != nil {
