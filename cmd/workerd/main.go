@@ -8,10 +8,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/config"
 	"github.com/luannn010/ptolemy/internal/fileops"
 	"github.com/luannn010/ptolemy/internal/gitops"
+	"github.com/luannn010/ptolemy/internal/health"
 	"github.com/luannn010/ptolemy/internal/httpapi"
 	"github.com/luannn010/ptolemy/internal/logging"
 	"github.com/luannn010/ptolemy/internal/memory"
@@ -64,12 +66,40 @@ func main() {
 	_ = guardedGit
 	_ = guardedWorktree
 
+	// Optional Postgres pool for the memory DB. pgxpool.New is lazy — it does not
+	// dial here, so an unreachable DB surfaces only at /health Ping time, not at
+	// startup. nil pool => Postgres reports "disabled".
+	var pgPool *pgxpool.Pool
+	if cfg.DatabaseURL != "" {
+		pool, perr := pgxpool.New(context.Background(), cfg.DatabaseURL)
+		if perr != nil {
+			log.Warn().Err(perr).Msg("postgres pool init failed; /health will report postgres down")
+		} else {
+			pgPool = pool
+		}
+	}
+	pgCheck := health.NewPgChecker("postgres", nil)
+	if pgPool != nil {
+		pgCheck = health.NewPgChecker("postgres", pgPool)
+	}
+	healthAgg := &health.Aggregator{
+		Timeout: time.Duration(cfg.HealthTimeoutMS) * time.Millisecond,
+		Checkers: []health.Checker{
+			health.NewSQLChecker("workerd", baseStore.SQLDB(), true),
+			health.NewHTTPChecker("brain", cfg.BrainBaseURL, "/v1/models", true),
+			health.NewHTTPChecker("embedder", cfg.EmbeddingBaseURL, "/v1/models", true),
+			pgCheck,
+			health.NewHTTPChecker("mcp", cfg.MCPBaseURL, "/health", false),
+		},
+	}
+
 	server := &http.Server{
-		Addr:         ":" + cfg.HTTPPort,
+		Addr: ":" + cfg.HTTPPort,
 		Handler: httpapi.NewRouter(httpapi.RouterDeps{
 			Sessions:  sessionStore,
 			Commands:  commandService,
 			CommandDB: commandStore,
+			Health:    healthAgg,
 		}),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -119,6 +149,9 @@ func main() {
 
 	if sweepCleanup != nil {
 		sweepCleanup()
+	}
+	if pgPool != nil {
+		pgPool.Close()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

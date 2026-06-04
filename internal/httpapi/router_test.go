@@ -12,6 +12,7 @@ import (
 	"github.com/luannn010/ptolemy/internal/apitypes"
 	"github.com/luannn010/ptolemy/internal/command"
 	"github.com/luannn010/ptolemy/internal/domain"
+	"github.com/luannn010/ptolemy/internal/health"
 	"github.com/luannn010/ptolemy/internal/policy"
 	"github.com/luannn010/ptolemy/internal/session"
 	"github.com/luannn010/ptolemy/internal/store"
@@ -57,6 +58,71 @@ func TestHealthEndpoint(t *testing.T) {
 	_ = json.NewDecoder(resp.Body).Decode(&body)
 	if body["status"] != "ok" {
 		t.Fatalf("expected status ok, got %+v", body)
+	}
+}
+
+func TestHealth_DeepOK(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer up.Close()
+
+	agg := &health.Aggregator{Checkers: []health.Checker{
+		health.NewHTTPChecker("brain", up.URL, "/v1/models", true),
+		health.NewHTTPChecker("embedder", up.URL, "/v1/models", true),
+		health.NewPgChecker("postgres", nil),               // disabled
+		health.NewHTTPChecker("mcp", "", "/health", false), // disabled
+	}}
+	router := NewRouter(RouterDeps{Health: agg})
+
+	srv := httptest.NewServer(router)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("code = %d, want 200", resp.StatusCode)
+	}
+	var report health.Report
+	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "ok" || report.Service != "workerd" || len(report.Checks) != 4 {
+		t.Fatalf("report = %+v", report)
+	}
+}
+
+func TestHealth_RequiredDown503(t *testing.T) {
+	agg := &health.Aggregator{Checkers: []health.Checker{
+		health.NewHTTPChecker("brain", "", "/v1/models", true), // required, not configured -> down
+	}}
+	router := NewRouter(RouterDeps{Health: agg})
+
+	srv := httptest.NewServer(router)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("code = %d, want 503", resp.StatusCode)
+	}
+}
+
+func TestHealth_NilFallback(t *testing.T) {
+	router := NewRouter(RouterDeps{}) // no Health wired
+	srv := httptest.NewServer(router)
+	defer srv.Close()
+	resp, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("code = %d, want 200", resp.StatusCode)
 	}
 }
 
