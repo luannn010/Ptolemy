@@ -53,6 +53,7 @@ type Query struct {
 	Filters   map[string]any
 	SubjectID *string // recall isolation; nil = global KB only
 	ProjectID *string // reserved for 6b project filtering; populated, not filtered in 6a
+	Trace     bool    // when true, Answer carries a RecallTrace of the retrieval/reasoning steps
 }
 
 type RawDocument struct {
@@ -79,7 +80,8 @@ type PromptContext struct {
 type Answer struct {
 	Text      string
 	Citations []string
-	GaveUp    bool // true when the loop produced an honest give_up (not a failure)
+	GaveUp    bool         // true when the loop produced an honest give_up (not a failure)
+	Trace     *RecallTrace // non-nil only when Query.Trace was set; additive, never affects Text
 }
 
 // Exchange is one full user+assistant turn, the unit of conversational capture.
