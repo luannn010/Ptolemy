@@ -2,8 +2,28 @@ package memory
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
+
+func TestExtractorPromptV2_Wiring(t *testing.T) {
+	if ExtractorVersion != "extract_v2" {
+		t.Fatalf("ExtractorVersion = %q, want extract_v2", ExtractorVersion)
+	}
+	if strings.TrimSpace(extractPromptTemplate) == "" {
+		t.Fatal("embedded extract prompt is empty")
+	}
+	// v2 must advertise the predicate vocabulary so the model emits taxonomy values.
+	for _, tok := range []string{"uses", "runs_on", "listens_on", "stores_in", "configured_as"} {
+		if !strings.Contains(extractPromptTemplate, tok) {
+			t.Fatalf("extract prompt missing predicate vocabulary token %q", tok)
+		}
+	}
+	// v2 must instruct substring-safe content (copy from source, do not paraphrase).
+	if !strings.Contains(strings.ToLower(extractPromptTemplate), "copy") {
+		t.Fatal("extract prompt should instruct copying content from the source turn")
+	}
+}
 
 type fakeChat struct{ resp string }
 

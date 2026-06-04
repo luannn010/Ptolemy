@@ -47,6 +47,38 @@ func TestGrammarMatchesAtomStruct(t *testing.T) {
 	}
 }
 
+func TestPredicateGrammarMatchesTaxonomy(t *testing.T) {
+	b, err := os.ReadFile("grammar/atom.gbnf")
+	if err != nil {
+		t.Fatalf("read grammar: %v", err)
+	}
+	// Find the single-line `factpredicate ::= ...` alternation rule.
+	var rule string
+	for _, ln := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(ln), "factpredicate ::=") {
+			rule = ln
+			break
+		}
+	}
+	if rule == "" {
+		t.Fatal("grammar missing `factpredicate ::=` rule")
+	}
+	// Forward: every allowed predicate must appear as a quoted alternative.
+	// The .gbnf escapes quotes as \" ; unescape to compare literal tokens.
+	unesc := strings.ReplaceAll(rule, `\"`, `"`)
+	for p := range allowedPredicates {
+		lit := `"` + p + `"` // p=="" -> `""`
+		if !strings.Contains(unesc, lit) {
+			t.Fatalf("factpredicate rule missing taxonomy value %q (looked for %s)", p, lit)
+		}
+	}
+	// Reverse: alternative count must equal taxonomy size (guards against extras).
+	alts := strings.Count(rule, "|") + 1
+	if alts != len(allowedPredicates) {
+		t.Fatalf("factpredicate has %d alternatives, taxonomy has %d", alts, len(allowedPredicates))
+	}
+}
+
 func TestActionGrammarFile_ValidGBNF(t *testing.T) {
 	b, err := os.ReadFile("grammar/action.gbnf")
 	if err != nil {
