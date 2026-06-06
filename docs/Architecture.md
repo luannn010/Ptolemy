@@ -48,3 +48,21 @@ stamped as `ExtractorVersion`) lists that vocabulary, extracts less conservative
 and requires `content` to be copied from the source turn (trim filler, no paraphrase)
 so atoms survive `EvidenceInSourceValidator`; the resolved entity goes in
 `fact_subject`. No validator was changed.
+
+## Controller worker-pool (`internal/controller`)
+
+The first deterministic slice of the multi-agent orchestration layer. Three pure
+units plus a supervisor: an in-process `Bus` (non-blocking fan-out — each
+subscriber drains its own bounded channel; a full buffer drops + counts rather
+than stalling the publisher), a worker lifecycle `State` machine (`Pending →
+Provisioning → Running → Stage1Passed → Integrating → Merged`, with `Failed` /
+`Cancelled` reachable from every non-terminal state; `CanTransition` validates
+against a transition table), and a `Supervisor` that spawns N workers into git
+worktrees and drives each through an injected `Runner` up to `Stage1Passed`. The
+supervisor performs side effects only through a `WorktreeManager` consumer
+interface satisfied by `*policy.GuardedWorktree`, so it never touches a raw
+adapter — consistent with the harness rule. The registry is in-memory (no schema
+change); Docker, mocks, the integration lock/Stage 2, `base_updated`
+propagation, and wiring in the model are deferred to later slices, per the build
+order in `docs/ptolemy-architecture.html` ("wire in the model last"). The
+`Runner` interface is the seam the model-backed implementation plugs into later.
