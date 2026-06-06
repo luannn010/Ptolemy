@@ -73,7 +73,7 @@ Hooks in `.claude/settings.local.json` (host-specific, gitignored) automate the 
 - **Never** wire a raw adapter into a service. Services hold `Guarded*` types only. The only place raw adapters exist is `cmd/workerd/main.go`.
 - **Never** run destructive shell commands (`rm -rf`, `git push --force`, `git reset --hard`) without explicit user approval, even if the policy engine would allow them via your local rules.
 - **Never** use `git add .` or `git add -A`. Stage explicit files only (per AGENTS.md §Commit hygiene).
-- **Never** use the `gh` CLI; use the GitHub plugin tooling (per AGENTS.md §GitHub Tooling Policy).
+- Prefer the GitHub plugin tooling for GitHub operations (per AGENTS.md §GitHub Tooling Policy). The `gh` CLI is permitted as a fallback for read and PR operations (e.g. `gh pr create`, `gh pr view`, `gh auth status`) when the plugin is unavailable; it remains disallowed for destructive operations.
 
 ## Repository conventions
 

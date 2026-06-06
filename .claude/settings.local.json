@@ -2,6 +2,13 @@
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
   },
+  "permissions": {
+    "allow": [
+      "Bash(gh auth status:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr view:*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
