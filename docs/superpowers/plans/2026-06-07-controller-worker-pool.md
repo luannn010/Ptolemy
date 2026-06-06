@@ -869,12 +869,12 @@ func (s *Supervisor) Workers() []Worker {
 // Shutdown cancels in-flight/non-terminal workers and removes their worktrees.
 func (s *Supervisor) Shutdown(ctx context.Context) {
 	s.mu.Lock()
-	type rm struct{ name string }
+	type rm struct{ name, sessionID string }
 	var toRemove []rm
 	for _, id := range s.order {
 		w := s.workers[id]
 		if w.Worktree != "" {
-			toRemove = append(toRemove, rm{name: w.Spec.Name})
+			toRemove = append(toRemove, rm{name: w.Spec.Name, sessionID: w.sessionID})
 		}
 		if CanTransition(w.State, StateCancelled) {
 			s.transition(w, StateCancelled, "shutdown")
@@ -882,7 +882,7 @@ func (s *Supervisor) Shutdown(ctx context.Context) {
 	}
 	s.mu.Unlock()
 	for _, r := range toRemove {
-		_, _ = s.deps.Worktree.Remove(ctx, "shutdown", r.name, defaultCallOpts())
+		_, _ = s.deps.Worktree.Remove(ctx, r.sessionID, r.name, defaultCallOpts())
 	}
 }
 ```
@@ -935,7 +935,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/luannn010/ptolemy/internal/domain"
 	"github.com/luannn010/ptolemy/internal/policy"
+	"github.com/luannn010/ptolemy/internal/store"
 	"github.com/luannn010/ptolemy/internal/worktree"
 )
 
@@ -968,11 +970,27 @@ func TestSupervisorWithRealGuardedWorktree(t *testing.T) {
 	repo := setupRepoForSmoke(t)
 	wtDir := filepath.Join(repo, ".worktrees")
 
-	// Real worktree manager wrapped by the real guard, with an allow-all engine.
+	// Real DB + a sessions row (policy_decisions FKs to sessions(id)).
+	st, err := store.Open(filepath.Join(t.TempDir(), "db.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	if _, err := st.DB.Exec(`INSERT INTO sessions(id,name,status,workspace,description,created_at,updated_at)
+		VALUES('smoke','n','open','.','','x','x')`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Real worktree manager wrapped by the real guard. DefaultRuleset has no
+	// worktree rule (would hit the Ask/OOB fail-safe), so use an allow-worktree
+	// ruleset for the test.
 	mgr := worktree.NewManager(repo, wtDir)
-	engine := policy.NewAllowAllEngine() // see note below
+	rs := policy.Ruleset{Rules: []policy.Rule{
+		{ID: "allow-worktree", Contains: "worktree", Effect: domain.EffectAllow, Reason: "test allows worktree ops"},
+	}}
+	engine := policy.NewEngine(rs)
 	approvals := policy.NewApprovals()
-	guarded := policy.NewGuardedWorktree(engine, approvals, mgr, repo, nil)
+	guarded := policy.NewGuardedWorktree(engine, approvals, mgr, repo, st.DB)
 
 	bus := NewBus()
 	defer bus.Close()
