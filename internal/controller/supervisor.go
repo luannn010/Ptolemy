@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -10,7 +11,8 @@ const defaultMaxWorkers = 4
 
 // Config tunes the supervisor.
 type Config struct {
-	MaxWorkers int // concurrency bound; defaults to 4 when <= 0
+	MaxWorkers int    // concurrency bound; defaults to 4 when <= 0
+	BaseBranch string // merge target; defaults to "main" when empty and integration is configured
 }
 
 // Deps are the supervisor's injected dependencies.
@@ -19,6 +21,12 @@ type Deps struct {
 	Runner   Runner
 	Bus      *Bus
 	Config   Config
+
+	// Integration (slice 2). All three nil => slice-1 behavior (stop at
+	// Stage1Passed). Setting some-but-not-all panics in New (wiring bug).
+	Lock   IntegrationLock
+	Stage2 Stage2Runner
+	Merger GitMerger
 }
 
 // Supervisor owns the in-memory worker registry and drives workers through
@@ -32,17 +40,38 @@ type Supervisor struct {
 	nextID  int
 }
 
-// New constructs a Supervisor.
+// New constructs a Supervisor. Panics if integration deps are partially set.
 func New(deps Deps) *Supervisor {
 	max := deps.Config.MaxWorkers
 	if max <= 0 {
 		max = defaultMaxWorkers
+	}
+	set := 0
+	if deps.Lock != nil {
+		set++
+	}
+	if deps.Stage2 != nil {
+		set++
+	}
+	if deps.Merger != nil {
+		set++
+	}
+	if set != 0 && set != 3 {
+		panic("controller: integration requires all of Lock, Stage2, Merger (or none)")
+	}
+	if set == 3 && deps.Config.BaseBranch == "" {
+		deps.Config.BaseBranch = "main"
 	}
 	return &Supervisor{
 		deps:    deps,
 		max:     max,
 		workers: make(map[string]*Worker),
 	}
+}
+
+// integrationConfigured reports whether Stage-2 promotion is wired.
+func (s *Supervisor) integrationConfigured() bool {
+	return s.deps.Lock != nil && s.deps.Stage2 != nil && s.deps.Merger != nil
 }
 
 // Spawn registers a new Pending worker and returns its id.
@@ -149,7 +178,6 @@ func (s *Supervisor) driveWorker(ctx context.Context, id, sessionID string) {
 	s.mu.Unlock()
 	outcome, runErr := s.deps.Runner.RunStage1(ctx, snapshot)
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	switch {
 	case runErr != nil:
 		s.transition(w, StateFailed, runErr.Error())
@@ -157,6 +185,71 @@ func (s *Supervisor) driveWorker(ctx context.Context, id, sessionID string) {
 		s.transition(w, StateStage1Passed, outcome.Detail)
 	default:
 		s.transition(w, StateFailed, outcome.Detail)
+	}
+	passed := w.State == StateStage1Passed
+	s.mu.Unlock()
+
+	if passed && s.integrationConfigured() {
+		s.integrate(ctx, id, sessionID)
+	}
+}
+
+// integrate promotes a Stage1Passed worker serially: acquire the integration
+// lock, run Stage 2, and on success merge to base and emit base_updated.
+func (s *Supervisor) integrate(ctx context.Context, id, sessionID string) {
+	release, err := s.deps.Lock.Acquire(ctx)
+	if err != nil {
+		s.mu.Lock()
+		w := s.workers[id]
+		s.transition(w, StateCancelled, "integration lock: "+err.Error())
+		s.mu.Unlock()
+		return
+	}
+	defer release()
+
+	s.mu.Lock()
+	w := s.workers[id]
+	s.transition(w, StateIntegrating, "")
+	snapshot := *w
+	s.mu.Unlock()
+
+	outcome, runErr := s.deps.Stage2.RunStage2(ctx, snapshot)
+	if runErr != nil {
+		s.mu.Lock()
+		s.transition(w, StateFailed, runErr.Error())
+		s.mu.Unlock()
+		return
+	}
+	if !outcome.Passed {
+		s.mu.Lock()
+		s.transition(w, StateFailed, outcome.Detail)
+		s.mu.Unlock()
+		return
+	}
+
+	mergeRes, mergeErr := s.deps.Merger.MergeNoFF(ctx, sessionID, snapshot.Branch, defaultCallOpts())
+	if mergeErr != nil || !mergeRes.Success {
+		detail := "merge failed"
+		if mergeErr != nil {
+			detail = mergeErr.Error()
+		} else if mergeRes.Output != "" {
+			detail = mergeRes.Output
+		}
+		s.mu.Lock()
+		s.transition(w, StateFailed, detail)
+		s.mu.Unlock()
+		return
+	}
+
+	sha := ""
+	if shaRes, err := s.deps.Merger.CurrentCommitSHA(ctx, sessionID, defaultCallOpts()); err == nil && shaRes.Success {
+		sha = strings.TrimSpace(shaRes.Output)
+	}
+	s.mu.Lock()
+	s.transition(w, StateMerged, "merged")
+	s.mu.Unlock()
+	if s.deps.Bus != nil {
+		s.deps.Bus.Publish(Event{Type: EventBaseUpdated, WorkerID: id, Payload: sha})
 	}
 }
 
