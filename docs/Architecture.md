@@ -66,3 +66,24 @@ change); Docker, mocks, the integration lock/Stage 2, `base_updated`
 propagation, and wiring in the model are deferred to later slices, per the build
 order in `docs/ptolemy-architecture.html` ("wire in the model last"). The
 `Runner` interface is the seam the model-backed implementation plugs into later.
+
+## Controller Stage-2 integration (`internal/controller`)
+
+Slice 2 of the orchestration layer adds serial promotion on top of the slice-1
+supervisor. After a worker reaches `Stage1Passed`, `driveWorker` (when the
+integration deps are configured) calls `integrate`: acquire a single
+`IntegrationLock`, transition `Integrating`, run the injected `Stage2Runner`
+against the real environment, and on success `MergeNoFF` the worker's branch to
+base via a `GitMerger`, transition `Merged`, and publish `base_updated` with the
+new base SHA. Stage-1 stays parallel (`MaxWorkers`); only the integration section
+is serial, enforced by the lock, and `s.mu` is held only per-transition so the
+long-running integration steps don't serialize unrelated workers. The production
+lock (`PgLock`) is a Postgres session-level advisory lock — crash reclaim is
+automatic because the lock dies with its connection — and needs no `Guarded*`
+wrapper, consistent with the `internal/health` precedent for non-workspace
+Postgres access (no table is added; the four-table schema is intact). The actual
+code change, the merge, *does* go through `*policy.GuardedGit`. `New` panics if
+the integration deps are only partially set (a wiring bug); all-nil preserves
+slice-1 behavior (stop at `Stage1Passed`). The `base_updated` subscribers
+(propagation, relevance), the current-with-base entry ticket, and the
+Stage-2-fail regression loop are deferred to later slices.
