@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -240,23 +241,50 @@ func TestWake_ProcessDiesDuringStartup(t *testing.T) {
 	}
 }
 
-func TestMaybeUnloadIfIdle(t *testing.T) {
-	l := &fakeLauncher{}
-	m := newTestManager(t, l, &fakeProbe{ready: true})
-	_ = m.Wake(context.Background(), "qwen9b")
+func TestRunIdleLoop_UnloadsWhenIdle(t *testing.T) {
+	var unloads atomic.Int32
+	status := func() Status { return Status{Running: true, LastUse: time.Now().Add(-time.Hour)} }
+	unload := func(_ context.Context) error { unloads.Add(1); return nil }
 
-	unloaded, err := m.MaybeUnloadIfIdle(context.Background(), time.Hour)
-	if err != nil || unloaded {
-		t.Fatalf("fresh activity must not unload, unloaded=%v err=%v", unloaded, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { RunIdleLoop(ctx, time.Millisecond, time.Millisecond, status, unload); close(done) }()
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+	<-done
+	if unloads.Load() == 0 {
+		t.Fatal("idle-past-ttl must trigger unload")
 	}
-	m.mu.Lock()
-	m.lastUse = time.Now().Add(-time.Hour) // simulate idle
-	m.mu.Unlock()
-	unloaded, err = m.MaybeUnloadIfIdle(context.Background(), time.Minute)
-	if err != nil || !unloaded {
-		t.Fatalf("idle past ttl must unload, unloaded=%v err=%v", unloaded, err)
+}
+
+func TestRunIdleLoop_SkipsWhenActive(t *testing.T) {
+	var unloads atomic.Int32
+	status := func() Status { return Status{Running: true, LastUse: time.Now()} } // just used
+	unload := func(_ context.Context) error { unloads.Add(1); return nil }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { RunIdleLoop(ctx, time.Millisecond, time.Hour, status, unload); close(done) }()
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	<-done
+	if unloads.Load() != 0 {
+		t.Fatalf("active brain must not unload, got %d", unloads.Load())
 	}
-	if st := m.Status(); st.Running {
-		t.Fatal("brain must be stopped after idle unload")
+}
+
+func TestRunIdleLoop_StopsOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan struct{})
+	go func() {
+		RunIdleLoop(ctx, time.Millisecond, time.Millisecond,
+			func() Status { return Status{} }, func(context.Context) error { return nil })
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("RunIdleLoop must return promptly on cancel")
 	}
 }

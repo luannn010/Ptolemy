@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Launcher spawns the brain process and returns a Handle to control it. Injected
@@ -205,19 +207,27 @@ func (m *Manager) Status() Status {
 	}
 }
 
-// MaybeUnloadIfIdle stops the brain if it has been idle longer than ttl. Returns
-// whether it unloaded. Called by the idle-TTL loop.
-func (m *Manager) MaybeUnloadIfIdle(_ context.Context, ttl time.Duration) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.handle == nil || !m.handle.Running() {
-		return false, nil
+// RunIdleLoop ticks every interval and, when status reports the brain has been
+// idle longer than ttl, calls unload. The idleness CHECK is a read (no policy
+// gate / no audit row per tick); only the actual unload goes through the
+// (gated) unload func, so the audit log records one row per real unload, not one
+// per tick. Tolerates unload errors; stops on ctx cancel. Testable core.
+func RunIdleLoop(ctx context.Context, interval, ttl time.Duration, status func() Status, unload func(context.Context) error) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			st := status()
+			if st.Running && time.Since(st.LastUse) >= ttl {
+				if err := unload(ctx); err != nil {
+					log.Error().Err(err).Msg("brain idle unload failed; retrying next interval")
+				}
+			}
+		}
 	}
-	if time.Since(m.lastUse) < ttl {
-		return false, nil
-	}
-	m.stopLocked()
-	return true, nil
 }
 
 // --- production Launcher + Probe (thin; exercised live, not in unit tests) ----
