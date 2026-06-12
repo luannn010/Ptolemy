@@ -107,3 +107,27 @@ wrapper is involved. Because `NewModule` returns a single non-concurrency-safe
 HTTP 200; upstream failures (brain/embedder/DB) map to 502; the server uses a
 120s WriteTimeout (multi-step agentic answers) and shuts down before the memory
 conn closes.
+
+## Brain lifecycle skill (`internal/brain`, `internal/policy/guard_brain.go`, `cmd/workerd`)
+
+workerd can manage the local llama.cpp "brain" process — start, stop, switch
+model, **auto-wake on a `/chat` request**, and unload after idle (the JIT VRAM
+"hibernate" pattern). Because spawning/killing a process is a side effect, it is
+reached only through `policy.GuardedBrain`, never a raw exec: every op is
+`Authorize`d and audited to `policy_decisions` like `GuardedRunner`. The raw
+mechanism is `brain.Manager` (injected `Launcher`/`Probe` make it unit-testable
+without a real process; `wake` polls `GET /v1/models` for readiness, `switch`
+validates the target model before stopping the current one). Policy posture:
+**automatic** actions (`brain wake`, `brain autounload`, `brain status`) are
+`allow` so they don't block, while **manual destructive** actions (`brain
+switch`, `brain stop`) are `ask`/OOB — confirmed via the existing
+`127.0.0.1:APPROVE_PORT/approve/{id}` flow. The control plane
+(`POST /brain/{wake,stop,switch}`, `GET /brain/status`) is **loopback-only**
+(it can stop GPU processes); auto-wake is injected into `/chat` as an optional
+`Waker`. The idle-TTL loop reads `Manager.Status` (ungated) and calls the gated
+`Unload` only when actually idle, so the audit records one row per real unload,
+not one per tick. Brain decisions audit under a reserved `brain-system` session
+row (ensured at startup — no schema change). The whole skill is **off by
+default** (`BRAIN_CONTROL_ENABLED`); model paths come from a `BRAIN_MODELS` JSON
+registry. It assumes workerd is co-located with the brain (same host); the model
+is wired last per the build order.

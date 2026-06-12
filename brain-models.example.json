@@ -1,0 +1,17 @@
+{
+  "_comment": "Example brain model registry (BRAIN_MODELS). Copy to brain-models.json and edit paths. The Manager composes argv as: binary -m gguf --host 0.0.0.0 --port <BRAIN port> <args...>. Paths are on the host workerd runs on (co-located with llama.cpp).",
+  "models": [
+    {
+      "name": "qwen9b",
+      "binary": "/home/you/projects/llama.cpp/build/bin/llama-server",
+      "gguf": "/home/you/models/qwen3.5-9b/Qwen3.5-9B-Q4_K_M.gguf",
+      "args": ["--ctx-size", "32768", "-ngl", "999", "-np", "1", "--batch-size", "512", "--ubatch-size", "512", "--threads", "8"]
+    },
+    {
+      "name": "qwen4b",
+      "binary": "/home/you/projects/llama.cpp/build/bin/llama-server",
+      "gguf": "/home/you/models/qwen3.5-4b/Qwen3.5-4B-Q4_K_M.gguf",
+      "args": ["--ctx-size", "32768", "-ngl", "999", "-np", "1", "--batch-size", "512", "--ubatch-size", "512", "--threads", "8"]
+    }
+  ]
+}

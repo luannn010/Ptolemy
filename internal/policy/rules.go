@@ -29,6 +29,13 @@ func DefaultRuleset() Ruleset {
 			{ID: "ask-push-cmd", Contains: "git push", Effect: domain.EffectAsk, Channel: domain.ChannelOOB, Reason: "git push requires confirmation"},
 			{ID: "ask-network", Contains: "curl http", Effect: domain.EffectAsk, Channel: domain.ChannelOOB, Reason: "network download requires confirmation"},
 			{ID: "allow-build-test", Contains: "go test", Effect: domain.EffectAllow, Reason: "build/test command allowed"},
+			// Brain lifecycle skill: automatic actions allow (non-blocking, audited);
+			// manual destructive actions ask/OOB.
+			{ID: "allow-brain-wake", Contains: "brain wake", Effect: domain.EffectAllow, Reason: "auto-wake / manual start of the local brain"},
+			{ID: "allow-brain-status", Contains: "brain status", Effect: domain.EffectAllow, Reason: "brain status is a read"},
+			{ID: "allow-brain-autounload", Contains: "brain autounload", Effect: domain.EffectAllow, Reason: "idle-TTL unload of the local brain"},
+			{ID: "ask-brain-switch", Contains: "brain switch", Effect: domain.EffectAsk, Channel: domain.ChannelOOB, Reason: "manual brain model switch requires confirmation"},
+			{ID: "ask-brain-stop", Contains: "brain stop", Effect: domain.EffectAsk, Channel: domain.ChannelOOB, Reason: "manual brain stop requires confirmation"},
 		},
 	}
 }
