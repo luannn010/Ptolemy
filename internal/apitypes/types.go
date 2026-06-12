@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/luannn010/ptolemy/internal/domain"
+	"github.com/luannn010/ptolemy/internal/memory"
 )
 
 type CreateSessionRequest struct {
@@ -51,4 +52,25 @@ type ConfirmRequest struct {
 type ErrorResponse struct {
 	Error  string `json:"error"`
 	RuleID string `json:"rule_id,omitempty"`
+}
+
+// ChatRequest is the body of POST /chat on the RAG listener: a question for the
+// memory RAG plus optional scope/trace controls.
+type ChatRequest struct {
+	Query     string `json:"query"`
+	K         int    `json:"k,omitempty"`
+	SubjectID string `json:"subject_id,omitempty"`
+	ProjectID string `json:"project_id,omitempty"`
+	Trace     bool   `json:"trace,omitempty"`
+}
+
+// ChatResponse carries the RAG answer. Mode and Steps appear only when the
+// request set trace=true; gave_up=true is a successful, honest "not in the KB"
+// (HTTP 200), mirroring memory.Answer semantics.
+type ChatResponse struct {
+	Answer    string             `json:"answer"`
+	Citations []string           `json:"citations"`
+	GaveUp    bool               `json:"gave_up"`
+	Mode      string             `json:"mode,omitempty"`
+	Steps     []memory.TraceStep `json:"steps,omitempty"`
 }
