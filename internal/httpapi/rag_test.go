@@ -268,6 +268,59 @@ func (o *overlapAnswerer) Answer(_ context.Context, _ memory.Query) (memory.Answ
 	return memory.Answer{Text: "x"}, nil
 }
 
+type stubWaker struct {
+	calls int
+	err   error
+}
+
+func (w *stubWaker) EnsureAwake(_ context.Context) error { w.calls++; return w.err }
+
+func TestChat_AutoWakeBeforeAnswer(t *testing.T) {
+	ans := &stubAnswerer{out: memory.Answer{Text: "a", Citations: []string{"a"}}}
+	wk := &stubWaker{}
+	srv := httptest.NewServer(NewRAGRouter(RAGDeps{
+		Answerer: ans, Waker: wk, DefaultSubject: "default", DefaultProject: "ptolemy",
+	}))
+	t.Cleanup(srv.Close)
+
+	resp := postChat(t, srv, `{"query":"q"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	if wk.calls != 1 {
+		t.Fatalf("expected auto-wake once, got %d", wk.calls)
+	}
+	if ans.calls != 1 {
+		t.Fatalf("answerer should run after wake, calls=%d", ans.calls)
+	}
+}
+
+func TestChat_WakeError_502_SkipsAnswer(t *testing.T) {
+	ans := &stubAnswerer{}
+	wk := &stubWaker{err: errors.New("brain asleep")}
+	srv := httptest.NewServer(NewRAGRouter(RAGDeps{
+		Answerer: ans, Waker: wk, DefaultSubject: "default", DefaultProject: "ptolemy",
+	}))
+	t.Cleanup(srv.Close)
+
+	resp := postChat(t, srv, `{"query":"q"}`)
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("wake failure must be 502, got %d", resp.StatusCode)
+	}
+	if ans.calls != 0 {
+		t.Fatal("answerer must not run when wake fails")
+	}
+}
+
+func TestChat_NilWaker_Unchanged(t *testing.T) {
+	ans := &stubAnswerer{out: memory.Answer{Text: "a", Citations: []string{"a"}}}
+	srv := newRAGServer(t, ans) // RAGDeps has no Waker
+	resp := postChat(t, srv, `{"query":"q"}`)
+	if resp.StatusCode != http.StatusOK || ans.calls != 1 {
+		t.Fatalf("nil waker must behave as before: status=%d calls=%d", resp.StatusCode, ans.calls)
+	}
+}
+
 func TestSerialAnswerer_Serializes(t *testing.T) {
 	inner := &overlapAnswerer{}
 	serial := NewSerialAnswerer(inner)
