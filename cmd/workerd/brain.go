@@ -34,32 +34,24 @@ func buildBrainDeps(ctx context.Context, cfg config.Config, engine *policy.Engin
 		log.Info().Msg("brain skill disabled (set BRAIN_CONTROL_ENABLED=true)")
 		return brainDeps{}, nil, false
 	}
-	if cfg.BrainModelsPath == "" {
-		log.Warn().Msg("brain skill disabled: BRAIN_MODELS not set")
-		return brainDeps{}, nil, false
-	}
-	reg, err := brain.LoadRegistry(cfg.BrainModelsPath)
-	if err != nil {
-		log.Warn().Err(err).Msg("brain skill disabled: model registry failed to load")
-		return brainDeps{}, nil, false
-	}
 	if err := ensureBrainSession(ctx, db); err != nil {
 		log.Warn().Err(err).Msg("brain skill disabled: could not ensure system session")
 		return brainDeps{}, nil, false
 	}
 
 	host, port := brainHostPort(cfg.BrainBaseURL)
-	mgr := brain.NewManager(reg, brain.NewExecLauncher(nil), brain.NewHTTPProbe(cfg.BrainBaseURL),
-		host, port, cfg.BrainDefaultModel)
+	mgr := brain.NewManager(brain.NewExecLauncher(nil), brain.NewHTTPProbe(),
+		cfg.BrainLlamaBin, host, port, cfg.BrainModelsDir)
 	gb := policy.NewGuardedBrain(engine, approvals, mgr, db)
 
-	// Idle-TTL unloader: read status (ungated), unload (gated) only when idle.
+	// Idle-TTL hibernator: read status (ungated), hibernate (gated) only when
+	// idle. Hibernate keeps the spec, so the next /chat resumes the same model.
 	idleCtx, cancelIdle := context.WithCancel(ctx)
 	idleDone := make(chan struct{})
 	go func() {
 		defer close(idleDone)
 		brain.RunIdleLoop(idleCtx, idleCheckInterval, cfg.BrainIdleTTL, mgr.Status, func(c context.Context) error {
-			return gb.Unload(c, httpapi.BrainSystemSession, policy.CallOpts{})
+			return gb.Hibernate(c, httpapi.BrainSystemSession, policy.CallOpts{})
 		})
 	}()
 
@@ -77,8 +69,8 @@ func buildBrainDeps(ctx context.Context, cfg config.Config, engine *policy.Engin
 	if cfg.BrainAutoWake {
 		deps.waker = &brainWaker{gb: gb}
 	}
-	log.Info().Str("default_model", cfg.BrainDefaultModel).Bool("auto_wake", cfg.BrainAutoWake).
-		Msg("brain skill enabled")
+	log.Info().Str("models_dir", cfg.BrainModelsDir).Str("default_bin", cfg.BrainLlamaBin).
+		Bool("auto_wake", cfg.BrainAutoWake).Msg("brain skill enabled")
 	return deps, cleanup, true
 }
 
