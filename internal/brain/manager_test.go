@@ -4,287 +4,144 @@ import (
 	"context"
 	"errors"
 	"os"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// --- fakes -------------------------------------------------------------------
-
-type fakeHandle struct {
-	mu         sync.Mutex
-	running    bool
-	signaled   bool
-	killed     bool
-	waitBlocks bool // if true, Wait blocks until Kill (exercises the kill-on-timeout path)
-}
-
-func (h *fakeHandle) Signal(_ os.Signal) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.signaled = true
-	if !h.waitBlocks {
-		h.running = false
-	}
-	return nil
-}
-
-func (h *fakeHandle) Kill() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.killed = true
-	h.running = false
-	return nil
-}
-
-func (h *fakeHandle) Wait() error {
-	for {
-		h.mu.Lock()
-		blocking := h.waitBlocks && h.running
-		h.mu.Unlock()
-		if !blocking {
-			return nil
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
-
-func (h *fakeHandle) Running() bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	return h.running
-}
-
+// fakeLauncher hands out fakeHandles and counts starts.
 type fakeLauncher struct {
-	mu         sync.Mutex
-	startCalls int
-	lastArgv   []string
-	failStart  bool
-	handles    []*fakeHandle // returned in order; default is a fresh running handle
+	starts   atomic.Int32
+	lastArgv []string
+	failNext bool
 }
 
 func (l *fakeLauncher) Start(argv []string) (Handle, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.startCalls++
+	if l.failNext {
+		return nil, errors.New("boom")
+	}
+	l.starts.Add(1)
 	l.lastArgv = argv
-	if l.failStart {
-		return nil, errors.New("start failed")
-	}
-	if len(l.handles) > 0 {
-		h := l.handles[0]
-		l.handles = l.handles[1:]
-		return h, nil
-	}
 	return &fakeHandle{running: true}, nil
 }
 
-type fakeProbe struct {
-	mu         sync.Mutex
-	ready      bool
-	readyAfter int
-	calls      int
-}
+type fakeHandle struct{ running bool }
 
-func (p *fakeProbe) Ready(_ context.Context) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.calls++
-	if p.readyAfter > 0 {
-		return p.calls >= p.readyAfter
-	}
-	return p.ready
-}
+func (h *fakeHandle) Signal(os.Signal) error { return nil }
+func (h *fakeHandle) Kill() error            { h.running = false; return nil }
+func (h *fakeHandle) Wait() error            { h.running = false; return nil }
+func (h *fakeHandle) Running() bool          { return h.running }
 
-func newTestManager(t *testing.T, l *fakeLauncher, p *fakeProbe) *Manager {
-	t.Helper()
-	reg, err := LoadRegistry(writeRegistry(t, sampleRegistry))
-	if err != nil {
-		t.Fatal(err)
-	}
-	m := NewManager(reg, l, p, "0.0.0.0", "9000", "qwen9b")
+type stubProbe struct{ ready bool }
+
+func (p *stubProbe) Ready(context.Context, string) bool { return p.ready }
+
+func newTestManager(l Launcher, p Probe) *Manager {
+	m := NewManager(l, p, "/bin/llama-server", "0.0.0.0", "9000", "")
 	m.readyTimeout = 200 * time.Millisecond
-	m.pollInterval = 2 * time.Millisecond
+	m.pollInterval = 5 * time.Millisecond
 	m.stopTimeout = 50 * time.Millisecond
 	return m
 }
 
-// --- tests -------------------------------------------------------------------
-
-func TestWake_StartsAndBecomesReady(t *testing.T) {
+func TestManager_LoadLaunchesAndStoresSpec(t *testing.T) {
 	l := &fakeLauncher{}
-	m := newTestManager(t, l, &fakeProbe{ready: true})
-	if err := m.Wake(context.Background(), "qwen9b"); err != nil {
-		t.Fatalf("wake: %v", err)
+	m := newTestManager(l, &stubProbe{ready: true})
+	if err := m.Load(context.Background(), Spec{GGUF: "/m/x.gguf"}); err != nil {
+		t.Fatal(err)
+	}
+	if l.starts.Load() != 1 {
+		t.Fatalf("expected 1 start, got %d", l.starts.Load())
 	}
 	st := m.Status()
-	if !st.Running || st.Model != "qwen9b" {
-		t.Fatalf("status wrong: %+v", st)
+	if !st.Running || st.GGUF != "/m/x.gguf" || st.Binary != "/bin/llama-server" {
+		t.Fatalf("status after load: %+v", st)
 	}
-	argv := l.lastArgv
-	want := []string{"/bin/llama-server", "-m", "/m/qwen9b.gguf", "--host", "0.0.0.0", "--port", "9000", "--ctx-size", "32768", "-ngl", "999"}
-	if len(argv) != len(want) {
-		t.Fatalf("argv len: got %v", argv)
-	}
-	for i := range want {
-		if argv[i] != want[i] {
-			t.Fatalf("argv[%d]=%q want %q (full %v)", i, argv[i], want[i], argv)
-		}
+	if l.lastArgv[0] != "/bin/llama-server" || l.lastArgv[2] != "/m/x.gguf" {
+		t.Fatalf("argv: %v", l.lastArgv)
 	}
 }
 
-func TestWake_AlreadyRunningSameModel_NoSecondStart(t *testing.T) {
+func TestManager_LoadValidationRejectsEmptyGGUF(t *testing.T) {
+	m := newTestManager(&fakeLauncher{}, &stubProbe{ready: true})
+	if err := m.Load(context.Background(), Spec{}); err == nil {
+		t.Fatal("empty gguf must error")
+	}
+}
+
+func TestManager_HibernateKeepsSpec_ResumeRelaunches(t *testing.T) {
 	l := &fakeLauncher{}
-	m := newTestManager(t, l, &fakeProbe{ready: true})
-	_ = m.Wake(context.Background(), "qwen9b")
-	_ = m.Wake(context.Background(), "qwen9b")
-	if l.startCalls != 1 {
-		t.Fatalf("expected one Start for an already-running model, got %d", l.startCalls)
+	m := newTestManager(l, &stubProbe{ready: true})
+	_ = m.Load(context.Background(), Spec{GGUF: "/m/x.gguf"})
+
+	if err := m.Hibernate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	st := m.Status()
+	if st.Running || !st.Hibernated || st.GGUF != "/m/x.gguf" {
+		t.Fatalf("after hibernate: %+v", st)
+	}
+	if err := m.Resume(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if l.starts.Load() != 2 {
+		t.Fatalf("resume must relaunch; starts=%d", l.starts.Load())
+	}
+	if !m.Status().Running {
+		t.Fatal("running after resume")
 	}
 }
 
-func TestEnsureAwake_WakesDefault(t *testing.T) {
-	l := &fakeLauncher{}
-	m := newTestManager(t, l, &fakeProbe{ready: true})
-	if err := m.EnsureAwake(context.Background()); err != nil {
-		t.Fatalf("ensure: %v", err)
-	}
-	if st := m.Status(); !st.Running || st.Model != "qwen9b" {
-		t.Fatalf("EnsureAwake should wake the default model, got %+v", st)
-	}
-}
-
-func TestStop_SignalsAndClears(t *testing.T) {
-	l := &fakeLauncher{handles: []*fakeHandle{{running: true}}}
-	m := newTestManager(t, l, &fakeProbe{ready: true})
-	_ = m.Wake(context.Background(), "qwen9b")
-	if err := m.Stop(context.Background()); err != nil {
-		t.Fatalf("stop: %v", err)
-	}
-	if st := m.Status(); st.Running {
-		t.Fatal("expected not running after stop")
-	}
-}
-
-func TestStop_KillsWhenGracefulHangs(t *testing.T) {
-	h := &fakeHandle{running: true, waitBlocks: true}
-	l := &fakeLauncher{handles: []*fakeHandle{h}}
-	m := newTestManager(t, l, &fakeProbe{ready: true})
-	_ = m.Wake(context.Background(), "qwen9b")
+func TestManager_StopClearsSpec(t *testing.T) {
+	m := newTestManager(&fakeLauncher{}, &stubProbe{ready: true})
+	_ = m.Load(context.Background(), Spec{GGUF: "/m/x.gguf"})
 	_ = m.Stop(context.Background())
-	if !h.killed {
-		t.Fatal("expected Kill after graceful stop timed out")
-	}
-}
-
-func TestSwitch_UnknownModel_KeepsCurrent(t *testing.T) {
-	l := &fakeLauncher{}
-	m := newTestManager(t, l, &fakeProbe{ready: true})
-	_ = m.Wake(context.Background(), "qwen9b")
-	if err := m.Switch(context.Background(), "llama70b"); err == nil {
-		t.Fatal("expected error switching to unknown model")
-	}
 	st := m.Status()
-	if !st.Running || st.Model != "qwen9b" {
-		t.Fatalf("current model must survive a failed switch, got %+v", st)
+	if st.Running || st.Hibernated || st.GGUF != "" {
+		t.Fatalf("stop must clear spec: %+v", st)
 	}
-	if l.startCalls != 1 {
-		t.Fatalf("failed switch must not start anything, starts=%d", l.startCalls)
-	}
-}
-
-func TestSwitch_StopsThenStartsNew(t *testing.T) {
-	h1 := &fakeHandle{running: true}
-	l := &fakeLauncher{handles: []*fakeHandle{h1, {running: true}}}
-	m := newTestManager(t, l, &fakeProbe{ready: true})
-	_ = m.Wake(context.Background(), "qwen9b")
-	if err := m.Switch(context.Background(), "qwen4b"); err != nil {
-		t.Fatalf("switch: %v", err)
-	}
-	if !h1.signaled {
-		t.Fatal("old model should be stopped on switch")
-	}
-	if st := m.Status(); st.Model != "qwen4b" || !st.Running {
-		t.Fatalf("expected qwen4b running after switch, got %+v", st)
-	}
-	if l.startCalls != 2 {
-		t.Fatalf("switch should start the new model, starts=%d", l.startCalls)
+	if err := m.Resume(context.Background()); !errors.Is(err, ErrNoModelLoaded) {
+		t.Fatalf("resume after stop must be ErrNoModelLoaded, got %v", err)
 	}
 }
 
-func TestWake_ReadyTimeout_StopsAndErrors(t *testing.T) {
-	h := &fakeHandle{running: true}
-	l := &fakeLauncher{handles: []*fakeHandle{h}}
-	m := newTestManager(t, l, &fakeProbe{ready: false}) // never ready
-	if err := m.Wake(context.Background(), "qwen9b"); err == nil {
+func TestManager_EnsureAwake(t *testing.T) {
+	l := &fakeLauncher{}
+	m := newTestManager(l, &stubProbe{ready: true})
+	// cold: no spec
+	if err := m.EnsureAwake(context.Background()); !errors.Is(err, ErrNoModelLoaded) {
+		t.Fatalf("cold EnsureAwake must be ErrNoModelLoaded, got %v", err)
+	}
+	_ = m.Load(context.Background(), Spec{GGUF: "/m/x.gguf"})
+	// already running: no extra start
+	_ = m.EnsureAwake(context.Background())
+	if l.starts.Load() != 1 {
+		t.Fatalf("EnsureAwake while running must not relaunch; starts=%d", l.starts.Load())
+	}
+	// hibernated: resumes
+	_ = m.Hibernate(context.Background())
+	_ = m.EnsureAwake(context.Background())
+	if l.starts.Load() != 2 {
+		t.Fatalf("EnsureAwake while hibernated must resume; starts=%d", l.starts.Load())
+	}
+}
+
+func TestManager_ReadinessTimeoutStopsProcess(t *testing.T) {
+	l := &fakeLauncher{}
+	m := newTestManager(l, &stubProbe{ready: false}) // never ready
+	err := m.Load(context.Background(), Spec{GGUF: "/m/x.gguf"})
+	if err == nil {
 		t.Fatal("expected readiness timeout error")
 	}
-	if st := m.Status(); st.Running {
-		t.Fatal("a timed-out wake must stop the process")
+	if m.Status().Running {
+		t.Fatal("failed load must leave nothing running")
 	}
 }
 
-func TestWake_StartFails(t *testing.T) {
-	m := newTestManager(t, &fakeLauncher{failStart: true}, &fakeProbe{ready: true})
-	if err := m.Wake(context.Background(), "qwen9b"); err == nil {
-		t.Fatal("expected start failure error")
-	}
-}
-
-func TestWake_ProcessDiesDuringStartup(t *testing.T) {
-	dead := &fakeHandle{running: false} // exited immediately
-	l := &fakeLauncher{handles: []*fakeHandle{dead}}
-	m := newTestManager(t, l, &fakeProbe{ready: false})
-	if err := m.Wake(context.Background(), "qwen9b"); err == nil {
-		t.Fatal("expected error when the process exits during startup")
-	}
-}
-
-func TestRunIdleLoop_UnloadsWhenIdle(t *testing.T) {
-	var unloads atomic.Int32
-	status := func() Status { return Status{Running: true, LastUse: time.Now().Add(-time.Hour)} }
-	unload := func(_ context.Context) error { unloads.Add(1); return nil }
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { RunIdleLoop(ctx, time.Millisecond, time.Millisecond, status, unload); close(done) }()
-	time.Sleep(30 * time.Millisecond)
-	cancel()
-	<-done
-	if unloads.Load() == 0 {
-		t.Fatal("idle-past-ttl must trigger unload")
-	}
-}
-
-func TestRunIdleLoop_SkipsWhenActive(t *testing.T) {
-	var unloads atomic.Int32
-	status := func() Status { return Status{Running: true, LastUse: time.Now()} } // just used
-	unload := func(_ context.Context) error { unloads.Add(1); return nil }
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() { RunIdleLoop(ctx, time.Millisecond, time.Hour, status, unload); close(done) }()
-	time.Sleep(20 * time.Millisecond)
-	cancel()
-	<-done
-	if unloads.Load() != 0 {
-		t.Fatalf("active brain must not unload, got %d", unloads.Load())
-	}
-}
-
-func TestRunIdleLoop_StopsOnCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	done := make(chan struct{})
-	go func() {
-		RunIdleLoop(ctx, time.Millisecond, time.Millisecond,
-			func() Status { return Status{} }, func(context.Context) error { return nil })
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("RunIdleLoop must return promptly on cancel")
+func TestManager_ResolveSpecFillsDefaults(t *testing.T) {
+	m := newTestManager(&fakeLauncher{}, &stubProbe{ready: true})
+	got := m.ResolveSpec(Spec{GGUF: "/g"})
+	if got.Binary != "/bin/llama-server" || got.Host != "0.0.0.0" || got.Port != "9000" {
+		t.Fatalf("ResolveSpec: %+v", got)
 	}
 }

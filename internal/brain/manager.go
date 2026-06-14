@@ -28,115 +28,178 @@ type Handle interface {
 	Running() bool              // still alive?
 }
 
-// Probe reports whether the brain's HTTP endpoint is serving (GET /v1/models).
+// Probe reports whether a brain HTTP endpoint is serving (GET {baseURL}/v1/models).
+// The target is passed at probe time so a custom-port load is probed correctly.
 type Probe interface {
-	Ready(ctx context.Context) bool
+	Ready(ctx context.Context, baseURL string) bool
 }
+
+// ErrNoModelLoaded is returned by Resume/EnsureAwake when no spec has been loaded
+// yet (cold start) — there is nothing to bring back.
+var ErrNoModelLoaded = errors.New("no model loaded")
 
 // Status is a snapshot of the brain process.
 type Status struct {
-	Running bool      `json:"running"`
-	Model   string    `json:"model"`
-	LastUse time.Time `json:"last_use"`
+	Running    bool      `json:"running"`
+	Hibernated bool      `json:"hibernated"` // a spec is stored but not running
+	Binary     string    `json:"binary,omitempty"`
+	GGUF       string    `json:"gguf,omitempty"`
+	Host       string    `json:"host,omitempty"`
+	Port       string    `json:"port,omitempty"`
+	Args       []string  `json:"args,omitempty"`
+	LastUse    time.Time `json:"last_use"`
 }
 
-// Manager owns the single brain child process. It is the RAW mechanism — every
-// caller reaches it only through policy.GuardedBrain. All methods are
-// mutex-serialized: there is at most one brain at a time.
+// Manager owns the single brain child process. RAW mechanism — every caller
+// reaches it only through policy.GuardedBrain. All methods are mutex-serialized.
+// The stored spec is set only by Load, persists across Hibernate, and is cleared
+// only by Stop. This is the security invariant: a custom spec can enter only via
+// Load (which the guard gates ask/OOB).
 type Manager struct {
-	reg          *Registry
-	launcher     Launcher
-	probe        Probe
-	host         string
-	port         string
-	defaultModel string
+	launcher Launcher
+	probe    Probe
+
+	defBinary string
+	defHost   string
+	defPort   string
+	modelsDir string
+
 	readyTimeout time.Duration
 	pollInterval time.Duration
 	stopTimeout  time.Duration
 
 	mu      sync.Mutex
 	handle  Handle
-	current string
+	spec    Spec
+	hasSpec bool
 	lastUse time.Time
 }
 
-func NewManager(reg *Registry, launcher Launcher, probe Probe, host, port, defaultModel string) *Manager {
+func NewManager(launcher Launcher, probe Probe, defaultBinary, defaultHost, defaultPort, modelsDir string) *Manager {
 	return &Manager{
-		reg:          reg,
 		launcher:     launcher,
 		probe:        probe,
-		host:         host,
-		port:         port,
-		defaultModel: defaultModel,
+		defBinary:    defaultBinary,
+		defHost:      defaultHost,
+		defPort:      defaultPort,
+		modelsDir:    modelsDir,
 		readyTimeout: 90 * time.Second,
 		pollInterval: 500 * time.Millisecond,
 		stopTimeout:  15 * time.Second,
 	}
 }
 
-func (m *Manager) argv(model Model) []string {
-	argv := []string{model.Binary, "-m", model.GGUF, "--host", m.host, "--port", m.port}
-	return append(argv, model.Args...)
+// ResolveSpec fills empty Binary/Host/Port from the manager defaults. Pure; used
+// by GuardedBrain to build the policy intent over the resolved command.
+func (m *Manager) ResolveSpec(s Spec) Spec {
+	return s.WithDefaults(m.defBinary, m.defHost, m.defPort)
 }
 
-// Wake ensures the named model (or the default when empty) is running and ready.
-func (m *Manager) Wake(ctx context.Context, name string) error {
+// Load launches the given spec (defaults filled), waiting for readiness, and
+// stores it as the active spec.
+func (m *Manager) Load(ctx context.Context, s Spec) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.wakeLocked(ctx, name)
+	s = s.WithDefaults(m.defBinary, m.defHost, m.defPort)
+	if err := s.Validate(); err != nil {
+		return err
+	}
+	return m.launchLocked(ctx, s)
 }
 
-// EnsureAwake wakes the current model if one is set, else the default. Used by
-// the /chat auto-wake hook; a no-op when the brain is already up.
+// Resume relaunches the stored spec (e.g. after hibernate). ErrNoModelLoaded if
+// nothing was ever loaded.
+func (m *Manager) Resume(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.hasSpec {
+		return ErrNoModelLoaded
+	}
+	if m.handle != nil && m.handle.Running() {
+		m.lastUse = time.Now()
+		return nil
+	}
+	return m.launchLocked(ctx, m.spec)
+}
+
+// EnsureAwake is the /chat auto-wake hook: no-op when running, resume when
+// hibernated, ErrNoModelLoaded when cold.
 func (m *Manager) EnsureAwake(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	name := m.current
-	if name == "" {
-		name = m.defaultModel
-	}
-	return m.wakeLocked(ctx, name)
-}
-
-func (m *Manager) wakeLocked(ctx context.Context, name string) error {
-	if name == "" {
-		name = m.defaultModel
-	}
-	if name == "" {
-		return errors.New("no model specified and no default configured")
-	}
-	if m.handle != nil && m.handle.Running() && m.current == name {
-		m.lastUse = time.Now() // already up — just record activity
+	if m.handle != nil && m.handle.Running() {
+		m.lastUse = time.Now()
 		return nil
 	}
-	model, err := m.reg.Get(name)
-	if err != nil {
-		return err
+	if !m.hasSpec {
+		return ErrNoModelLoaded
 	}
+	return m.launchLocked(ctx, m.spec)
+}
+
+// Hibernate stops the process but keeps the spec for a later resume.
+func (m *Manager) Hibernate(_ context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stopProcessLocked()
+	return nil
+}
+
+// Stop terminates the process AND forgets the spec (full teardown).
+func (m *Manager) Stop(_ context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stopProcessLocked()
+	m.spec = Spec{}
+	m.hasSpec = false
+	return nil
+}
+
+// ListModels scans the configured models dir for *.gguf.
+func (m *Manager) ListModels() ([]DiscoveredModel, error) {
+	return DiscoverModels(m.modelsDir)
+}
+
+// Status returns a snapshot.
+func (m *Manager) Status() Status {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	running := m.handle != nil && m.handle.Running()
+	st := Status{Running: running, Hibernated: m.hasSpec && !running, LastUse: m.lastUse}
+	if m.hasSpec {
+		st.Binary, st.GGUF, st.Host, st.Port, st.Args = m.spec.Binary, m.spec.GGUF, m.spec.Host, m.spec.Port, m.spec.Args
+	}
+	return st
+}
+
+// launchLocked stops any current process, starts the spec, and waits for ready.
+// On failure it tears down the partial process. mu must be held.
+func (m *Manager) launchLocked(ctx context.Context, s Spec) error {
 	if m.handle != nil && m.handle.Running() {
-		m.stopLocked()
+		m.stopProcessLocked()
 	}
-	h, err := m.launcher.Start(m.argv(model))
+	h, err := m.launcher.Start(s.Argv())
 	if err != nil {
-		return fmt.Errorf("start brain %q: %w", name, err)
+		return fmt.Errorf("start brain: %w", err)
 	}
 	m.handle = h
-	m.current = name
-	if err := m.waitReady(ctx); err != nil {
-		m.stopLocked()
+	m.spec = s
+	m.hasSpec = true
+	if err := m.waitReady(ctx, s.BaseURL()); err != nil {
+		m.stopProcessLocked()
 		return err
 	}
 	m.lastUse = time.Now()
 	return nil
 }
 
-func (m *Manager) waitReady(ctx context.Context) error {
+func (m *Manager) waitReady(ctx context.Context, baseURL string) error {
 	deadline := time.Now().Add(m.readyTimeout)
 	for {
 		if m.handle == nil || !m.handle.Running() {
 			return errors.New("brain process exited during startup")
 		}
-		if m.probe.Ready(ctx) {
+		if m.probe.Ready(ctx, baseURL) {
 			return nil
 		}
 		if time.Now().After(deadline) {
@@ -150,37 +213,9 @@ func (m *Manager) waitReady(ctx context.Context) error {
 	}
 }
 
-// Switch validates the target model BEFORE stopping the current one, then
-// stop-then-wake. A bad model name leaves the running brain untouched.
-func (m *Manager) Switch(ctx context.Context, name string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, err := m.reg.Get(name); err != nil {
-		return err
-	}
-	if m.handle != nil && m.handle.Running() {
-		m.stopLocked()
-	}
-	return m.wakeLocked(ctx, name)
-}
-
-// Stop terminates the brain (manual). Unload is the same mechanism, exposed
-// separately so policy.GuardedBrain can gate the idle-path differently.
-func (m *Manager) Stop(_ context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.stopLocked()
-	return nil
-}
-
-func (m *Manager) Unload(_ context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.stopLocked()
-	return nil
-}
-
-func (m *Manager) stopLocked() {
+// stopProcessLocked signals→waits→kills the handle. It does NOT touch the stored
+// spec. mu must be held.
+func (m *Manager) stopProcessLocked() {
 	if m.handle == nil {
 		return
 	}
@@ -193,18 +228,6 @@ func (m *Manager) stopLocked() {
 		_ = m.handle.Kill()
 	}
 	m.handle = nil
-	m.current = ""
-}
-
-// Status returns a snapshot.
-func (m *Manager) Status() Status {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return Status{
-		Running: m.handle != nil && m.handle.Running(),
-		Model:   m.current,
-		LastUse: m.lastUse,
-	}
 }
 
 // RunIdleLoop ticks every interval and, when status reports the brain has been
@@ -274,8 +297,8 @@ type execHandle struct {
 }
 
 func (h *execHandle) Signal(sig os.Signal) error { return h.cmd.Process.Signal(sig) }
-func (h *execHandle) Kill() error                 { return h.cmd.Process.Kill() }
-func (h *execHandle) Wait() error                 { <-h.done; return nil }
+func (h *execHandle) Kill() error                { return h.cmd.Process.Kill() }
+func (h *execHandle) Wait() error                { <-h.done; return nil }
 
 func (h *execHandle) Running() bool {
 	h.mu.Lock()
@@ -283,22 +306,17 @@ func (h *execHandle) Running() bool {
 	return !h.exited
 }
 
-type httpProbe struct {
-	url    string
-	client *http.Client
+type httpProbe struct{ client *http.Client }
+
+// NewHTTPProbe reports readiness via GET {baseURL}/v1/models for the baseURL
+// passed at probe time (so a custom-port load is probed correctly).
+func NewHTTPProbe() Probe {
+	return &httpProbe{client: &http.Client{Timeout: 3 * time.Second}}
 }
 
-// NewHTTPProbe reports readiness via GET {baseURL}/v1/models (same liveness path
-// the health checker uses).
-func NewHTTPProbe(baseURL string) Probe {
-	return &httpProbe{
-		url:    strings.TrimRight(baseURL, "/") + "/v1/models",
-		client: &http.Client{Timeout: 3 * time.Second},
-	}
-}
-
-func (p *httpProbe) Ready(ctx context.Context) bool {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.url, nil)
+func (p *httpProbe) Ready(ctx context.Context, baseURL string) bool {
+	url := strings.TrimRight(baseURL, "/") + "/v1/models"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return false
 	}
