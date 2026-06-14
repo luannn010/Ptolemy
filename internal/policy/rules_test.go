@@ -14,15 +14,22 @@ func TestDefaultRuleset_HasBrainRules(t *testing.T) {
 		got[r.ID] = r.Effect
 	}
 	want := map[string]domain.Effect{
-		"allow-brain-wake":       domain.EffectAllow,
-		"allow-brain-status":     domain.EffectAllow,
-		"allow-brain-autounload": domain.EffectAllow,
-		"ask-brain-switch":       domain.EffectAsk,
-		"ask-brain-stop":         domain.EffectAsk,
+		"allow-brain-wake":      domain.EffectAllow,
+		"allow-brain-status":    domain.EffectAllow,
+		"allow-brain-models":    domain.EffectAllow,
+		"allow-brain-resume":    domain.EffectAllow,
+		"allow-brain-hibernate": domain.EffectAllow,
+		"ask-brain-load":        domain.EffectAsk,
+		"ask-brain-stop":        domain.EffectAsk,
 	}
 	for id, eff := range want {
 		if got[id] != eff {
 			t.Fatalf("DefaultRuleset rule %q: got %q want %q", id, got[id], eff)
+		}
+	}
+	for _, gone := range []string{"ask-brain-switch", "allow-brain-autounload"} {
+		if _, ok := got[gone]; ok {
+			t.Fatalf("DefaultRuleset rule %q should have been removed", gone)
 		}
 	}
 	for _, id := range []string{"deny-policy-write", "deny-secret-cmd"} {
