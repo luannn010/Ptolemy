@@ -1,7 +1,8 @@
-// Brain control plane: a LOOPBACK-ONLY HTTP surface for the brain lifecycle skill
-// (start/stop/switch/status). It is never exposed on a public interface — it can
-// stop GPU processes — and every action goes through policy.GuardedBrain, so
-// denies/asks/audit all apply. Auto-wake (the /chat hook) lives in rag.go.
+// Brain control plane: a LOOPBACK-ONLY HTTP surface for the brain controller
+// (models/status/load/resume/hibernate/stop). It is never exposed on a public
+// interface — it can stop GPU processes — and every action goes through
+// policy.GuardedBrain, so denies/asks/audit all apply. Auto-wake (the /chat hook)
+// lives in rag.go.
 package httpapi
 
 import (
@@ -26,21 +27,31 @@ const BrainSystemSession = "brain-system"
 
 // BrainController is the slice of policy.GuardedBrain the control plane needs.
 type BrainController interface {
-	Wake(ctx context.Context, sessionID, model string, opts policy.CallOpts) error
+	Load(ctx context.Context, sessionID string, spec brain.Spec, opts policy.CallOpts) error
+	Resume(ctx context.Context, sessionID string, opts policy.CallOpts) error
+	Hibernate(ctx context.Context, sessionID string, opts policy.CallOpts) error
 	Stop(ctx context.Context, sessionID string, opts policy.CallOpts) error
-	Switch(ctx context.Context, sessionID, model string, opts policy.CallOpts) error
 	Status(ctx context.Context, sessionID string, opts policy.CallOpts) (brain.Status, error)
+	ListModels(ctx context.Context, sessionID string, opts policy.CallOpts) ([]brain.DiscoveredModel, error)
 }
 
 type BrainDeps struct {
 	Brain BrainController
 }
 
-// NewBrainControlRouter serves loopback-only POST /brain/{wake,stop,switch} and
-// GET /brain/status.
+// NewBrainControlRouter serves loopback-only GET /brain/{models,status} and
+// POST /brain/{load,resume,hibernate,stop}.
 func NewBrainControlRouter(deps BrainDeps) http.Handler {
 	r := chi.NewRouter()
 	r.Use(loopbackOnly)
+
+	r.Get("/brain/models", func(w http.ResponseWriter, req *http.Request) {
+		models, err := deps.Brain.ListModels(req.Context(), BrainSystemSession, policy.CallOpts{})
+		if writeBrainErr(w, err) {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"models": models})
+	})
 
 	r.Get("/brain/status", func(w http.ResponseWriter, req *http.Request) {
 		st, err := deps.Brain.Status(req.Context(), BrainSystemSession, policy.CallOpts{})
@@ -50,36 +61,46 @@ func NewBrainControlRouter(deps BrainDeps) http.Handler {
 		writeJSON(w, http.StatusOK, st)
 	})
 
-	r.Post("/brain/wake", func(w http.ResponseWriter, req *http.Request) {
+	r.Post("/brain/load", func(w http.ResponseWriter, req *http.Request) {
 		var body struct {
-			Model        string `json:"model"`
-			ConfirmToken string `json:"confirm_token"`
+			Binary       string   `json:"binary"`
+			GGUF         string   `json:"gguf"`
+			Host         string   `json:"host"`
+			Port         string   `json:"port"`
+			Args         []string `json:"args"`
+			ConfirmToken string   `json:"confirm_token"`
 		}
 		if !decodeOptionalJSON(w, req, &body) {
 			return
 		}
-		err := deps.Brain.Wake(req.Context(), BrainSystemSession, strings.TrimSpace(body.Model),
-			policy.CallOpts{ConfirmToken: body.ConfirmToken})
+		if strings.TrimSpace(body.GGUF) == "" {
+			writeJSON(w, http.StatusBadRequest, apitypes.ErrorResponse{Error: "gguf is required"})
+			return
+		}
+		spec := brain.Spec{Binary: body.Binary, GGUF: body.GGUF, Host: body.Host, Port: body.Port, Args: body.Args}
+		err := deps.Brain.Load(req.Context(), BrainSystemSession, spec, policy.CallOpts{ConfirmToken: body.ConfirmToken})
 		if writeBrainErr(w, err) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	r.Post("/brain/switch", func(w http.ResponseWriter, req *http.Request) {
+	r.Post("/brain/resume", func(w http.ResponseWriter, req *http.Request) {
 		var body struct {
-			Model        string `json:"model"`
 			ConfirmToken string `json:"confirm_token"`
 		}
 		if !decodeOptionalJSON(w, req, &body) {
 			return
 		}
-		if strings.TrimSpace(body.Model) == "" {
-			writeJSON(w, http.StatusBadRequest, apitypes.ErrorResponse{Error: "model is required"})
+		err := deps.Brain.Resume(req.Context(), BrainSystemSession, policy.CallOpts{ConfirmToken: body.ConfirmToken})
+		if writeBrainErr(w, err) {
 			return
 		}
-		err := deps.Brain.Switch(req.Context(), BrainSystemSession, strings.TrimSpace(body.Model),
-			policy.CallOpts{ConfirmToken: body.ConfirmToken})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+
+	r.Post("/brain/hibernate", func(w http.ResponseWriter, req *http.Request) {
+		err := deps.Brain.Hibernate(req.Context(), BrainSystemSession, policy.CallOpts{})
 		if writeBrainErr(w, err) {
 			return
 		}
@@ -129,8 +150,9 @@ func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, target any) bool
 	return true
 }
 
-// writeBrainErr maps guard errors: deny->403, needs-confirmation->202, other
-// (process/exec failure)->502. Returns true when it wrote a response.
+// writeBrainErr maps guard/manager errors: deny->403, needs-confirmation->202,
+// no-model->409, other (process/exec failure)->502. Returns true when it wrote a
+// response.
 func writeBrainErr(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
@@ -148,6 +170,10 @@ func writeBrainErr(w http.ResponseWriter, err error) bool {
 			PendingID: needs.PendingID,
 			Reason:    needs.Reason,
 		})
+		return true
+	}
+	if errors.Is(err, brain.ErrNoModelLoaded) {
+		writeJSON(w, http.StatusConflict, apitypes.ErrorResponse{Error: err.Error()})
 		return true
 	}
 	writeJSON(w, http.StatusBadGateway, apitypes.ErrorResponse{Error: err.Error()})

@@ -13,32 +13,37 @@ import (
 )
 
 type stubBrain struct {
-	wake, stop, switched, status int
-	lastModel                    string
-	lastToken                    string
-	statusOut                    brain.Status
-	wakeErr, stopErr             error
-	switchErr, statusErr         error
+	loaded                              *brain.Spec
+	lastToken                           string
+	resume, hibernate, stop, listModels int
+	statusOut                           brain.Status
+	loadErr, resumeErr, stopErr         error
+	statusErr, listErr                  error
 }
 
-func (s *stubBrain) Wake(_ context.Context, _, model string, opts policy.CallOpts) error {
-	s.wake++
-	s.lastModel = model
+func (s *stubBrain) Load(_ context.Context, _ string, spec brain.Spec, opts policy.CallOpts) error {
+	s.loaded = &spec
 	s.lastToken = opts.ConfirmToken
-	return s.wakeErr
+	return s.loadErr
+}
+func (s *stubBrain) Resume(_ context.Context, _ string, _ policy.CallOpts) error {
+	s.resume++
+	return s.resumeErr
+}
+func (s *stubBrain) Hibernate(_ context.Context, _ string, _ policy.CallOpts) error {
+	s.hibernate++
+	return nil
 }
 func (s *stubBrain) Stop(_ context.Context, _ string, _ policy.CallOpts) error {
 	s.stop++
 	return s.stopErr
 }
-func (s *stubBrain) Switch(_ context.Context, _, model string, _ policy.CallOpts) error {
-	s.switched++
-	s.lastModel = model
-	return s.switchErr
-}
 func (s *stubBrain) Status(_ context.Context, _ string, _ policy.CallOpts) (brain.Status, error) {
-	s.status++
 	return s.statusOut, s.statusErr
+}
+func (s *stubBrain) ListModels(_ context.Context, _ string, _ policy.CallOpts) ([]brain.DiscoveredModel, error) {
+	s.listModels++
+	return []brain.DiscoveredModel{{Name: "m.gguf", Path: "/m.gguf", Size: 1}}, s.listErr
 }
 
 func brainServer(t *testing.T, sb *stubBrain) *httptest.Server {
@@ -58,7 +63,7 @@ func post(t *testing.T, srv *httptest.Server, path, body string) *http.Response 
 }
 
 func TestBrainStatus_OK(t *testing.T) {
-	sb := &stubBrain{statusOut: brain.Status{Running: true, Model: "qwen9b"}}
+	sb := &stubBrain{statusOut: brain.Status{Running: true, GGUF: "/m.gguf"}}
 	srv := brainServer(t, sb)
 	resp, err := http.Get(srv.URL + "/brain/status")
 	if err != nil {
@@ -70,27 +75,57 @@ func TestBrainStatus_OK(t *testing.T) {
 	}
 	var out brain.Status
 	_ = json.NewDecoder(resp.Body).Decode(&out)
-	if !out.Running || out.Model != "qwen9b" {
+	if !out.Running || out.GGUF != "/m.gguf" {
 		t.Fatalf("unexpected status payload: %+v", out)
 	}
 }
 
-func TestBrainWake_OK_PassesModelAndToken(t *testing.T) {
+func TestBrainModels_OK(t *testing.T) {
 	sb := &stubBrain{}
 	srv := brainServer(t, sb)
-	resp := post(t, srv, "/brain/wake", `{"model":"qwen9b","confirm_token":"tok"}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("wake status %d", resp.StatusCode)
+	resp, err := http.Get(srv.URL + "/brain/models")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if sb.wake != 1 || sb.lastModel != "qwen9b" || sb.lastToken != "tok" {
-		t.Fatalf("wake not wired through: %+v", sb)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("models status %d", resp.StatusCode)
+	}
+	if sb.listModels != 1 {
+		t.Fatalf("ListModels not called: %+v", sb)
 	}
 }
 
-func TestBrainSwitch_NeedsConfirmation_202(t *testing.T) {
-	sb := &stubBrain{switchErr: policy.ErrNeedsConfirmation{PendingID: "abc123", Channel: "oob", Reason: "manual swap"}}
+func TestBrainLoad_OK_PassesSpecAndToken(t *testing.T) {
+	sb := &stubBrain{}
 	srv := brainServer(t, sb)
-	resp := post(t, srv, "/brain/switch", `{"model":"qwen4b"}`)
+	resp := post(t, srv, "/brain/load",
+		`{"binary":"/b","gguf":"/m.gguf","host":"0.0.0.0","port":"9000","args":["-ngl","999"],"confirm_token":"tok"}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("load status %d", resp.StatusCode)
+	}
+	if sb.loaded == nil || sb.loaded.GGUF != "/m.gguf" || sb.loaded.Binary != "/b" ||
+		len(sb.loaded.Args) != 2 || sb.lastToken != "tok" {
+		t.Fatalf("load not wired through: %+v", sb.loaded)
+	}
+}
+
+func TestBrainLoad_MissingGGUF_400(t *testing.T) {
+	sb := &stubBrain{}
+	srv := brainServer(t, sb)
+	resp := post(t, srv, "/brain/load", `{"binary":"/b"}`)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("missing gguf must be 400, got %d", resp.StatusCode)
+	}
+	if sb.loaded != nil {
+		t.Fatal("load must not run without a gguf")
+	}
+}
+
+func TestBrainLoad_NeedsConfirmation_202(t *testing.T) {
+	sb := &stubBrain{loadErr: policy.ErrNeedsConfirmation{PendingID: "abc123", Channel: "oob", Reason: "custom launch"}}
+	srv := brainServer(t, sb)
+	resp := post(t, srv, "/brain/load", `{"gguf":"/m.gguf"}`)
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d", resp.StatusCode)
 	}
@@ -105,24 +140,33 @@ func TestBrainSwitch_NeedsConfirmation_202(t *testing.T) {
 	}
 }
 
+func TestBrainResume_NoModel_409(t *testing.T) {
+	sb := &stubBrain{resumeErr: brain.ErrNoModelLoaded}
+	srv := brainServer(t, sb)
+	resp := post(t, srv, "/brain/resume", `{}`)
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("no-model resume must be 409, got %d", resp.StatusCode)
+	}
+}
+
+func TestBrainHibernate_OK(t *testing.T) {
+	sb := &stubBrain{}
+	srv := brainServer(t, sb)
+	resp := post(t, srv, "/brain/hibernate", `{}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("hibernate status %d", resp.StatusCode)
+	}
+	if sb.hibernate != 1 {
+		t.Fatalf("hibernate not called: %+v", sb)
+	}
+}
+
 func TestBrainStop_Denied_403(t *testing.T) {
 	sb := &stubBrain{stopErr: policy.ErrDenied{RuleID: "deny-x", Reason: "nope"}}
 	srv := brainServer(t, sb)
 	resp := post(t, srv, "/brain/stop", `{}`)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", resp.StatusCode)
-	}
-}
-
-func TestBrainSwitch_MissingModel_400(t *testing.T) {
-	sb := &stubBrain{}
-	srv := brainServer(t, sb)
-	resp := post(t, srv, "/brain/switch", `{}`)
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing model, got %d", resp.StatusCode)
-	}
-	if sb.switched != 0 {
-		t.Fatal("switch must not run without a model")
 	}
 }
 
