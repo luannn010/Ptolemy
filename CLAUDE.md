@@ -54,6 +54,14 @@ It does **not** apply to:
 
 When unsure whether something counts as "new implementation", ask.
 
+## Merging a dev branch to main (release flow)
+
+Whenever the user states an intent to merge a dev branch into `main` (e.g. "merge this to main", "send the PR", "PR this"), do the following **without being re-asked**:
+
+1. **Update README.md first** so it reflects what the branch changes (new surfaces, ports, env vars, binaries, packages, behavior). Update any other affected docs too (`docs/Architecture.md` notes are already mandatory per the Definition of done). Commit the doc refresh on the dev branch with explicit staging.
+2. **Open the PR**: push the dev branch and create a PR to `main` using `.github/pull_request_template.md` (all sections filled), after running `superpowers:requesting-code-review`. The user's stated merge intent counts as the explicit push approval required by AGENTS.md — for that branch only, never `--force`.
+3. **Never merge the PR yourself** unless the user explicitly asks for the merge as well.
+
 ## Memory & context recall (via MCP)
 
 Ptolemy has a working conversational memory/RAG system (`internal/memory`) exposed through three MCP tools and a CLI. Use it instead of asking the user to paste context.

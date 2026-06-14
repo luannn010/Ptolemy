@@ -1,365 +1,162 @@
 # Ptolemy
 
-Ptolemy is a local worker and MCP execution platform for agent-driven coding workflows. It gives an assistant a controlled runtime for opening sessions, reading and editing files, running commands through tmux, tracking execution in SQLite, working with Git, and isolating tasks in worktrees.
+Ptolemy is a local-first agent runtime. A worker daemon (`workerd`) gives a planner
+(Claude Code, Codex, or any MCP client) controlled hands on a machine — sessions,
+shell commands, files, git, worktrees — while a **policy harness** sits between
+intent and effect: every side-effecting call is authorized against a ruleset,
+audited to SQLite, and either allowed, paused for human approval, or denied. On
+top of that runtime sits a **conversational memory** system (hybrid RAG on
+PostgreSQL + pgvector) with an agentic retrieval loop, exposed both as MCP tools
+and as a plain HTTP `/chat` endpoint for sub-services.
 
-The project is intentionally local-first: Codex or another planner decides what should happen, while Ptolemy performs deterministic workspace operations and records what happened.
+This tree is the **v2 clean-room rebuild**: packages are ported from
+`ptolemy-legacy/` one by one (copy + adapt + test, never import), each landing
+behind the harness with its own tests and a note in
+[docs/Architecture.md](docs/Architecture.md).
 
-## What It Does
+## The policy harness (trust root)
 
-- Runs a local HTTP worker daemon (`workerd`).
-- Creates persistent workspace-bound sessions.
-- Executes commands through tmux-backed runners.
-- Chooses an OS-native shell for generic command execution: PowerShell on Windows and Bash on Unix-like systems.
-- Provides file read, write, list, search, and basic patch operations.
-- Exposes Git status, diff, log, checkout, branch, commit, and push helpers.
-- Creates isolated Git worktrees for safer parallel task work.
-- Stores execution memory in SQLite.
-- Stores agent-readable project knowledge in a KB-first `.ptolemy/kb` workspace.
-- Exposes the worker through an MCP adapter (`ptolemy-mcp`).
-- Runs a controller-driven agent reasoning loop through `workerd` agent runs.
-- Includes prototypes for a local LLM executor (`ptolemy-agent`) and task queue runner (`ptolemy-task-runner`).
-- Builds deterministic execution plans from task metadata.
-- Validates task files before sequential execution.
-- Supports CLI plan and run commands for inbox task workflows.
-- Supports bootstrapping workflow and task scaffolding into another workspace.
+`internal/policy` is the heart of v2. Side-effecting adapters (`terminal`,
+`fileops`, `gitops`, `worktree`) are never reachable from services directly —
+only through a `Guarded*` wrapper that runs every call through
+`Authorize → record to policy_decisions → allow / ask / deny`:
 
-## Architecture
+- **allow** — proceeds, still audited.
+- **ask** — pauses: the caller gets `202 needs_confirmation` with a
+  `pending_id`; a human approves out-of-band on the loopback approve listener;
+  the retried call carries the `confirm_token` (which *is* the intent hash, so
+  approving intent A can never authorize a different intent B).
+- **deny** — refused, audited.
 
-```text
-Codex / MCP client / local agent
-        |
-        v
-ptolemy-mcp (optional JSON-RPC stdio adapter)
-        |
-        v
-workerd HTTP API
-        |
-        +-- sessions and command logs -> SQLite
-        +-- command execution -> tmux
-        +-- file operations -> workspace filesystem
-        +-- git operations -> repository/worktrees
-        +-- navigator KB/context -> .ptolemy + docs memory
-        +-- agent runs -> model JSON validation + tool dispatch + observations
+The fail-safe default for anything unlisted is **ask**. The committed baseline
+ruleset is `DefaultRuleset()` in
+[internal/policy/rules.go](internal/policy/rules.go); a host-local override can
+live at `.ptolemy/policy.json` (gitignored, and itself write-protected by the
+`deny-policy-write` rule). Deny rules are never loosened — see
+[CLAUDE.md](CLAUDE.md) for the guardrails. The bypass test suite lives at
+[internal/policy/engine_test.go](internal/policy/engine_test.go).
+
+Two read-only carve-outs skip the harness by design: `navigator`
+(knowledge-base reads) and `internal/memory` (in-process memory whose only
+writes land in the memory Postgres DB).
+
+## Network surfaces
+
+`workerd` serves up to three listeners:
+
+| Port | Env | Binds | Surface |
+|---|---|---|---|
+| 8080 | `HTTP_PORT` | all | Worker API: `GET /health` (deep readiness), `POST/GET /sessions`, `POST /sessions/{id}/commands`, `POST /execute` |
+| 8081 | `APPROVE_PORT` | loopback | `POST /approve/{pending_id}` — out-of-band human approval |
+| 8090 | `RAG_PORT` | all | `POST /chat` (agentic RAG for sub-services), `GET /health` |
+
+The RAG listener appears only when memory is configured (`DATABASE_URL` etc.);
+otherwise workerd logs that it's disabled and keeps serving the rest. The
+approve surface is loopback-only on purpose — approving intents is an operator
+action.
+
+## Agentic RAG over HTTP (`POST /chat`)
+
+Sub-services ask questions; Ptolemy retrieves, reasons, and answers grounded in
+its memory:
+
+```bash
+curl -s http://<host>:8090/chat -H "Content-Type: application/json" \
+  -d '{"query":"How does the approval flow work?", "trace":true}'
 ```
 
-Ptolemy uses two kinds of memory:
+Request: `{query, k?, subject_id?, project_id?, trace?}`. Response:
+`{answer, citations, gave_up}` — plus `mode` and a step-by-step retrieval
+`steps` trace when `trace:true`. `gave_up:true` is an honest 200 ("not in the
+KB"); upstream failures (brain LLM / embedder / DB) map to 502. With
+`AGENT_LOOP_ENABLED=true` answers come from the agentic planner + grounding
+loop instead of the single-shot pipeline.
 
-- SQLite execution memory for sessions, command logs, actions, logs, and approvals
-- KB-first Markdown and JSON knowledge memory under `.ptolemy/kb` for project maps, file indexes, symbol indexes, workflows, decisions, and changelog history
+Because `memory.NewModule` hands back a single non-concurrency-safe `*pgx.Conn`,
+the handler is serialized (`NewSerialAnswerer`), and the listener uses a generous
+120s write timeout because an agentic answer is several LLM round-trips.
 
-For deeper design notes, see [Architecture](./docs/Architecture.md) and [Project Memory](./docs/memory/projects/ptolemy).
+## Conversational memory (MCP)
 
-## KB Workspace
+`internal/memory` implements hybrid retrieval (dense pgvector + BM25, fused
+with reciprocal-rank fusion), recency ranking, grammar-constrained capture
+extraction, GC/dedup sweeps, and an agentic recall loop with reasoning traces.
+It is exposed as three MCP tools — `ptolemy_memory_recall`,
+`ptolemy_memory_capture`, `ptolemy_memory_consolidate` — plus the
+`ptolemy-memory` CLI. Scope defaults from `PTOLEMY_MEMORY_SUBJECT` /
+`PTOLEMY_MEMORY_PROJECT`. The full build spec lives under
+[docs/memory/](docs/memory/README.md).
 
-Ptolemy now treats `.ptolemy/kb/` as the canonical repo memory layer for agents. The intended flow is:
+The local LLM ("brain", `BRAIN_BASE_URL`) and the embedder
+(`EMBEDDING_BASE_URL`) are external endpoints this runtime talks to — generation
+and embeddings for the RAG path, and a `GET /v1/models` liveness probe in
+`/health`.
 
-1. Read `.ptolemy/PTOLEMY.md`
-2. Read `.ptolemy/kb/PROJECT_MAP.md`
-3. Use `.ptolemy/kb/FILE_INDEX.json` and `.ptolemy/kb/SYMBOL_INDEX.json` to choose likely files
-4. Search and read the repo only after KB triage
-5. Update the KB after successful task-pack completion
+## Binaries
 
-Canonical KB files:
+`make build` produces four:
 
-```text
-.ptolemy/
-├── PTOLEMY.md
-└── kb/
-    ├── PROJECT_MAP.md
-    ├── FILE_INDEX.json
-    ├── SYMBOL_INDEX.json
-    ├── WORKFLOWS.md
-    ├── DECISIONS.md
-    └── CHANGELOG.md
+| Binary | Purpose |
+|---|---|
+| `workerd` | the worker daemon (all listeners above) |
+| `ptolemy-mcp` | stdio MCP adapter exposing worker + memory tools |
+| `ptolemy` | CLI: `policy check`, `memory demo\|eval\|synth-eval`, `memory recall\|capture` |
+| `ptolemy-memory` | thin alias for `ptolemy memory recall\|capture` (hook-friendly) |
+
+## Build, test, configure
+
+```bash
+make build          # bin/{workerd,ptolemy-mcp,ptolemy,ptolemy-memory}
+make test           # go test -p 1 ./...
+make smoke-memory   # end-to-end ingest+ask against your .env
+make eval-memory    # retrieval eval on the frozen fixture corpus
 ```
 
-Compatibility artifacts are still emitted in MVP for older callers:
+Copy [.env.example](.env.example) to `.env` and fill in what you use: SQLite
+state (`DB_PATH`), memory Postgres (`DATABASE_URL`), embedder
+(`EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_DIM`), brain
+(`BRAIN_BASE_URL`, `BRAIN_MODEL`), and the agentic loop (`AGENT_LOOP_ENABLED`).
+Anything unset degrades gracefully — workerd logs what it disabled and keeps
+serving.
 
-- `.ptolemy/index/file-tree.json`
-- `.ptolemy/context/*.md`
+Execution state is SQLite with exactly four tables (`sessions`,
+`command_logs`, `policy_decisions`, `schema_migrations`); memory lives in
+PostgreSQL. Go 1.25, module `github.com/luannn010/ptolemy`.
 
-Generated vs curated KB files:
-
-- Generated or machine-updated: `PROJECT_MAP.md`, `FILE_INDEX.json`, `SYMBOL_INDEX.json`, `CHANGELOG.md`
-- Curated: `WORKFLOWS.md`, `DECISIONS.md`
-
-KB surfaces:
-
-```text
-POST /navigator/index      compatibility build path
-POST /navigator/context    compatibility read path
-POST /kb/build             canonical KB build path
-POST /kb/read              canonical KB read path
-POST /kb/update            canonical KB incremental update path
-
-ptolemy.index_workspace    compatibility MCP tool
-ptolemy.read_context       compatibility MCP tool
-ptolemy.kb_build           canonical MCP tool
-ptolemy.kb_read            canonical MCP tool
-ptolemy.kb_update          canonical MCP tool
-```
-
-A successful task-pack run updates the KB once after integration merge and before push or PR creation. That update refreshes changed file entries, refreshes Go symbol entries for changed Go files, removes deleted entries, and appends one KB changelog entry for the pack.
-
-## Controller-Driven Reasoning Loop
-
-Ptolemy now supports a controller-owned agent loop in `workerd`. The model proposes exactly one JSON action at a time, and the worker decides whether that action is valid, safe, and executable.
-
-The intended loop is:
-
-1. Receive a task request or task file.
-2. Create or resume an `agent-run`.
-3. Load task scope, KB context, and available tools.
-4. Ask the model for exactly one JSON action.
-5. Validate the JSON action in `workerd`.
-6. Execute the selected tool through the worker runtime.
-7. Record the result as an observation.
-8. Repeat until the model signals completion or guardrails stop the run.
-9. Validate task commands, then finalize with staged Git changes, KB refresh, and reporting.
-
-The model is proposal-only. It does not execute shell, file, Git, or publish operations directly.
-
-Current controller pieces:
-
-- Persistent `agent_runs` and `agent_observations` state in SQLite
-- HTTP routes under `/agent-runs`
-- Strict single-object JSON action validation
-- Worker-owned tool dispatch for file, command, approval, and explain actions
-- Task-scoped path checks using `allowed_files`
-- Finalization hooks for validation, staged commit flow, push, PR creation, and KB update
-
-Primary implementation paths:
-
-- `internal/agentloop/`
-- `internal/httpapi/agent_runs.go`
-- `internal/worker/client.go`
-- `cmd/workerd`
-- `cmd/ptolemy-task-runner`
-
-## Repository Layout
+## Repository layout
 
 ```text
 cmd/
-  workerd/              HTTP worker daemon
-  ptolemy-mcp/          MCP adapter for the worker API
-  ptolemy-agent/        local LLM-driven executor prototype
-  ptolemy-task-runner/  markdown queue runner and task planning CLI
-
+  workerd/          worker daemon + listener wiring
+  ptolemy-mcp/      MCP stdio adapter
+  ptolemy/          CLI (policy check, memory demo/eval/recall/capture)
+  ptolemy-memory/   alias binary for memory recall/capture
 internal/
-  action/ approval/ logs/ store/   SQLite execution memory
-  command/ terminal/ executor/     command execution path
-  shellcmd/                        OS-aware shell selection helpers
-  fileops/ navigator/ memory/      workspace and context tools
-  gitops/ worktree/                Git and isolation helpers
-  httpapi/                         HTTP routes
-  mcp/                             MCP tool definitions and JSON-RPC server
-  brain/ worker/                   clients for local LLM and worker APIs
-  inspect/ policy/                 workspace inspection and command policy
-
+  policy/           THE TRUST ROOT — engine, rules, approvals, Guarded* adapters
+  domain/           intents, decisions, effects
+  memory/           hybrid RAG, capture/recall/consolidate, agent loop, GC
+  httpapi/          routers: worker API, approvals, RAG /chat
+  mcp/              MCP tool definitions + JSON-RPC server
+  health/           deep /health aggregator
+  controller/       multi-agent worker-pool orchestration (Stage 1/2 slices)
+  config/           env-backed configuration
+  command/ terminal/ shellcmd/                    command execution path (behind GuardedRunner)
+  fileops/ gitops/ worktree/ workspace/ inspect/  raw adapters (behind guards)
+  navigator/        read-only KB access (carve-out)
+  session/ store/ logging/ apitypes/ cli/         support packages
 docs/
-  Architecture.md
-  memory/
-  tasks/
-  workflows/
+  Architecture.md   one-paragraph note per landed package
+  memory/           memory module build spec
+  deploy.md
 ```
 
-## Docs
+## Contributing & agent rules
 
-Core docs are split into focused entry points:
-
-- [Documentation Hub](./docs/README.md)
-- [Setup](./docs/Setup.md)
-- [CLI Guide](./docs/CLI.md)
-- [Worker API](./docs/Worker_API.md)
-- [Development Workflow](./docs/Development.md)
-- [Project Memory](./docs/memory/projects/ptolemy)
-
-## Task System
-
-Tasks live under [`docs/tasks`](./docs/tasks), and the system is built around small, bounded work items with explicit metadata and file scope. For a single isolated change, a loose task file is enough. For anything that needs shared context, reusable snippets, or multiple related task files, use a task pack.
-
-Task packs are the best way to model multi-step work because they keep planning, inputs, and runnable tasks together in one place:
-
-```text
-docs/tasks/packs/<pack-name>/
-├── PACK_MANIFEST.yaml
-├── README.md
-├── TASK_PLAN.md
-├── inbox/
-│   ├── 01-*.md
-│   ├── 02-*.md
-│   └── 99-final-validation.md
-├── scripts/
-├── snippets/
-└── task-scripts/
-```
-
-What a pack gives you:
-
-- One shared plan in `TASK_PLAN.md`
-- Pack-level metadata in `PACK_MANIFEST.yaml`
-- Runnable task files in `inbox/`
-- Reusable references in `snippets/` and `task-scripts/`
-- Optional helper assets in `scripts/`
-
-In the normal Pack Studio flow, you author the pack and start a run. Ptolemy then validates referenced assets, runs the pack `inbox/` tasks in dependency order, and automatically splits large tasks into child-task processes when needed.
-
-The intended operator flow is:
-
-1. Create a task pack.
-2. Add narrow inbox tasks where possible.
-3. Start the pack or program run from Pack Studio or the CLI.
-4. Let Ptolemy split large tasks into child tasks automatically.
-5. Monitor progress from the Pack Studio `Runs` page.
-
-Large-task execution is now manifest-driven:
-
-```text
-large inbox task
--> deterministic child-task split
--> .ptolemy/tasks/process/<pack-id>/manifest.json
--> .ptolemy/tasks/process/<pack-id>/todo.md
--> per-child result summaries under state/
--> fresh model context per child task
-```
-
-This means you do not need to manually pre-split every large task just to keep the model stable. The safer default is still to write focused tasks, but the runtime can now decompose a large task and carry forward compact state summaries instead of one growing chat history.
-
-Pack commands:
-
-```bash
-go run ./cmd/ptolemy-task-runner plan --pack <pack-dir>
-go run ./cmd/ptolemy-task-runner run --pack <pack-dir> --workspace .
-go run ./cmd/ptolemy-task-runner bootstrap --workspace /path/to/target-repo
-```
-
-See [Task System Overview](./docs/tasks/README.md), [Task-File Driven Workflow](./docs/workflows/agent/task-file-driven.md), and example packs in [`docs/tasks/packs`](./docs/tasks/packs).
-For the new large-task runtime, also see [Task Pack Execution Workflow](./docs/workflows/agent/task-pack-execution.md).
-
-## [Workflow System](./WORKFLOWS.md)
-
-Ptolemy workflows exist so agents do not improvise the execution model on every task. The workflow system defines the safe, repeatable path for reading context, selecting tools, editing files, recovering from worker drops, and committing changes.
-
-Why workflows matter:
-
-- They keep execution deterministic instead of prompt-driven
-- They tell the agent what to read first and what to skip
-- They separate task execution, editing, recovery, and Git safety into focused docs
-- They reduce broad rewrites by favoring targeted, observable steps
-
-`WORKFLOWS.md` is the index entry point. An agent reads it first, then opens only the workflow document needed for the current task.
-
-Workflow docs are grouped by purpose:
-
-```text
-docs/workflows/core/
-docs/workflows/agent/
-docs/workflows/editing/
-docs/workflows/recovery/
-docs/workflows/git/
-```
-
-High-signal workflow highlights:
-
-- `core/` covers worker health, sessions, command execution, terminal runners, and worktrees
-- `agent/` explains navigator usage, file search/read flow, task-file execution, and planner vs executor boundaries
-- `editing/` documents marker-based edits and patch conventions for small, safe changes
-- `recovery/` covers EOF or invalid multi-action failures without blindly restarting work
-- `git/` defines safe commit behavior, including explicit staging and verification
-
-Start with [Workflow Index](./WORKFLOWS.md), then drill into [workflow docs](./docs/workflows) for the implementation details.
-
-This keeps context small while still documenting command execution, task-file handling, editing, recovery, safe commits, task branches, and pull requests.
-
-## Git And Pull Requests
-
-Task work happens on the branch declared by task metadata, usually `ptolemy/<priority>-<task-id>`. Stage explicit task files only, never use `git add .`, and commit task-related changes on the task branch after validation.
-
-The pull request workflow is: push the branch, create a Pull Request with the GitHub CLI when available, and write fallback instructions under `.state/pr/` if the CLI is unavailable or unauthenticated. Do not auto-merge unless a task explicitly requests it.
-
-## Development Workflow
-
-Before editing behavior:
-
-```bash
-git status --short
-go test ./...
-```
-
-For normal changes:
-
-```bash
-go fmt ./...
-go test ./...
-git diff --stat
-git diff --name-only
-```
-
-Project conventions:
-
-- Search first, read small, edit targeted, test immediately.
-- Keep command execution behind the runner; handlers should not shell out directly.
-- Prefer structured JSON input and output for APIs.
-- Keep reusable agent knowledge in Markdown, not hidden in prompts.
-- Do not commit `.state/`, `state/*.db`, `bin/`, or temporary `tmp-*.txt` files.
-- Never push without explicit approval.
-
-## Using Another Workspace
-
-You can point Ptolemy at a different repository without moving the Ptolemy source tree into that workspace.
-
-- Start `workerd` with a reachable `WORKER_BASE_URL`.
-- Run `ptolemy-agent --workspace /path/to/repo` so file reads, writes, and commands bind to that repository.
-- Configure `BRAIN_BASE_URL` and `BRAIN_MODEL` when your local model endpoint differs from the defaults.
-- Put `ptolemy-agent` on `PATH` or set `PTOLEMY_AGENT_BIN` so `ptolemy-task-runner` can invoke the agent binary directly.
-- Use `go run ./cmd/ptolemy-task-runner bootstrap --workspace /path/to/repo` to seed `WORKFLOWS.md` and `docs/tasks/templates` into a fresh non-Ptolemy repository.
-
-## Current Status
-
-Completed or mostly complete:
-
-- Worker daemon and health check.
-- Session persistence and recovery.
-- tmux-backed command execution.
-- File operations with workspace path restrictions.
-- MCP adapter and core tool exposure.
-- Git endpoints and MCP tools.
-- Worktree creation, listing, removal, and session binding.
-- SQLite execution memory tables and migrations.
-- Markdown knowledge memory structure.
-- Basic local-brain agent loop and task runner prototype.
-- Controller-driven agent loop in `workerd` with persisted run state and observations.
-- Split workflow documentation, task metadata rules, and safe commit/PR guidance.
-
-Still in progress:
-
-- Full approval flow for dangerous actions.
-- More complete policy hardening.
-- More end-to-end happy-path smoke coverage for publish and PR finalization.
-- Short command-output summaries.
-- Full Codex bridge service.
-- End-to-end task execution, validation, and queue finalization.
-
-See `docs/Worker_Progress_Checklist.md` for the detailed phase checklist.
-
-## Design Principles
-
-```text
-Deterministic over smart.
-File-based over prompt-based.
-Search before read.
-Safe edits over broad rewrites.
-Local-first execution.
-Agent-compatible architecture.
-```
-
-## More Documentation
-
-- [docs/README.md](./docs/README.md) is the main documentation hub
-- [WORKFLOWS.md](./WORKFLOWS.md) indexes supported execution workflows
-- [docs/workflows](./docs/workflows) contains focused workflow files for core runtime, agent operation, editing, recovery, and Git safety
-- [docs/tasks](./docs/tasks) contains the task system docs and pack examples
-- [docs/plans/MVP_Design.md](./docs/plans/MVP_Design.md) describes the planner/executor/runtime model
-- [docs/plans/Build Plan.md](./docs/plans/Build%20Plan.md) lays out the build phases
-- [docs/plans/Future Updates.md](./docs/plans/Future%20Updates.md) lists future MCP, infrastructure, and safety ideas
-- [docs/memory/projects/ptolemy](./docs/memory/projects/ptolemy) contains agent-readable architecture, conventions, decisions, and known issues
+[AGENTS.md](AGENTS.md) is authoritative for branching, commits, and PRs;
+[CLAUDE.md](CLAUDE.md) overlays the Claude Code harness rules. The short
+version: feature branches are `ptolemy/<task-slug>`; commits are per-phase with
+explicit staging (never `git add .`); tests precede implementation for anything
+touching the harness; PRs use
+[.github/pull_request_template.md](.github/pull_request_template.md); README
+and docs are refreshed before any dev branch merges to `main`; and nothing is
+pushed without explicit approval.
