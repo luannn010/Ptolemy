@@ -57,17 +57,29 @@
       "reason": "brain status is a read"
     },
     {
-      "id": "allow-brain-autounload",
-      "contains": "brain autounload",
+      "id": "allow-brain-models",
+      "contains": "brain models",
       "effect": "allow",
-      "reason": "idle-TTL unload of the local brain"
+      "reason": "listing available models is a read"
     },
     {
-      "id": "ask-brain-switch",
-      "contains": "brain switch",
+      "id": "allow-brain-resume",
+      "contains": "brain resume",
+      "effect": "allow",
+      "reason": "resume the already-approved brain spec"
+    },
+    {
+      "id": "allow-brain-hibernate",
+      "contains": "brain hibernate",
+      "effect": "allow",
+      "reason": "hibernate frees VRAM, spec retained"
+    },
+    {
+      "id": "ask-brain-load",
+      "contains": "brain load",
       "effect": "ask",
       "channel": "oob",
-      "reason": "manual brain model switch requires confirmation"
+      "reason": "custom brain launch requires confirmation"
     },
     {
       "id": "ask-brain-stop",
