@@ -165,8 +165,8 @@ func TestLoadConfigBrainFields(t *testing.T) {
 	t.Setenv("BRAIN_AUTO_WAKE", "true")
 	t.Setenv("BRAIN_IDLE_TTL", "300s")
 	t.Setenv("BRAIN_CONTROL_PORT", "18089")
-	t.Setenv("BRAIN_MODELS", "/tmp/brain-models.json")
-	t.Setenv("BRAIN_DEFAULT_MODEL", "qwen9b")
+	t.Setenv("BRAIN_MODELS_DIR", "/home/u/models")
+	t.Setenv("BRAIN_LLAMA_BIN", "/opt/llama/llama-server")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +177,7 @@ func TestLoadConfigBrainFields(t *testing.T) {
 	if cfg.BrainIdleTTL != 300*time.Second {
 		t.Fatalf("expected idle ttl 300s, got %v", cfg.BrainIdleTTL)
 	}
-	if cfg.BrainControlPort != "18089" || cfg.BrainModelsPath != "/tmp/brain-models.json" || cfg.BrainDefaultModel != "qwen9b" {
+	if cfg.BrainControlPort != "18089" || cfg.BrainModelsDir != "/home/u/models" || cfg.BrainLlamaBin != "/opt/llama/llama-server" {
 		t.Fatalf("brain string fields wrong: %+v", cfg)
 	}
 }
@@ -188,7 +188,8 @@ func TestLoadConfigBrainDefaults(t *testing.T) {
 	t.Setenv("BRAIN_AUTO_WAKE", "")
 	t.Setenv("BRAIN_IDLE_TTL", "")
 	t.Setenv("BRAIN_CONTROL_PORT", "")
-	t.Setenv("BRAIN_DEFAULT_MODEL", "")
+	t.Setenv("BRAIN_MODELS_DIR", "")
+	t.Setenv("BRAIN_LLAMA_BIN", "")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -201,6 +202,9 @@ func TestLoadConfigBrainDefaults(t *testing.T) {
 	}
 	if cfg.BrainControlPort != "8089" {
 		t.Fatalf("expected default control port 8089, got %q", cfg.BrainControlPort)
+	}
+	if cfg.BrainModelsDir != "" || cfg.BrainLlamaBin != "" {
+		t.Fatalf("expected empty brain dir/bin defaults, got %q / %q", cfg.BrainModelsDir, cfg.BrainLlamaBin)
 	}
 }
 

@@ -38,8 +38,8 @@ type Config struct {
 	BrainAutoWake       bool
 	BrainIdleTTL        time.Duration
 	BrainControlPort    string
-	BrainModelsPath     string
-	BrainDefaultModel   string
+	BrainModelsDir      string // BRAIN_MODELS_DIR: scanned for *.gguf by GET /brain/models
+	BrainLlamaBin       string // BRAIN_LLAMA_BIN: default binary for loads that omit it
 }
 
 const (
@@ -82,8 +82,8 @@ func Load() (Config, error) {
 	cfg.BrainAutoWake = getEnvBool("BRAIN_AUTO_WAKE", false)
 	cfg.BrainIdleTTL = getEnvDuration("BRAIN_IDLE_TTL", 5*time.Minute)
 	cfg.BrainControlPort = getEnv("BRAIN_CONTROL_PORT", "8089")
-	cfg.BrainModelsPath = getEnv("BRAIN_MODELS", "")
-	cfg.BrainDefaultModel = getEnv("BRAIN_DEFAULT_MODEL", "")
+	cfg.BrainModelsDir = getEnv("BRAIN_MODELS_DIR", "")
+	cfg.BrainLlamaBin = getEnv("BRAIN_LLAMA_BIN", "")
 
 	if cfg.HTTPPort == "" {
 		return Config{}, fmt.Errorf("HTTP_PORT cannot be empty")
