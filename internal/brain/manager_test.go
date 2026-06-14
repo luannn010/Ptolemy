@@ -145,3 +145,55 @@ func TestManager_ResolveSpecFillsDefaults(t *testing.T) {
 		t.Fatalf("ResolveSpec: %+v", got)
 	}
 }
+
+func TestRunIdleLoop_HibernatesWhenIdleAndToleratesError(t *testing.T) {
+	var unloads atomic.Int32
+	// Running and idle for an hour, ttl is tiny -> every tick should hibernate.
+	status := func() Status { return Status{Running: true, LastUse: time.Now().Add(-time.Hour)} }
+	unload := func(context.Context) error { unloads.Add(1); return errors.New("transient") }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { RunIdleLoop(ctx, 2*time.Millisecond, time.Millisecond, status, unload); close(done) }()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for unloads.Load() < 2 && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if unloads.Load() < 2 {
+		t.Fatalf("expected the loop to keep hibernating past an unload error, got %d", unloads.Load())
+	}
+}
+
+func TestRunIdleLoop_SkipsWhenNotIdle(t *testing.T) {
+	var unloads atomic.Int32
+	// Running but just used; ttl is long -> never idle, never hibernate.
+	status := func() Status { return Status{Running: true, LastUse: time.Now()} }
+	unload := func(context.Context) error { unloads.Add(1); return nil }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { RunIdleLoop(ctx, 2*time.Millisecond, time.Hour, status, unload); close(done) }()
+	time.Sleep(40 * time.Millisecond)
+	cancel()
+	<-done
+	if unloads.Load() != 0 {
+		t.Fatalf("must not hibernate while active, got %d", unloads.Load())
+	}
+}
+
+func TestRunIdleLoop_StopsOnCancel(t *testing.T) {
+	status := func() Status { return Status{} }
+	unload := func(context.Context) error { return nil }
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { RunIdleLoop(ctx, time.Millisecond, time.Millisecond, status, unload); close(done) }()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("RunIdleLoop did not return after ctx cancel")
+	}
+}

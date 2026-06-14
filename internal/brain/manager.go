@@ -173,7 +173,10 @@ func (m *Manager) Status() Status {
 }
 
 // launchLocked stops any current process, starts the spec, and waits for ready.
-// On failure it tears down the partial process. mu must be held.
+// On failure it tears down the partial process. mu must be held — and is held for
+// the whole launch, including the readiness wait (up to readyTimeout). That
+// deliberately serializes concurrent brain calls (including Status) during a cold
+// load: a loading process should serialize wakes and is never "idle".
 func (m *Manager) launchLocked(ctx context.Context, s Spec) error {
 	if m.handle != nil && m.handle.Running() {
 		m.stopProcessLocked()
