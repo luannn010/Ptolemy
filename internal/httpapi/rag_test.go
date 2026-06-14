@@ -285,3 +285,24 @@ func TestSerialAnswerer_Serializes(t *testing.T) {
 		t.Fatal("SerialAnswerer must not allow concurrent Answer calls (single pgx conn)")
 	}
 }
+
+// TestChat_RejectsOversizedBody guards the body-size cap: /chat binds all
+// interfaces, so an unauthenticated client must not be able to push an unbounded
+// request body into the JSON decoder. The oversized request is rejected before
+// the (serialized, single-conn) answerer is ever reached.
+func TestChat_RejectsOversizedBody(t *testing.T) {
+	stub := &stubAnswerer{out: memory.Answer{Text: "should not be reached"}}
+	srv := newRAGServer(t, stub)
+
+	// Valid JSON shape, but well over the 1 MiB cap.
+	big := `{"query":"` + strings.Repeat("a", 2<<20) + `"}`
+	resp := postChat(t, srv, big)
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 400 || resp.StatusCode >= 500 {
+		t.Fatalf("oversized body: got status %d, want 4xx", resp.StatusCode)
+	}
+	if stub.calls != 0 {
+		t.Fatalf("answerer must not be called for an oversized body; calls=%d", stub.calls)
+	}
+}

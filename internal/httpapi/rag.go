@@ -51,6 +51,11 @@ func (s *serialAnswerer) Answer(ctx context.Context, q memory.Query) (memory.Ans
 	return s.inner.Answer(ctx, q)
 }
 
+// maxChatBodyBytes caps the /chat request body. The listener binds all
+// interfaces, so this bounds the memory an unauthenticated caller can force the
+// JSON decoder to allocate. A query payload is tiny; 1 MiB is generous.
+const maxChatBodyBytes = 1 << 20
+
 // NewRAGRouter serves POST /chat and a static GET /health liveness probe.
 func NewRAGRouter(deps RAGDeps) http.Handler {
 	r := chi.NewRouter()
@@ -60,6 +65,8 @@ func NewRAGRouter(deps RAGDeps) http.Handler {
 	})
 
 	r.Post("/chat", func(w http.ResponseWriter, req *http.Request) {
+		// Bound the request body before decoding (all-interfaces listener).
+		req.Body = http.MaxBytesReader(w, req.Body, maxChatBodyBytes)
 		var body apitypes.ChatRequest
 		if !decodeJSON(w, req, &body) {
 			return

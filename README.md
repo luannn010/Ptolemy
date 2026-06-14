@@ -55,6 +55,12 @@ otherwise workerd logs that it's disabled and keeps serving the rest. The
 approve surface is loopback-only on purpose — approving intents is an operator
 action.
 
+> ⚠️ **`RAG_PORT` (and the worker API) bind all interfaces and have no
+> authentication.** `/chat` reaches the LLM and the memory DB. If the host sits
+> on an untrusted network, restrict the port — firewall it, bind it behind a
+> reverse proxy, or expose it only over a VPN. The body is capped (1 MiB) but
+> there is no auth or rate limiting in-process.
+
 ## Agentic RAG over HTTP (`POST /chat`)
 
 Sub-services ask questions; Ptolemy retrieves, reasons, and answers grounded in
