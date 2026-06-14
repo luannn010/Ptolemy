@@ -12,6 +12,7 @@ type Config struct {
 	AppEnv          string
 	HTTPPort        string
 	ApprovePort     string
+	RagPort         string // RAG HTTP listener (POST /chat); binds all interfaces
 	LogLevel        string
 	StateDir        string
 	DBPath          string
@@ -46,6 +47,7 @@ func Load() (Config, error) {
 		AppEnv:          getEnv("APP_ENV", "development"),
 		HTTPPort:        getEnv("HTTP_PORT", "8080"),
 		ApprovePort:     getEnv("APPROVE_PORT", "8081"),
+		RagPort:         getEnv("RAG_PORT", "8090"),
 		LogLevel:        getEnv("LOG_LEVEL", "debug"),
 		StateDir:        getEnv("STATE_DIR", "./state"),
 		DBPath:          getEnv("DB_PATH", "./state/ptolemy.db"),

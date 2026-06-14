@@ -87,3 +87,23 @@ the integration deps are only partially set (a wiring bug); all-nil preserves
 slice-1 behavior (stop at `Stage1Passed`). The `base_updated` subscribers
 (propagation, relevance), the current-with-base entry ticket, and the
 Stage-2-fail regression loop are deferred to later slices.
+
+## RAG HTTP listener (`internal/httpapi/rag.go`, `cmd/workerd`)
+
+workerd's third listener exposes the memory module's agentic RAG to local
+sub-services as plain HTTP: `POST :RAG_PORT/chat` (default 8090, all interfaces
+so LAN + WSL callers can reach it) takes `{query, k?, subject_id?, project_id?,
+trace?}` and returns the grounded answer, citations, `gave_up`, and — when
+`trace` is set — the `mode` + `steps` reasoning trace (reusing `memory.TraceStep`).
+A static `GET /health` gives sub-services a liveness probe. Wiring mirrors
+`cmd/ptolemy-mcp`: `buildRAGDeps` (cmd/workerd/memory.go) loads `memory.LoadConfig`
++ `NewModule` and gracefully disables the listener (warn log, workerd still
+serves) when memory is unconfigured; the agent loop engages via
+`AGENT_LOOP_ENABLED`, and subject/project default from `PTOLEMY_MEMORY_*`.
+Memory stays in its in-process carve-out — the endpoint is read-mostly (its only
+writes are reinforce counters in the memory Postgres DB) so no `Guarded*`
+wrapper is involved. Because `NewModule` returns a single non-concurrency-safe
+`*pgx.Conn`, the handler goes through `NewSerialAnswerer` (mutex). gave-ups are
+HTTP 200; upstream failures (brain/embedder/DB) map to 502; the server uses a
+120s WriteTimeout (multi-step agentic answers) and shuts down before the memory
+conn closes.

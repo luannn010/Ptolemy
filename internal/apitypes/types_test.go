@@ -8,6 +8,27 @@ import (
 	"github.com/luannn010/ptolemy/internal/domain"
 )
 
+func TestChatResponseOmitsTraceFields(t *testing.T) {
+	v := ChatResponse{Answer: "a", Citations: []string{}, GaveUp: false}
+	data, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+	for _, absent := range []string{`"mode"`, `"steps"`} {
+		if strings.Contains(s, absent) {
+			t.Fatalf("expected %s omitted when trace absent, got %s", absent, s)
+		}
+	}
+	// gave_up must always be present, even when false.
+	if !strings.Contains(s, `"gave_up"`) {
+		t.Fatalf("gave_up must always serialize, got %s", s)
+	}
+	if !strings.Contains(s, `"citations":[]`) {
+		t.Fatalf("citations must serialize as an array, got %s", s)
+	}
+}
+
 func TestNeedsConfirmationJSONShape(t *testing.T) {
 	v := NeedsConfirmation{
 		Status:     "needs_confirmation",

@@ -113,6 +113,22 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// RAG HTTP listener (POST /chat): in-process memory, all interfaces so LAN
+	// sub-services and WSL can reach it. Gracefully absent when memory is
+	// unconfigured. WriteTimeout is generous: an agentic answer is several LLM
+	// round-trips and would be killed mid-response by the 15s used above.
+	ragDeps, ragCleanup, ragOK := buildRAGDeps(context.Background())
+	var ragServer *http.Server
+	if ragOK {
+		ragServer = &http.Server{
+			Addr:         ":" + cfg.RagPort,
+			Handler:      httpapi.NewRAGRouter(ragDeps),
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 120 * time.Second,
+			IdleTimeout:  60 * time.Second,
+		}
+	}
+
 	log.Info().
 		Str("app_env", cfg.AppEnv).
 		Str("http_port", cfg.HTTPPort).
@@ -129,6 +145,14 @@ func main() {
 			log.Fatal().Err(err).Msg("approve server failed")
 		}
 	}()
+	if ragServer != nil {
+		log.Info().Str("rag_port", cfg.RagPort).Msg("rag http listening (POST /chat)")
+		go func() {
+			if err := ragServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatal().Err(err).Msg("rag server failed")
+			}
+		}()
+	}
 
 	// Sweep has its own lifetime (a Background root, not tied to HTTP shutdown);
 	// MaybeStartSweep owns cancellation — sweepCleanup() stops the goroutine and
@@ -158,4 +182,12 @@ func main() {
 	defer cancel()
 	_ = server.Shutdown(ctx)
 	_ = approveServer.Shutdown(ctx)
+	if ragServer != nil {
+		_ = ragServer.Shutdown(ctx)
+	}
+	// Close the memory conn only after the RAG server has drained, so in-flight
+	// /chat requests finish using it.
+	if ragCleanup != nil {
+		ragCleanup()
+	}
 }

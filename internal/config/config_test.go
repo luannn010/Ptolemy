@@ -158,6 +158,27 @@ func TestLoadConfigCarriesMemoryVars(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRagPort(t *testing.T) {
+	t.Setenv("STATE_DIR", t.TempDir())
+	t.Setenv("RAG_PORT", "18090")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RagPort != "18090" {
+		t.Fatalf("expected RAG_PORT override 18090, got %q", cfg.RagPort)
+	}
+
+	t.Setenv("RAG_PORT", "")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RagPort != "8090" {
+		t.Fatalf("expected default RagPort 8090, got %q", cfg.RagPort)
+	}
+}
+
 func TestGetEnvIntFallsBackOnNonIntegerOrNegative(t *testing.T) {
 	t.Setenv("STATE_DIR", t.TempDir())
 	t.Setenv("HEALTH_TIMEOUT_MS", "not-a-number")
