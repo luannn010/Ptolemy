@@ -117,7 +117,9 @@ loaded spec persists across hibernate, so resume/auto-wake bring back the *same*
 model; cold start with nothing loaded → 502 (`/chat`) or 409 (`/brain/resume`).
 The control plane is **loopback-only** (it can stop GPU processes) and **off by
 default** (`BRAIN_CONTROL_ENABLED`); models come from `BRAIN_MODELS_DIR` +
-`BRAIN_LLAMA_BIN`. It assumes workerd runs on the same host as the brain.
+`BRAIN_LLAMA_BIN`. It assumes workerd runs on the same host as the brain. Full
+endpoint reference (request/response shapes, status codes, the approval flow,
+and how to call it from another project): [docs/Brain_Controller_API.md](docs/Brain_Controller_API.md).
 
 ## Conversational memory (MCP)
 
