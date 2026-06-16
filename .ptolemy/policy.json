@@ -43,6 +43,50 @@
       "contains": "go test",
       "effect": "allow",
       "reason": "build/test command allowed"
+    },
+    {
+      "id": "allow-brain-wake",
+      "contains": "brain wake",
+      "effect": "allow",
+      "reason": "auto-wake / manual start of the local brain"
+    },
+    {
+      "id": "allow-brain-status",
+      "contains": "brain status",
+      "effect": "allow",
+      "reason": "brain status is a read"
+    },
+    {
+      "id": "allow-brain-models",
+      "contains": "brain models",
+      "effect": "allow",
+      "reason": "listing available models is a read"
+    },
+    {
+      "id": "allow-brain-resume",
+      "contains": "brain resume",
+      "effect": "allow",
+      "reason": "resume the already-approved brain spec"
+    },
+    {
+      "id": "allow-brain-hibernate",
+      "contains": "brain hibernate",
+      "effect": "allow",
+      "reason": "hibernate frees VRAM, spec retained"
+    },
+    {
+      "id": "ask-brain-load",
+      "contains": "brain load",
+      "effect": "ask",
+      "channel": "oob",
+      "reason": "custom brain launch requires confirmation"
+    },
+    {
+      "id": "ask-brain-stop",
+      "contains": "brain stop",
+      "effect": "ask",
+      "channel": "oob",
+      "reason": "manual brain stop requires confirmation"
     }
   ]
 }

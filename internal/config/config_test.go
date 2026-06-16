@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestLoadConfigWithEnv(t *testing.T) {
@@ -155,6 +156,71 @@ func TestLoadConfigCarriesMemoryVars(t *testing.T) {
 	}
 	if cfg.RagTopK != 12 || cfg.RagChunkSize != 600 || cfg.RagChunkOverlap != 80 {
 		t.Fatalf("RAG knobs: %+v", cfg)
+	}
+}
+
+func TestLoadConfigBrainFields(t *testing.T) {
+	t.Setenv("STATE_DIR", t.TempDir())
+	t.Setenv("BRAIN_CONTROL_ENABLED", "true")
+	t.Setenv("BRAIN_AUTO_WAKE", "true")
+	t.Setenv("BRAIN_IDLE_TTL", "300s")
+	t.Setenv("BRAIN_CONTROL_PORT", "18089")
+	t.Setenv("BRAIN_MODELS_DIR", "/home/u/models")
+	t.Setenv("BRAIN_LLAMA_BIN", "/opt/llama/llama-server")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.BrainControlEnabled || !cfg.BrainAutoWake {
+		t.Fatalf("expected brain control+autowake enabled, got %+v", cfg)
+	}
+	if cfg.BrainIdleTTL != 300*time.Second {
+		t.Fatalf("expected idle ttl 300s, got %v", cfg.BrainIdleTTL)
+	}
+	if cfg.BrainControlPort != "18089" || cfg.BrainModelsDir != "/home/u/models" || cfg.BrainLlamaBin != "/opt/llama/llama-server" {
+		t.Fatalf("brain string fields wrong: %+v", cfg)
+	}
+}
+
+func TestLoadConfigBrainDefaults(t *testing.T) {
+	t.Setenv("STATE_DIR", t.TempDir())
+	t.Setenv("BRAIN_CONTROL_ENABLED", "")
+	t.Setenv("BRAIN_AUTO_WAKE", "")
+	t.Setenv("BRAIN_IDLE_TTL", "")
+	t.Setenv("BRAIN_CONTROL_PORT", "")
+	t.Setenv("BRAIN_MODELS_DIR", "")
+	t.Setenv("BRAIN_LLAMA_BIN", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BrainControlEnabled || cfg.BrainAutoWake {
+		t.Fatalf("brain control must default off, got %+v", cfg)
+	}
+	if cfg.BrainIdleTTL != 5*time.Minute {
+		t.Fatalf("expected default idle ttl 5m, got %v", cfg.BrainIdleTTL)
+	}
+	if cfg.BrainControlPort != "8089" {
+		t.Fatalf("expected default control port 8089, got %q", cfg.BrainControlPort)
+	}
+	if cfg.BrainModelsDir != "" || cfg.BrainLlamaBin != "" {
+		t.Fatalf("expected empty brain dir/bin defaults, got %q / %q", cfg.BrainModelsDir, cfg.BrainLlamaBin)
+	}
+}
+
+func TestBoolAndDurationEnvFallBackOnGarbage(t *testing.T) {
+	t.Setenv("STATE_DIR", t.TempDir())
+	t.Setenv("BRAIN_CONTROL_ENABLED", "not-a-bool")
+	t.Setenv("BRAIN_IDLE_TTL", "not-a-duration")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BrainControlEnabled {
+		t.Fatal("garbage bool must fall back to false")
+	}
+	if cfg.BrainIdleTTL != 5*time.Minute {
+		t.Fatalf("garbage duration must fall back to 5m, got %v", cfg.BrainIdleTTL)
 	}
 }
 

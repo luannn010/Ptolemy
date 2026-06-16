@@ -107,3 +107,35 @@ wrapper is involved. Because `NewModule` returns a single non-concurrency-safe
 HTTP 200; upstream failures (brain/embedder/DB) map to 502; the server uses a
 120s WriteTimeout (multi-step agentic answers) and shuts down before the memory
 conn closes.
+
+## Brain controller (`internal/brain`, `internal/policy/guard_brain.go`, `cmd/workerd`)
+
+workerd can drive the local llama.cpp "brain" the way you would from the CLI:
+**list available models, load any of them with a full caller-supplied config,
+hibernate → resume to free/reclaim VRAM, and auto-wake on a `/chat` request.**
+The launch unit is a free-form `brain.Spec` (`binary`, `gguf`, `host`, `port`,
+`args[]`) — there is no named-preset registry. `GET /brain/models` disk-scans
+`BRAIN_MODELS_DIR` for `*.gguf`; `binary` defaults to `BRAIN_LLAMA_BIN` when a
+load omits it. Because spawning/killing a process is a side effect, every op is
+reached only through `policy.GuardedBrain` — `Authorize`d and audited to
+`policy_decisions` like `GuardedRunner`. The raw mechanism is `brain.Manager`
+(injected `Launcher`/`Probe` make it unit-testable without a real process; the
+probe polls `GET /v1/models` at the *spec's* own host:port for readiness). The
+**security invariant**: a custom spec enters the Manager only via the `load`
+path, which is `ask`/OOB — the resolved argv goes into the policy intent, so the
+hash and the `deny` rules cover every spec field (a `rm -rf`/`.env` token in any
+flag is denied), and approving one spec can't authorize another. The other verbs
+carry no spec and auto-`allow`: `resume`/`wake` (relaunch the stored spec),
+`hibernate` (stop process, keep spec), `status`, `models`. `stop` carries no
+spec but stays `ask` as a manual teardown that also forgets the spec. The stored
+spec persists across hibernate, so the idle-TTL loop (ungated `Status` read →
+gated `Hibernate` only when idle) and the `/chat` `Waker` resume the *same*
+model; cold start with nothing loaded → 502 (`/chat`) or 409 (`POST
+/brain/resume`). The control plane (`POST /brain/{load,resume,hibernate,stop}`,
+`GET /brain/{models,status}`) is **loopback-only** (it can stop GPU processes).
+Brain decisions audit under a reserved `brain-system` session row (ensured at
+startup — no schema change). The whole controller is **off by default**
+(`BRAIN_CONTROL_ENABLED`) and assumes workerd is co-located with the brain (same
+host). The host-local `.ptolemy/policy.json`, if present, must carry the same
+brain allow/ask rules as `DefaultRuleset()` (or be removed to fall back to it)
+before the controller is enabled.

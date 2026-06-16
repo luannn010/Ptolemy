@@ -3,7 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -31,6 +33,13 @@ type Config struct {
 	RagTopK         int
 	RagChunkSize    int
 	RagChunkOverlap int
+	// Brain lifecycle skill (workerd-managed llama.cpp). Off by default.
+	BrainControlEnabled bool
+	BrainAutoWake       bool
+	BrainIdleTTL        time.Duration
+	BrainControlPort    string
+	BrainModelsDir      string // BRAIN_MODELS_DIR: scanned for *.gguf by GET /brain/models
+	BrainLlamaBin       string // BRAIN_LLAMA_BIN: default binary for loads that omit it
 }
 
 const (
@@ -69,6 +78,13 @@ func Load() (Config, error) {
 	cfg.RagChunkSize = getEnvInt("RAG_CHUNK_SIZE_TOKENS", 700)
 	cfg.RagChunkOverlap = getEnvInt("RAG_CHUNK_OVERLAP_TOKENS", 100)
 
+	cfg.BrainControlEnabled = getEnvBool("BRAIN_CONTROL_ENABLED", false)
+	cfg.BrainAutoWake = getEnvBool("BRAIN_AUTO_WAKE", false)
+	cfg.BrainIdleTTL = getEnvDuration("BRAIN_IDLE_TTL", 5*time.Minute)
+	cfg.BrainControlPort = getEnv("BRAIN_CONTROL_PORT", "8089")
+	cfg.BrainModelsDir = getEnv("BRAIN_MODELS_DIR", "")
+	cfg.BrainLlamaBin = getEnv("BRAIN_LLAMA_BIN", "")
+
 	if cfg.HTTPPort == "" {
 		return Config{}, fmt.Errorf("HTTP_PORT cannot be empty")
 	}
@@ -99,6 +115,30 @@ func getEnv(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	v, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
+func getEnvDuration(key string, fallback time.Duration) time.Duration {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	v, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+	return v
 }
 
 func ensureDir(path string) error {

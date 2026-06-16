@@ -25,10 +25,17 @@ type Answerer interface {
 	Answer(ctx context.Context, q memory.Query) (memory.Answer, error)
 }
 
+// Waker, when set, is invoked before each /chat answer to ensure the brain is
+// loaded (the auto-wake / JIT-load path). nil disables auto-wake.
+type Waker interface {
+	EnsureAwake(ctx context.Context) error
+}
+
 // RAGDeps wires the /chat handler. DefaultSubject/DefaultProject scope queries
 // that omit subject_id/project_id (sourced from PTOLEMY_MEMORY_* in cmd/workerd).
 type RAGDeps struct {
 	Answerer       Answerer
+	Waker          Waker // optional brain auto-wake; nil = disabled
 	DefaultSubject string
 	DefaultProject string
 }
@@ -91,6 +98,15 @@ func NewRAGRouter(deps RAGDeps) http.Handler {
 		}
 		if project != "" {
 			q.ProjectID = &project
+		}
+
+		// Auto-wake the brain (JIT load) before answering. A wake failure means
+		// the brain is unavailable — same 502 class as an answer failure.
+		if deps.Waker != nil {
+			if err := deps.Waker.EnsureAwake(req.Context()); err != nil {
+				writeJSON(w, http.StatusBadGateway, apitypes.ErrorResponse{Error: err.Error()})
+				return
+			}
 		}
 
 		ans, err := deps.Answerer.Answer(req.Context(), q)

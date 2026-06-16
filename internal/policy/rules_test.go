@@ -8,6 +8,37 @@ import (
 	"github.com/luannn010/ptolemy/internal/domain"
 )
 
+func TestDefaultRuleset_HasBrainRules(t *testing.T) {
+	got := map[string]domain.Effect{}
+	for _, r := range DefaultRuleset().Rules {
+		got[r.ID] = r.Effect
+	}
+	want := map[string]domain.Effect{
+		"allow-brain-wake":      domain.EffectAllow,
+		"allow-brain-status":    domain.EffectAllow,
+		"allow-brain-models":    domain.EffectAllow,
+		"allow-brain-resume":    domain.EffectAllow,
+		"allow-brain-hibernate": domain.EffectAllow,
+		"ask-brain-load":        domain.EffectAsk,
+		"ask-brain-stop":        domain.EffectAsk,
+	}
+	for id, eff := range want {
+		if got[id] != eff {
+			t.Fatalf("DefaultRuleset rule %q: got %q want %q", id, got[id], eff)
+		}
+	}
+	for _, gone := range []string{"ask-brain-switch", "allow-brain-autounload"} {
+		if _, ok := got[gone]; ok {
+			t.Fatalf("DefaultRuleset rule %q should have been removed", gone)
+		}
+	}
+	for _, id := range []string{"deny-policy-write", "deny-secret-cmd"} {
+		if _, ok := got[id]; !ok {
+			t.Fatalf("DefaultRuleset must keep self-protection rule %q", id)
+		}
+	}
+}
+
 func TestLoadRuleset_FileMissingFallsBackToDefault(t *testing.T) {
 	rs := LoadRuleset(filepath.Join(t.TempDir(), "does-not-exist.json"))
 	if len(rs.Rules) == 0 {

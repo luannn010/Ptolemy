@@ -118,6 +118,15 @@ func main() {
 	// unconfigured. WriteTimeout is generous: an agentic answer is several LLM
 	// round-trips and would be killed mid-response by the 15s used above.
 	ragDeps, ragCleanup, ragOK := buildRAGDeps(context.Background())
+
+	// Brain lifecycle skill (guarded llama.cpp start/stop/switch + idle-TTL). Off
+	// by default. When enabled, its auto-wake adapter is injected into /chat below,
+	// and a LOOPBACK-ONLY control plane is exposed (it can stop GPU processes).
+	brainDeps, brainCleanup, brainOK := buildBrainDeps(context.Background(), cfg, engine, approvals, baseStore.SQLDB())
+	if brainOK && brainDeps.waker != nil {
+		ragDeps.Waker = brainDeps.waker
+	}
+
 	var ragServer *http.Server
 	if ragOK {
 		ragServer = &http.Server{
@@ -125,6 +134,17 @@ func main() {
 			Handler:      httpapi.NewRAGRouter(ragDeps),
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: 120 * time.Second,
+			IdleTimeout:  60 * time.Second,
+		}
+	}
+
+	var brainControlServer *http.Server
+	if brainOK {
+		brainControlServer = &http.Server{
+			Addr:         "127.0.0.1:" + cfg.BrainControlPort,
+			Handler:      httpapi.NewBrainControlRouter(httpapi.BrainDeps{Brain: brainDeps.guarded}),
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 120 * time.Second, // a wake can take seconds (model load)
 			IdleTimeout:  60 * time.Second,
 		}
 	}
@@ -150,6 +170,14 @@ func main() {
 		go func() {
 			if err := ragServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Fatal().Err(err).Msg("rag server failed")
+			}
+		}()
+	}
+	if brainControlServer != nil {
+		log.Info().Str("brain_control_port", cfg.BrainControlPort).Msg("brain control listening (loopback)")
+		go func() {
+			if err := brainControlServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatal().Err(err).Msg("brain control server failed")
 			}
 		}()
 	}
@@ -185,9 +213,17 @@ func main() {
 	if ragServer != nil {
 		_ = ragServer.Shutdown(ctx)
 	}
+	if brainControlServer != nil {
+		_ = brainControlServer.Shutdown(ctx)
+	}
 	// Close the memory conn only after the RAG server has drained, so in-flight
 	// /chat requests finish using it.
 	if ragCleanup != nil {
 		ragCleanup()
+	}
+	// Stop the idle loop and the brain process after the control + RAG servers
+	// have drained (in-flight wakes/answers finish first).
+	if brainCleanup != nil {
+		brainCleanup()
 	}
 }

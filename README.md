@@ -2,12 +2,12 @@
 
 Ptolemy is a local-first agent runtime. A worker daemon (`workerd`) gives a planner
 (Claude Code, Codex, or any MCP client) controlled hands on a machine — sessions,
-shell commands, files, git, worktrees — while a **policy harness** sits between
-intent and effect: every side-effecting call is authorized against a ruleset,
-audited to SQLite, and either allowed, paused for human approval, or denied. On
-top of that runtime sits a **conversational memory** system (hybrid RAG on
-PostgreSQL + pgvector) with an agentic retrieval loop, exposed both as MCP tools
-and as a plain HTTP `/chat` endpoint for sub-services.
+shell commands, files, git, worktrees, a managed local LLM — while a **policy
+harness** sits between intent and effect: every side-effecting call is authorized
+against a ruleset, audited to SQLite, and either allowed, paused for human
+approval, or denied. On top of that runtime sits a **conversational memory**
+system (hybrid RAG on PostgreSQL + pgvector) with an agentic retrieval loop,
+exposed both as MCP tools and as a plain HTTP `/chat` endpoint for sub-services.
 
 This tree is the **v2 clean-room rebuild**: packages are ported from
 `ptolemy-legacy/` one by one (copy + adapt + test, never import), each landing
@@ -17,8 +17,8 @@ behind the harness with its own tests and a note in
 ## The policy harness (trust root)
 
 `internal/policy` is the heart of v2. Side-effecting adapters (`terminal`,
-`fileops`, `gitops`, `worktree`) are never reachable from services directly —
-only through a `Guarded*` wrapper that runs every call through
+`fileops`, `gitops`, `worktree`, `brain`) are never reachable from services
+directly — only through a `Guarded*` wrapper that runs every call through
 `Authorize → record to policy_decisions → allow / ask / deny`:
 
 - **allow** — proceeds, still audited.
@@ -30,11 +30,11 @@ only through a `Guarded*` wrapper that runs every call through
 
 The fail-safe default for anything unlisted is **ask**. The committed baseline
 ruleset is `DefaultRuleset()` in
-[internal/policy/rules.go](internal/policy/rules.go); a host-local override can
-live at `.ptolemy/policy.json` (gitignored, and itself write-protected by the
-`deny-policy-write` rule). Deny rules are never loosened — see
-[CLAUDE.md](CLAUDE.md) for the guardrails. The bypass test suite lives at
-[internal/policy/engine_test.go](internal/policy/engine_test.go).
+[internal/policy/rules.go](internal/policy/rules.go); a host override lives at
+`.ptolemy/policy.json` (keep it in sync with `DefaultRuleset()`, or remove it to
+fall back). Deny rules are never loosened, and the file is write-protected by the
+`deny-policy-write` rule — see [CLAUDE.md](CLAUDE.md). The bypass test suite
+lives at [internal/policy/engine_test.go](internal/policy/engine_test.go).
 
 Two read-only carve-outs skip the harness by design: `navigator`
 (knowledge-base reads) and `internal/memory` (in-process memory whose only
@@ -42,18 +42,20 @@ writes land in the memory Postgres DB).
 
 ## Network surfaces
 
-`workerd` serves up to three listeners:
+`workerd` serves up to four listeners:
 
 | Port | Env | Binds | Surface |
 |---|---|---|---|
 | 8080 | `HTTP_PORT` | all | Worker API: `GET /health` (deep readiness), `POST/GET /sessions`, `POST /sessions/{id}/commands`, `POST /execute` |
 | 8081 | `APPROVE_PORT` | loopback | `POST /approve/{pending_id}` — out-of-band human approval |
 | 8090 | `RAG_PORT` | all | `POST /chat` (agentic RAG for sub-services), `GET /health` |
+| 8089 | `BRAIN_CONTROL_PORT` | loopback | `POST /brain/{load,resume,hibernate,stop}`, `GET /brain/{models,status}` — only when `BRAIN_CONTROL_ENABLED=true` |
 
 The RAG listener appears only when memory is configured (`DATABASE_URL` etc.);
-otherwise workerd logs that it's disabled and keeps serving the rest. The
-approve surface is loopback-only on purpose — approving intents is an operator
-action.
+the brain control plane only when `BRAIN_CONTROL_ENABLED=true`. Otherwise workerd
+logs what it disabled and keeps serving the rest. Loopback-only surfaces are
+loopback-only on purpose — approving intents and stopping GPU processes are
+operator actions.
 
 > ⚠️ **`RAG_PORT` (and the worker API) bind all interfaces and have no
 > authentication.** `/chat` reaches the LLM and the memory DB. If the host sits
@@ -80,7 +82,44 @@ loop instead of the single-shot pipeline.
 
 Because `memory.NewModule` hands back a single non-concurrency-safe `*pgx.Conn`,
 the handler is serialized (`NewSerialAnswerer`), and the listener uses a generous
-120s write timeout because an agentic answer is several LLM round-trips.
+120s write timeout because an agentic answer is several LLM round-trips. When the
+brain controller is enabled with `BRAIN_AUTO_WAKE=true`, `/chat` resumes the
+loaded model just-in-time before answering (a cold first call pays model-load
+latency), and the idle-TTL loop hibernates it again after `BRAIN_IDLE_TTL`.
+
+## Brain controller
+
+When co-located with a local llama.cpp server, workerd can own its lifecycle —
+list models, load any of them with a full caller-supplied config, hibernate to
+free VRAM, and resume — all through `policy.GuardedBrain` (every op `Authorize`d
+and audited, never a raw exec). The launch unit is a free-form spec
+(`binary`, `gguf`, `host`, `port`, `args[]`); there is no preset registry.
+
+```bash
+# discover models under BRAIN_MODELS_DIR
+curl -s 127.0.0.1:8089/brain/models
+
+# load one with any llama.cpp flags (binary defaults to BRAIN_LLAMA_BIN)
+P=$(curl -s -X POST 127.0.0.1:8089/brain/load -d '{
+  "gguf":"/models/qwen3.5-9b/Qwen3.5-9B-Q4_K_M.gguf",
+  "args":["--ctx-size","32768","-ngl","999","--batch-size","512","--threads","8"]
+}' | jq -r .pending_id)
+curl -s -X POST 127.0.0.1:8081/approve/$P                                   # operator approves
+curl -s -X POST 127.0.0.1:8089/brain/load -d "{\"gguf\":\"...\",\"confirm_token\":\"$P\"}"
+```
+
+Policy posture: a **custom load is `ask`/OOB** because it can launch an arbitrary
+binary — and since the full argv goes into the policy intent, the `deny` rules
+cover every spec field (a destructive token in any flag is denied) and approving
+one spec can't authorize another. `resume`/`hibernate`/`status`/`models` and the
+`/chat` auto-wake carry no spec, so they auto-`allow`; `stop` stays `ask`. The
+loaded spec persists across hibernate, so resume/auto-wake bring back the *same*
+model; cold start with nothing loaded → 502 (`/chat`) or 409 (`/brain/resume`).
+The control plane is **loopback-only** (it can stop GPU processes) and **off by
+default** (`BRAIN_CONTROL_ENABLED`); models come from `BRAIN_MODELS_DIR` +
+`BRAIN_LLAMA_BIN`. It assumes workerd runs on the same host as the brain. Full
+endpoint reference (request/response shapes, status codes, the approval flow,
+and how to call it from another project): [docs/Brain_Controller_API.md](docs/Brain_Controller_API.md).
 
 ## Conversational memory (MCP)
 
@@ -94,9 +133,9 @@ It is exposed as three MCP tools — `ptolemy_memory_recall`,
 [docs/memory/](docs/memory/README.md).
 
 The local LLM ("brain", `BRAIN_BASE_URL`) and the embedder
-(`EMBEDDING_BASE_URL`) are external endpoints this runtime talks to — generation
-and embeddings for the RAG path, and a `GET /v1/models` liveness probe in
-`/health`.
+(`EMBEDDING_BASE_URL`) are the endpoints the RAG path talks to for generation
+and embeddings (and a `GET /v1/models` liveness probe in `/health`); the brain
+controller above manages the brain *process* when co-located.
 
 ## Binaries
 
@@ -120,10 +159,11 @@ make eval-memory    # retrieval eval on the frozen fixture corpus
 
 Copy [.env.example](.env.example) to `.env` and fill in what you use: SQLite
 state (`DB_PATH`), memory Postgres (`DATABASE_URL`), embedder
-(`EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_DIM`), brain
-(`BRAIN_BASE_URL`, `BRAIN_MODEL`), and the agentic loop (`AGENT_LOOP_ENABLED`).
-Anything unset degrades gracefully — workerd logs what it disabled and keeps
-serving.
+(`EMBEDDING_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_DIM`), brain endpoint
+(`BRAIN_BASE_URL`, `BRAIN_MODEL`), the agentic loop (`AGENT_LOOP_ENABLED`), and
+the brain controller (`BRAIN_CONTROL_ENABLED`, `BRAIN_MODELS_DIR`,
+`BRAIN_LLAMA_BIN`). Anything unset degrades gracefully — workerd logs what it
+disabled and keeps serving.
 
 Execution state is SQLite with exactly four tables (`sessions`,
 `command_logs`, `policy_decisions`, `schema_migrations`); memory lives in
@@ -140,8 +180,9 @@ cmd/
 internal/
   policy/           THE TRUST ROOT — engine, rules, approvals, Guarded* adapters
   domain/           intents, decisions, effects
+  brain/            managed llama.cpp lifecycle (spec, manager, discovery, idle loop)
   memory/           hybrid RAG, capture/recall/consolidate, agent loop, GC
-  httpapi/          routers: worker API, approvals, RAG /chat
+  httpapi/          routers: worker API, approvals, RAG /chat, brain control
   mcp/              MCP tool definitions + JSON-RPC server
   health/           deep /health aggregator
   controller/       multi-agent worker-pool orchestration (Stage 1/2 slices)

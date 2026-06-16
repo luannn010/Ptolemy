@@ -29,6 +29,15 @@ func DefaultRuleset() Ruleset {
 			{ID: "ask-push-cmd", Contains: "git push", Effect: domain.EffectAsk, Channel: domain.ChannelOOB, Reason: "git push requires confirmation"},
 			{ID: "ask-network", Contains: "curl http", Effect: domain.EffectAsk, Channel: domain.ChannelOOB, Reason: "network download requires confirmation"},
 			{ID: "allow-build-test", Contains: "go test", Effect: domain.EffectAllow, Reason: "build/test command allowed"},
+			// Brain controller: automatic actions allow (non-blocking, audited);
+			// custom load + manual stop ask/OOB.
+			{ID: "allow-brain-wake", Contains: "brain wake", Effect: domain.EffectAllow, Reason: "auto-wake / resume of the loaded brain spec"},
+			{ID: "allow-brain-status", Contains: "brain status", Effect: domain.EffectAllow, Reason: "brain status is a read"},
+			{ID: "allow-brain-models", Contains: "brain models", Effect: domain.EffectAllow, Reason: "listing available models is a read"},
+			{ID: "allow-brain-resume", Contains: "brain resume", Effect: domain.EffectAllow, Reason: "resume the already-approved brain spec"},
+			{ID: "allow-brain-hibernate", Contains: "brain hibernate", Effect: domain.EffectAllow, Reason: "hibernate frees VRAM, spec retained"},
+			{ID: "ask-brain-load", Contains: "brain load", Effect: domain.EffectAsk, Channel: domain.ChannelOOB, Reason: "custom brain launch requires confirmation"},
+			{ID: "ask-brain-stop", Contains: "brain stop", Effect: domain.EffectAsk, Channel: domain.ChannelOOB, Reason: "manual brain stop requires confirmation"},
 		},
 	}
 }
