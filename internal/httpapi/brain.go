@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -138,12 +139,15 @@ func loopbackOnly(next http.Handler) http.Handler {
 }
 
 // decodeOptionalJSON decodes the body if present; an empty body is allowed (the
-// zero struct). Malformed JSON writes 400 and returns false.
+// zero struct). An empty body decodes to io.EOF — this covers both
+// Content-Length: 0 and an empty chunked body (where ContentLength is -1), so we
+// must key off EOF rather than ContentLength. Malformed JSON writes 400.
 func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, target any) bool {
-	if r.ContentLength == 0 {
-		return true
+	err := json.NewDecoder(r.Body).Decode(target)
+	if errors.Is(err, io.EOF) {
+		return true // no body — leave target as the zero struct
 	}
-	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+	if err != nil {
 		writeJSON(w, http.StatusBadRequest, apitypes.ErrorResponse{Error: "invalid json"})
 		return false
 	}

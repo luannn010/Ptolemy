@@ -271,7 +271,13 @@ func (l *execLauncher) Start(argv []string) (Handle, error) {
 	if len(argv) == 0 {
 		return nil, errors.New("empty argv")
 	}
-	cmd := exec.Command(argv[0], argv[1:]...)
+	// argv is the full llama-server command from a brain Spec. This is the RAW
+	// launcher, reachable ONLY through policy.GuardedBrain: a caller-supplied spec
+	// arrives here only via the load path, which is ask/OOB (human-approved on the
+	// loopback approve listener), and the entire argv is Authorized against the
+	// deny ruleset before this runs. The dynamic command is the deliberate, gated
+	// purpose of the brain controller, mirroring the terminal/gitops raw adapters.
+	cmd := exec.Command(argv[0], argv[1:]...) // nosemgrep: go.lang.security.audit.dangerous-exec-command
 	out := l.logTo
 	if out == nil {
 		out = os.Stderr

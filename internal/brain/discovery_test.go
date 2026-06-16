@@ -34,6 +34,31 @@ func TestDiscoverModels_MissingOrEmptyRoot(t *testing.T) {
 	}
 }
 
+func TestDiscoverModels_AbsolutePathsForRelativeRoot(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "models", "m.gguf"), "x")
+
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(orig) }()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := DiscoverModels("models") // relative root
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 gguf, got %d", len(got))
+	}
+	if !filepath.IsAbs(got[0].Path) {
+		t.Fatalf("Path must be absolute even for a relative root, got %q", got[0].Path)
+	}
+}
+
 func mustWrite(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

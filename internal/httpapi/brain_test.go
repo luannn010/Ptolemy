@@ -180,3 +180,20 @@ func TestBrain_NonLoopbackForbidden(t *testing.T) {
 		t.Fatalf("non-loopback must be forbidden, got %d", rec.Code)
 	}
 }
+
+// A chunked POST with no body has ContentLength -1; the optional-body decoder
+// must treat that as "no payload", not reject it as invalid JSON.
+func TestBrain_EmptyChunkedBodyIsNot400(t *testing.T) {
+	h := NewBrainControlRouter(BrainDeps{Brain: &stubBrain{}})
+	req := httptest.NewRequest(http.MethodPost, "/brain/resume", bytes.NewReader([]byte{}))
+	req.ContentLength = -1 // simulate Transfer-Encoding: chunked (unknown length)
+	req.RemoteAddr = "127.0.0.1:7777"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code == http.StatusBadRequest {
+		t.Fatalf("empty chunked body must not be rejected as invalid json; got %d", rec.Code)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for empty-body resume, got %d", rec.Code)
+	}
+}

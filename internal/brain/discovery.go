@@ -23,6 +23,11 @@ func DiscoverModels(root string) ([]DiscoveredModel, error) {
 	if root == "" {
 		return out, nil
 	}
+	// Resolve to an absolute root so DiscoveredModel.Path is absolute (and thus
+	// usable directly as a load gguf) even when root is relative to the CWD.
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs
+	}
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil // skip unreadable entries; never abort the walk
